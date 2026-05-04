@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -10,7 +10,9 @@ import {
   Upload, FolderOpen, Image as ImageIcon,
   Play, PauseCircle, PlusCircle, CalendarClock,
   SlidersHorizontal, Megaphone, History,
+  X,
 } from 'lucide-react';
+import GalleryUploadZone from '@/app/(frontend)/(workspace)/gallery/GalleryUploadZone';
 import { SiMeta } from 'react-icons/si';
 
 /* ============================================
@@ -120,6 +122,31 @@ const PrimarySidebarIcon = ({
    SECONDARY NAV ITEM
 ============================================ */
 type IconComponentType = React.ComponentType<{ className?: string; style?: React.CSSProperties }>;
+
+const SecondaryNavButton = ({
+  icon: Icon,
+  label,
+  onClick,
+}: {
+  icon: IconComponentType;
+  label: string;
+  onClick: () => void;
+}) => (
+  <button
+    type="button"
+    onClick={onClick}
+    className="
+      relative flex w-full items-center gap-2.5 rounded-lg px-3 py-[7px] text-left
+      font-body text-[13px] transition-all duration-150
+      text-muted-foreground hover:bg-[var(--glass-hover)] hover:text-foreground
+    "
+  >
+    {Icon && (
+      <Icon className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
+    )}
+    <span className="flex-1 truncate">{label}</span>
+  </button>
+);
 
 const SecondaryNavItem = ({
   icon: Icon,
@@ -317,7 +344,13 @@ const NotificationsPanel = () => {
 /* ============================================
    SECONDARY SIDEBAR CONTENT
 ============================================ */
-const SecondarySidebarContent = ({ activeSection }: { activeSection: string }) => {
+const SecondarySidebarContent = ({
+  activeSection,
+  onGalleryUploadClick,
+}: {
+  activeSection: string;
+  onGalleryUploadClick?: () => void;
+}) => {
   switch (activeSection) {
     case 'home':
       return <NotificationsPanel />;
@@ -348,12 +381,20 @@ const SecondarySidebarContent = ({ activeSection }: { activeSection: string }) =
         <>
           <SectionLabel label="Assets" />
           <SecondaryNavItem icon={FolderOpen} label="All Creatives" href="/gallery" />
-          {/* <SecondaryNavItem icon={ImageIcon}  label="Images"        href="/gallery/images" /> */}
-          {/* <SecondaryNavItem icon={Play}       label="Videos"        href="/gallery/videos" /> */}
+          <SecondaryNavItem icon={ImageIcon}  label="Images"        href="/gallery/images" />
+          <SecondaryNavItem icon={Play}       label="Videos"        href="/gallery/videos" />
 
           <SectionLabel label="Upload" />
-          <SecondaryNavItem icon={Upload}     label="Upload Assets" href="/gallery/upload" />
-          <SecondaryNavItem icon={PlusCircle} label="Bulk Upload"   href="/gallery/bulk-upload" />
+          <SecondaryNavButton
+            icon={Upload}
+            label="Upload Assets"
+            onClick={() => onGalleryUploadClick?.()}
+          />
+          <SecondaryNavButton
+            icon={PlusCircle}
+            label="Bulk Upload"
+            onClick={() => onGalleryUploadClick?.()}
+          />
         </>
       );
 
@@ -388,11 +429,12 @@ const SidebarDivider = () => (
 /* ============================================
    MAIN APP SIDEBAR
 ============================================ */
-export default function AppSidebar() {
+export default function AppSidebar({ companyId }: { companyId: string }) {
   const pathname = usePathname();
   const router   = useRouter();
   const [activeSection,    setActiveSection]    = useState('home');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [galleryUploadModalOpen, setGalleryUploadModalOpen] = useState(false);
 
   const getFirstRoute = (sectionId: string) => {
     switch (sectionId) {
@@ -408,6 +450,13 @@ export default function AppSidebar() {
     setActiveSection(sectionId);
     router.push(getFirstRoute(sectionId));
   };
+
+  const handleGalleryUploadStart = useCallback((_bulkUploadId: string) => {
+    window.setTimeout(() => {
+      window.dispatchEvent(new CustomEvent('robust-gallery-refresh'));
+    }, 3500);
+    setGalleryUploadModalOpen(false);
+  }, []);
 
   const handleLogout = async () => {
     try {
@@ -583,7 +632,12 @@ export default function AppSidebar() {
 
             {/* Nav content */}
             <nav className="flex-1 overflow-y-auto px-2 py-1 glass-scrollbar">
-              <SecondarySidebarContent activeSection={activeSection} />
+              <SecondarySidebarContent
+                activeSection={activeSection}
+                onGalleryUploadClick={
+                  companyId ? () => setGalleryUploadModalOpen(true) : undefined
+                }
+              />
             </nav>
 
             {/* Footer */}
@@ -625,6 +679,59 @@ export default function AppSidebar() {
           <IconChevronRight className="h-3.5 w-3.5" />
         </button>
       )}
+
+      <AnimatePresence>
+        {galleryUploadModalOpen && companyId ? (
+          <motion.div
+            key="gallery-upload-modal"
+            className="fixed inset-0 z-[10000] flex items-center justify-center p-4 sm:p-8"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <button
+              type="button"
+              className="absolute inset-0 bg-black/50 backdrop-blur-[2px]"
+              aria-label="Close"
+              onClick={() => setGalleryUploadModalOpen(false)}
+            />
+            <motion.div
+              role="dialog"
+              aria-modal
+              aria-labelledby="gallery-upload-modal-title"
+              className="glass-modal relative z-[10001] flex max-h-[90vh] w-full max-w-xl flex-col overflow-hidden rounded-2xl border border-[var(--glass-border)] shadow-2xl"
+              initial={{ scale: 0.96, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.96, opacity: 0 }}
+              transition={{ type: 'spring', stiffness: 420, damping: 38 }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex shrink-0 items-center justify-between gap-3 border-b border-[var(--glass-border)] px-4 py-3">
+                <h2
+                  id="gallery-upload-modal-title"
+                  className="font-display text-[15px] font-semibold text-foreground"
+                >
+                  Upload creatives
+                </h2>
+                <button
+                  type="button"
+                  onClick={() => setGalleryUploadModalOpen(false)}
+                  className="rounded-lg p-2 text-muted-foreground hover:bg-[var(--glass-hover)] hover:text-foreground"
+                  aria-label="Close"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+              <div className="min-h-0 flex-1 overflow-y-auto glass-scrollbar">
+                <GalleryUploadZone
+                  companyId={companyId}
+                  onUploadStart={handleGalleryUploadStart}
+                />
+              </div>
+            </motion.div>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
     </div>
   );
 }

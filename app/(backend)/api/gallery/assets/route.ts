@@ -1,16 +1,26 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
+import { AssetType } from "@/app/generated/prisma/enums";
 import { getSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   const session = await getSession();
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const typeParam = req.nextUrl.searchParams.get("type");
+  const assetTypeFilter =
+    typeParam === "IMAGE" || typeParam === "VIDEO" ? typeParam : undefined;
+
   const assets = await prisma.asset.findMany({
-    where: { companyId: session.companyId },
+    where: {
+      companyId: session.companyId,
+      ...(assetTypeFilter
+        ? { assetType: assetTypeFilter as AssetType }
+        : {}),
+    },
     orderBy: { createdAt: "desc" },
     take: 500,
     select: {

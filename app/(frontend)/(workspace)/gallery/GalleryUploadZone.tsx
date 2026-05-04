@@ -4,6 +4,7 @@
 import React, { useCallback, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Upload, FolderOpen, HardDrive, X, Film, ImageIcon, FileWarning } from 'lucide-react';
+import { useUploader } from '@/app/hooks/useUploader';
 
 /* ─────────────────────────────────────────
    TYPES
@@ -15,6 +16,7 @@ export type UploadedFile = {
 };
 
 type Props = {
+  companyId: string;
   onUploadStart: (bulkUploadId: string) => void;
 };
 
@@ -215,13 +217,14 @@ const BulkNameModal = ({
 /* ─────────────────────────────────────────
    MAIN COMPONENT
 ───────────────────────────────────────── */
-export default function GalleryUploadZone({ onUploadStart }: Props) {
+export default function GalleryUploadZone({ companyId, onUploadStart }: Props) {
   const fileInputRef                      = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging]       = useState(false);
   const [stagedFiles, setStagedFiles]     = useState<UploadedFile[]>([]);
   const [showNameModal, setShowNameModal] = useState(false);
   const [isUploading, setIsUploading]     = useState(false);
   const [error, setError]                 = useState<string | null>(null);
+  const { upload }                        = useUploader(companyId, onUploadStart);
 
   /* ── File ingestion ── */
   const ingestFiles = useCallback((incoming: FileList | File[]) => {
@@ -287,33 +290,23 @@ export default function GalleryUploadZone({ onUploadStart }: Props) {
     alert('Google Drive integration coming soon. Drop files for now.');
   };
 
-  /* ── Upload ── */
+  /* ── Upload (multipart pipeline via useUploader, same as main Upload zone) ── */
   const doUpload = async (bulkUploadName: string) => {
     setIsUploading(true);
     setError(null);
     try {
-      const formData = new FormData();
-      formData.append('bulkUploadName', bulkUploadName);
-      stagedFiles.forEach(({ file }) => formData.append('files', file));
-
-      const res = await fetch('/api/gallery/upload', {
-        method: 'POST',
-        body: formData,
-        credentials: 'include',
-      });
-
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error((body as { error?: string }).error ?? `Upload failed (${res.status})`);
+      const files = stagedFiles.map(({ file }) => file);
+      for (const { previewUrl } of stagedFiles) {
+        if (previewUrl) URL.revokeObjectURL(previewUrl);
       }
-
-      const data = (await res.json()) as { bulkUploadId: string };
-      stagedFiles.forEach(({ previewUrl }) => { if (previewUrl) URL.revokeObjectURL(previewUrl); });
-      onUploadStart(data.bulkUploadId);
+      setStagedFiles([]);
+      await upload(files, { bulkName: bulkUploadName });
+      setShowNameModal(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Upload failed. Please try again.');
-      setIsUploading(false);
       setShowNameModal(false);
+    } finally {
+      setIsUploading(false);
     }
   };
 
@@ -330,7 +323,7 @@ export default function GalleryUploadZone({ onUploadStart }: Props) {
         │  both horizontally and vertically.                       │
         └──────────────────────────────────────────────────────────┘
       */}
-      <div className="flex h-full w-full items-center justify-center px-6 py-10">
+      <div className="flex min-h-0 w-full items-center justify-center overflow-y-auto px-6 py-6 sm:py-10">
         <div className="flex w-full max-w-lg flex-col gap-4">
 
           {/* ══════════════════════════════

@@ -75,6 +75,14 @@ type BulkGroup = {
 
 interface Props {
   companyId: string;
+  /** When set, API returns only this asset type (Images / Videos pages). */
+  assetTypeFilter?: "IMAGE" | "VIDEO";
+  pageTitle?: string;
+  pageSubtitle?: string;
+  /** Hide folder toggle + folders view (filtered sub-pages). */
+  hideFoldersView?: boolean;
+  /** Hide inline drop zone (upload from sidebar modal instead). */
+  hideInlineUploader?: boolean;
 }
 
 const UNGROUPED_KEY = "__ungrouped__";
@@ -285,7 +293,14 @@ function FolderTile({
   );
 }
 
-export default function GalleryClient({ companyId }: Props) {
+export default function GalleryClient({
+  companyId,
+  assetTypeFilter,
+  pageTitle = "Gallery",
+  pageSubtitle = "Uploads and assets for this workspace. Open a folder to view its files.",
+  hideFoldersView = false,
+  hideInlineUploader = false,
+}: Props) {
   const [assets, setAssets] = useState<GalleryAsset[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -295,10 +310,16 @@ export default function GalleryClient({ companyId }: Props) {
   const [openFolder, setOpenFolder] = useState<BulkGroup | null>(null);
   const [analyzeBusy, setAnalyzeBusy] = useState(false);
 
+  const assetsUrl = useMemo(() => {
+    const base = "/api/gallery/assets";
+    if (!assetTypeFilter) return base;
+    return `${base}?type=${encodeURIComponent(assetTypeFilter)}`;
+  }, [assetTypeFilter]);
+
   const loadAssets = useCallback(async () => {
     setError(null);
     try {
-      const res = await fetch("/api/gallery/assets", { credentials: "include" });
+      const res = await fetch(assetsUrl, { credentials: "include" });
       if (!res.ok) {
         const err = (await res.json().catch(() => ({}))) as { error?: string };
         throw new Error(err.error ?? `Failed to load assets (${res.status})`);
@@ -311,10 +332,23 @@ export default function GalleryClient({ companyId }: Props) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [assetsUrl]);
 
   useEffect(() => {
     void loadAssets();
+  }, [loadAssets]);
+
+  useEffect(() => {
+    if (hideFoldersView) {
+      setViewMode("flat");
+      setOpenFolder(null);
+    }
+  }, [hideFoldersView]);
+
+  useEffect(() => {
+    const onRefresh = () => void loadAssets();
+    window.addEventListener("robust-gallery-refresh", onRefresh);
+    return () => window.removeEventListener("robust-gallery-refresh", onRefresh);
   }, [loadAssets]);
 
   const bulkGroups = useMemo(() => buildBulkGroups(assets), [assets]);
@@ -487,13 +521,12 @@ export default function GalleryClient({ companyId }: Props) {
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <h1 className="font-heading text-2xl font-semibold tracking-tight text-foreground md:text-3xl">
-            Gallery
+            {pageTitle}
           </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Uploads and assets for this workspace. Open a folder to view its files.
-          </p>
+          <p className="mt-1 text-sm text-muted-foreground">{pageSubtitle}</p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
+          {!hideFoldersView ? (
           <div
             className="glass inline-flex rounded-xl border border-[var(--glass-border)] p-1"
             role="group"
@@ -527,6 +560,7 @@ export default function GalleryClient({ companyId }: Props) {
               Folders
             </button>
           </div>
+          ) : null}
           <button
             type="button"
             onClick={() => {
@@ -542,12 +576,14 @@ export default function GalleryClient({ companyId }: Props) {
         </div>
       </div>
 
-      <UploadZone
-        companyId={companyId}
-        onUploadStart={() => {
-          window.setTimeout(() => void loadAssets(), 3500);
-        }}
-      />
+      {!hideInlineUploader ? (
+        <UploadZone
+          companyId={companyId}
+          onUploadStart={() => {
+            window.setTimeout(() => void loadAssets(), 3500);
+          }}
+        />
+      ) : null}
 
       {error ? (
         <div className="rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
@@ -561,7 +597,9 @@ export default function GalleryClient({ companyId }: Props) {
 
       {!loading && assets.length === 0 ? (
         <div className="glass-card rounded-2xl p-10 text-center text-muted-foreground">
-          No assets yet. Upload video or images above.
+          {hideInlineUploader
+            ? "No assets yet. Use Upload Assets in the sidebar to add files."
+            : "No assets yet. Upload video or images above."}
         </div>
       ) : null}
 
@@ -569,7 +607,7 @@ export default function GalleryClient({ companyId }: Props) {
         <div className={gridClass}>{assets.map(renderAssetCard)}</div>
       ) : null}
 
-      {assets.length > 0 && viewMode === "bulk" ? (
+      {assets.length > 0 && viewMode === "bulk" && !hideFoldersView ? (
         <div className={folderGridClass}>
           {bulkGroups.map((group) => (
             <FolderTile

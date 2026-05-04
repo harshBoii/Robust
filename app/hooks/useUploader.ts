@@ -309,10 +309,16 @@ export function useUploader(
 
   // ── Main upload entry ────────────────────────────────────────────────────────
   const upload = useCallback(
-    async (selectedFiles: File[]) => {
+    async (
+      selectedFiles: File[],
+      options?: { bulkName?: string },
+    ) => {
       startFiredRef.current = false;
 
       logStep("bulk", `Starting batch upload of ${selectedFiles.length} file(s)`);
+
+      const bulkLabel =
+        options?.bulkName?.trim() || `Upload ${new Date().toLocaleString()}`;
 
       // 1. Create BulkUpload record
       logStep("bulk", "POST /api/upload/bulk-start …");
@@ -322,7 +328,7 @@ export function useUploader(
         credentials: "include",
         body: JSON.stringify({
           companyId,
-          name: `Upload ${new Date().toLocaleString()}`,
+          name: bulkLabel,
         }),
       });
 
