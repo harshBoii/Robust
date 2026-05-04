@@ -234,12 +234,18 @@ export function useUploader(
         }
 
         logOk(label, "Upload complete!", completeData);
-        const { assetId, assetType } = completeData;
+        const { assetId, assetType, thumbnailUrl: thumbFromComplete } =
+          completeData as {
+            assetId?: string;
+            assetType?: string;
+            thumbnailUrl?: string | null;
+          };
 
         updateFile(index, {
           assetId,
           status: assetType === "VIDEO" ? "processing" : "ready",
           progress: 100,
+          ...(thumbFromComplete ? { thumbnailUrl: thumbFromComplete } : {}),
         });
 
         return assetId as string;
@@ -313,6 +319,7 @@ export function useUploader(
       const bulkRes = await fetch("/api/upload/bulk-start", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({
           companyId,
           name: `Upload ${new Date().toLocaleString()}`,

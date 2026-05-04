@@ -23,8 +23,27 @@ export async function GET() {
       playbackUrl: true,
       mimeType: true,
       duration: true,
+      resolution: true,
       createdAt: true,
       streamId: true,
+      bulkUploadId: true,
+      assetBucketId: true,
+      bulkUpload: {
+        select: {
+          id: true,
+          name: true,
+          status: true,
+          createdAt: true,
+        },
+      },
+      assetBucket: {
+        select: {
+          id: true,
+          label: true,
+          bucketType: true,
+          bucketValue: true,
+        },
+      },
     },
   });
 

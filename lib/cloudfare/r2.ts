@@ -1,6 +1,24 @@
 import { S3Client, GetObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
+/**
+ * Stable HTTPS URL for objects in a **public** R2 bucket (custom domain or `*.r2.dev`).
+ * Set `R2_PUBLIC_BASE_URL` (no trailing slash), e.g. `https://pub-xxxx.r2.dev`.
+ * Key segments are URL-encoded; do not include a leading slash on `objectKey`.
+ */
+export function getR2PublicObjectUrl(objectKey: string): string | null {
+  const base = process.env.R2_PUBLIC_BASE_URL?.trim();
+  if (!base) return null;
+  const normalizedBase = base.replace(/\/+$/, "");
+  const normalizedKey = objectKey.replace(/^\/+/, "");
+  const path = normalizedKey
+    .split("/")
+    .filter(Boolean)
+    .map(encodeURIComponent)
+    .join("/");
+  return `${normalizedBase}/${path}`;
+}
+
 export const r2 = new S3Client({
   region: "auto" as string,
   // R2 + AWS SDK v3: virtual-hosted style can yield NoSuchBucket even when the bucket exists.

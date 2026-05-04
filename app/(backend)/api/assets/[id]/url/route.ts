@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { getSession } from "@/lib/auth/session";
-import { generatePresignedUrl } from "@/lib/cloudfare/r2";
+import { generatePresignedUrl, getR2PublicObjectUrl } from "@/lib/cloudfare/r2";
 import { prisma } from "@/lib/prisma";
 
 export async function GET(
@@ -44,7 +44,11 @@ export async function GET(
     return NextResponse.json({ url: asset.playbackUrl, type: "hls" });
   }
 
-  // Image/Document — presigned R2 URL
+  // Image/Document — public bucket URL when configured, else presigned R2 URL
+  const publicUrl = getR2PublicObjectUrl(asset.r2Key);
+  if (publicUrl) {
+    return NextResponse.json({ url: publicUrl, type: "r2" });
+  }
   const url = await generatePresignedUrl(asset.r2Key, asset.r2Bucket);
   return NextResponse.json({ url, type: "r2" });
 }

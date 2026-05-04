@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { maybeAnalyzeBulkUpload } from "@/lib/gallery/analyze-bulk";
 import { r2 } from "./r2";
 import { GetObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
@@ -109,7 +110,7 @@ export async function processNextQueueItem(): Promise<StreamUploadResult | null>
     console.log("[STREAM QUEUE] Upload result:", result);
 
     // Update Asset with Stream details
-    await prisma.asset.update({
+    const updatedAsset = await prisma.asset.update({
       where: { id: queueItem.assetId },
       data: {
         streamId: result.streamId,
@@ -120,7 +121,11 @@ export async function processNextQueueItem(): Promise<StreamUploadResult | null>
         duration: result.duration != null ? Math.round(result.duration) : undefined,
         resolution: result.resolution ?? undefined,
       },
+      select: { bulkUploadId: true },
     });
+    if (updatedAsset.bulkUploadId) {
+      void maybeAnalyzeBulkUpload(updatedAsset.bulkUploadId);
+    }
 
     // Mark queue item as COMPLETED
     await prisma.streamQueue.update({
@@ -188,8 +193,15 @@ export async function processNextQueueItem(): Promise<StreamUploadResult | null>
  * Generates a short-lived presigned R2 URL then hands it to
  * Cloudflare Stream's copy endpoint.
  */
+type StreamQueueWithAsset = {
+  assetId: string;
+  r2Key: string;
+  r2Bucket: string;
+  asset: { title: string; filename: string; companyId: string };
+};
+
 async function uploadToCloudflareStream(
-  queueItem: Awaited<ReturnType<typeof prisma.streamQueue.findFirstOrThrow>>
+  queueItem: StreamQueueWithAsset,
 ): Promise<StreamUploadResult> {
   // 1. Presigned download URL from R2 (valid 1 hour)
   //    r2Key / r2Bucket come from the queue row (copied at enqueue time)
@@ -218,9 +230,8 @@ async function uploadToCloudflareStream(
         url: downloadUrl,
         meta: {
           assetId: queueItem.assetId,
-          // asset is included via the include clause in processNextQueueItem
-          name: (queueItem as any).asset.title || (queueItem as any).asset.filename,
-          companyId: (queueItem as any).asset.companyId,
+          name: queueItem.asset.title || queueItem.asset.filename,
+          companyId: queueItem.asset.companyId,
         },
         requireSignedURLs: false,
         allowedOrigins: [],

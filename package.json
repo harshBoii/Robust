@@ -7,6 +7,7 @@
     "build": "prisma generate && next build",
     "start": "next start",
     "lint": "eslint",
+    "backfill:image-thumbnails": "tsx scripts/backfill-image-thumbnails.ts",
     "postinstall": "prisma generate"
   },
   "dependencies": {
@@ -20,6 +21,7 @@
     "clsx": "^2.1.1",
     "framer-motion": "^12.38.0",
     "hls.js": "^1.6.16",
+    "image-size": "^2.0.2",
     "jose": "^6.2.3",
     "lucide-react": "^1.14.0",
     "next": "16.2.4",
@@ -41,6 +43,7 @@
     "eslint-config-next": "16.2.4",
     "prisma": "^7.8.0",
     "tailwindcss": "^4",
+    "tsx": "^4.21.0",
     "typescript": "^5"
   }
 }
