@@ -348,8 +348,8 @@ const SecondarySidebarContent = ({ activeSection }: { activeSection: string }) =
         <>
           <SectionLabel label="Assets" />
           <SecondaryNavItem icon={FolderOpen} label="All Creatives" href="/gallery" />
-          <SecondaryNavItem icon={ImageIcon}  label="Images"        href="/gallery/images" />
-          <SecondaryNavItem icon={Play}       label="Videos"        href="/gallery/videos" />
+          {/* <SecondaryNavItem icon={ImageIcon}  label="Images"        href="/gallery/images" /> */}
+          {/* <SecondaryNavItem icon={Play}       label="Videos"        href="/gallery/videos" /> */}
 
           <SectionLabel label="Upload" />
           <SecondaryNavItem icon={Upload}     label="Upload Assets" href="/gallery/upload" />
