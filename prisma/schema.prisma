@@ -1,0 +1,678 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client"
+  output   = "../app/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ================================================================
+// CORE TENANT
+// ================================================================
+
+model Company {
+  id          String  @id @default(cuid())
+  name        String  @db.VarChar(255)
+  slug        String  @unique @db.VarChar(255)
+  description String?
+  logoUrl     String? @db.VarChar(1000)
+  website     String? @db.VarChar(500)
+  domain      String? @db.VarChar(255)
+  email       String? @unique @db.VarChar(255)
+  userName    String? @unique @db.VarChar(255)
+  password    String? @db.VarChar(255)
+
+  // Subscription
+  subscriptionId        String?            @map("subscription_id")
+  subscriptionStatus    SubscriptionStatus @default(PENDING) @map("subscription_status")
+  subscriptionCreatedAt DateTime?          @map("subscription_created_at")
+  subscriptionUpdatedAt DateTime?          @map("subscription_updated_at")
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  // Relations
+  metaIntegration    MetaIntegration?
+  assets             Asset[]
+  bulkUploads        BulkUpload[]
+  assetBuckets       AssetBucket[]
+  adPresets          AdPreset[]
+  adsetPresets       AdsetPreset[]
+  campaignPresets    CampaignPreset[]
+  adSchedules        AdSchedule[]
+  adAutomationRules  AdAutomationRule[]
+  adAutomationEvents AdAutomationEvent[]
+  notifications      Notification[]
+
+  @@index([slug])
+  @@map("companies")
+}
+
+// ================================================================
+// ASSETS & GALLERY
+// ================================================================
+
+model BulkUpload {
+  id        String           @id @default(cuid())
+  companyId String
+  name      String           @db.VarChar(255)
+  status    BulkUploadStatus @default(PROCESSING)
+  createdAt DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime         @updatedAt @db.Timestamptz(3)
+
+  company      Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  assets       Asset[]
+  assetBuckets AssetBucket[]
+
+  @@index([companyId])
+  @@index([companyId, createdAt(sort: Desc)])
+  @@map("bulk_uploads")
+}
+
+model AssetBucket {
+  id           String     @id @default(cuid())
+  companyId    String
+  bulkUploadId String
+  label        String     @db.VarChar(255)
+  bucketType   BucketType
+  bucketValue  String     @db.VarChar(255)
+  createdAt    DateTime   @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime   @updatedAt @db.Timestamptz(3)
+
+  company    Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  bulkUpload BulkUpload @relation(fields: [bulkUploadId], references: [id], onDelete: Cascade)
+  assets     Asset[]
+
+  @@index([companyId])
+  @@index([bulkUploadId])
+  @@map("asset_buckets")
+}
+
+model Asset {
+  id            String       @id @default(cuid())
+  companyId     String
+  bulkUploadId  String?
+  assetBucketId String?
+  assetType     AssetType
+  title         String       @db.VarChar(500)
+  filename      String       @db.VarChar(500)
+  originalSize  BigInt
+  status        AssetStatus  @default(UPLOADING)
+  r2Key         String       @db.VarChar(500)
+  r2Bucket      String       @db.VarChar(255)
+  resolution    String?      @db.VarChar(20)
+  mimeType      String?      @db.VarChar(100)
+  duration      Int?
+  fps           Int?
+  codec         String?      @db.VarChar(50)
+  streamId      String?      @unique @db.VarChar(255)
+  playbackUrl   String?      @db.VarChar(2000)
+  thumbnailUrl  String?      @db.VarChar(1000)
+  tags          String[]     @default([])
+  metadata      Json         @default("{}")
+  uploadSource  UploadSource @default(NATIVE)
+  createdAt     DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime     @updatedAt @db.Timestamptz(3)
+
+  company     Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  bulkUpload  BulkUpload?  @relation(fields: [bulkUploadId], references: [id], onDelete: SetNull)
+  assetBucket AssetBucket? @relation(fields: [assetBucketId], references: [id], onDelete: SetNull)
+  warnings    AssetWarning[]
+  metaMedia   MetaMedia?
+
+  @@index([companyId])
+  @@index([bulkUploadId])
+  @@index([assetBucketId])
+  @@index([assetType])
+  @@index([status])
+  @@index([assetType, companyId])
+  @@index([createdAt(sort: Desc)])
+  @@map("assets")
+}
+
+model AssetWarning {
+  id          String             @id @default(cuid())
+  assetId     String
+  warningType AssetWarningType
+  detail      String?            @db.Text
+  resolved    Boolean            @default(false)
+  resolution  WarningResolution?
+  createdAt   DateTime           @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime           @updatedAt @db.Timestamptz(3)
+
+  asset Asset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  @@index([assetId])
+  @@index([assetId, resolved])
+  @@map("asset_warnings")
+}
+
+model UploadSession {
+  id            String   @id @default(cuid())
+  uploadId      String   @db.VarChar(255)
+  key           String   @db.VarChar(500)
+  fileName      String   @db.VarChar(255)
+  fileSize      BigInt
+  fileType      String   @db.VarChar(200)
+  totalParts    Int
+  uploadedParts Int[]    @default([])
+  status        String   @db.VarChar(50)
+  companyId     String?  @db.VarChar(255)
+  uploadedBy    String?  @db.VarChar(255)
+  metadata      String?
+  expiresAt     DateTime @db.Timestamptz(3)
+  createdAt     DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime @updatedAt @db.Timestamptz(3)
+
+  @@index([status])
+  @@index([uploadedBy])
+  @@index([companyId])
+  @@map("upload_sessions")
+}
+
+// ================================================================
+// META INTEGRATION
+// ================================================================
+
+model MetaIntegration {
+  id            String   @id @default(cuid())
+  companyId     String   @unique
+  /// AES-256 encrypted
+  accessToken   String   @db.Text
+  /// Format: act_XXXXXXXXX
+  adAccountId   String   @db.VarChar(100)
+  fbPageId      String   @db.VarChar(100)
+  createdAt     DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime @updatedAt @db.Timestamptz(3)
+
+  /// Extracted tone, style, hook patterns from best performing ads
+  brandVoice       Json?
+  /// Top 5 ad copy + why they worked
+  topAdExamples    Json?
+  /// What targeting/demographics performed best
+  audienceInsights Json?
+  avgWinningCtr    Float?
+  contextBuiltAt   DateTime? @db.Timestamptz(3)
+
+  winningFormula        Json?     @map("winning_formula")
+  winningFormulaBuiltAt DateTime? @map("winning_formula_built_at") @db.Timestamptz(3)
+
+  company   Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  campaigns MetaCampaign[]
+  creatives MetaCreative[]
+  media     MetaMedia[]
+  adSets    MetaAdSet[]
+  ads       MetaAd[]
+
+  @@index([companyId])
+  @@map("meta_integrations")
+}
+
+model MetaMedia {
+  id                String   @id @default(cuid())
+  metaIntegrationId String
+  /// "image" | "video"
+  kind              String   @db.VarChar(10)
+  imageHash         String?  @db.VarChar(200)
+  videoId           String?  @db.VarChar(100)
+  assetId           String?  @unique
+  imageUrl          String?  @db.VarChar(1000)
+  videoUrl          String?  @db.VarChar(1000)
+  videoStreamId     String?  @db.VarChar(100)
+  thumbnailUrl      String?  @db.VarChar(1000)
+  r2Key             String?  @db.VarChar(500)
+  filename          String?  @db.VarChar(500)
+  mimeType          String?  @db.VarChar(200)
+  bytes             Int?
+  width             Int?
+  height            Int?
+  durationMs        Int?
+  /// uploading | processing | ready | error
+  status            String   @default("ready") @db.VarChar(20)
+  createdAt         DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime @updatedAt @db.Timestamptz(3)
+
+  metaIntegration MetaIntegration @relation(fields: [metaIntegrationId], references: [id], onDelete: Cascade)
+  asset           Asset?          @relation(fields: [assetId], references: [id], onDelete: SetNull)
+
+  @@unique([metaIntegrationId, imageHash])
+  @@unique([metaIntegrationId, videoId])
+  @@index([metaIntegrationId])
+  @@index([imageHash])
+  @@index([videoId])
+  @@map("meta_media")
+}
+
+model MetaCampaign {
+  id                  String    @id @default(cuid())
+  metaIntegrationId   String
+  metaCampaignId      String    @db.VarChar(100)
+  campaignPresetId    String?
+  name                String    @db.VarChar(500)
+  /// OUTCOME_TRAFFIC, OUTCOME_SALES, OUTCOME_LEADS etc.
+  objective           String    @db.VarChar(100)
+  /// ACTIVE | PAUSED | ARCHIVED
+  status              String    @db.VarChar(50)
+  /// In smallest currency unit; 0 when budget lives on ad set
+  dailyBudget         Int       @default(0)
+  lifetimeBudget      Int?
+  spendCap            BigInt?
+  specialAdCategory   String?   @db.VarChar(100)
+  specialAdCategories Json?     @default("[]")
+  bidStrategy         String?   @db.VarChar(64)
+  publishedAt         DateTime? @db.Timestamptz(3)
+  reviewStatus        String?   @db.VarChar(50)
+  reviewFeedback      String?   @db.Text
+  createdAt           DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime  @updatedAt @db.Timestamptz(3)
+
+  metaIntegration MetaIntegration @relation(fields: [metaIntegrationId], references: [id], onDelete: Cascade)
+  campaignPreset  CampaignPreset? @relation(fields: [campaignPresetId], references: [id], onDelete: SetNull)
+  creative        MetaCreative?
+  adSets          MetaAdSet[]
+
+  @@unique([metaIntegrationId, metaCampaignId])
+  @@index([metaIntegrationId])
+  @@index([metaCampaignId])
+  @@index([campaignPresetId])
+  @@map("meta_campaigns")
+}
+
+model MetaCreative {
+  id                  String    @id @default(cuid())
+  metaIntegrationId   String
+  /// One creative per campaign
+  metaCampaignId      String?   @unique
+  /// Returned by Meta after adcreatives POST
+  metaCreativeId      String?   @db.VarChar(100)
+  imageHash           String?   @db.VarChar(200)
+  videoId             String?   @db.VarChar(100)
+  headline            String    @db.VarChar(500)
+  primaryText         String    @db.Text
+  description         String?   @db.Text
+  ctaType             String    @db.VarChar(100)
+  landingUrl          String    @db.VarChar(2000)
+  imageUrl            String?   @db.VarChar(1000)
+  imagePrompt         String?   @db.Text
+  videoUrl            String?   @db.VarChar(1000)
+  videoPrompt         String?   @db.Text
+  videoStreamId       String?   @db.VarChar(100)
+  thumbnailUrl        String?   @db.VarChar(1000)
+  aiGenerated         Boolean   @default(true)
+  compliancePassed    Boolean   @default(false)
+  complianceFlags     Json?
+  complianceCheckedAt DateTime? @db.Timestamptz(3)
+  approvedByUser      Boolean   @default(false)
+  approvedAt          DateTime? @db.Timestamptz(3)
+  createdAt           DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime  @updatedAt @db.Timestamptz(3)
+
+  metaIntegration MetaIntegration @relation(fields: [metaIntegrationId], references: [id], onDelete: Cascade)
+  campaign        MetaCampaign?   @relation(fields: [metaCampaignId], references: [id], onDelete: SetNull)
+  ads             MetaAd[]
+
+  @@unique([metaIntegrationId, metaCreativeId])
+  @@index([metaIntegrationId])
+  @@index([metaCreativeId])
+  @@map("meta_creatives")
+}
+
+model MetaAdSet {
+  id                String    @id @default(cuid())
+  metaIntegrationId String
+  campaignId        String
+  adsetPresetId     String?
+  metaAdSetId       String    @db.VarChar(100)
+  name              String?   @db.VarChar(500)
+  /// ACTIVE | PAUSED | ARCHIVED
+  status            String?   @db.VarChar(50)
+  dailyBudget       Int?
+  lifetimeBudget    Int?
+  bidStrategy       String?   @db.VarChar(64)
+  bidAmount         Int?
+  bidConstraints    Json?     @default("{}")
+  optimizationGoal  String?   @db.VarChar(100)
+  billingEvent      String?   @db.VarChar(50)
+  /// Full Meta targeting object
+  targeting         Json?
+  startTime         DateTime? @db.Timestamptz(3)
+  endTime           DateTime? @db.Timestamptz(3)
+  createdAt         DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime  @updatedAt @db.Timestamptz(3)
+
+  metaIntegration MetaIntegration @relation(fields: [metaIntegrationId], references: [id], onDelete: Cascade)
+  campaign        MetaCampaign    @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  adsetPreset     AdsetPreset?    @relation(fields: [adsetPresetId], references: [id], onDelete: SetNull)
+  ads             MetaAd[]
+
+  @@unique([metaIntegrationId, metaAdSetId])
+  @@index([campaignId])
+  @@index([metaIntegrationId])
+  @@index([adsetPresetId])
+  @@map("meta_ad_sets")
+}
+
+model MetaAd {
+  id                String    @id @default(cuid())
+  metaIntegrationId String
+  adSetId           String
+  metaCreativeDbId  String?
+  metaAdId          String    @db.VarChar(100)
+  name              String?   @db.VarChar(500)
+  /// ACTIVE | PAUSED | ARCHIVED
+  status            String?   @db.VarChar(50)
+  presetId          String?
+  scheduleId        String?
+  /// Self-relation: tracks which ad this was duplicated from
+  duplicatedFromId  String?
+  publishedAt       DateTime? @db.Timestamptz(3)
+  reviewStatus      String?   @db.VarChar(50)
+  reviewFeedback    String?   @db.Text
+  createdAt         DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime  @updatedAt @db.Timestamptz(3)
+
+  metaIntegration MetaIntegration @relation(fields: [metaIntegrationId], references: [id], onDelete: Cascade)
+  adSet           MetaAdSet       @relation(fields: [adSetId], references: [id], onDelete: Cascade)
+  creative        MetaCreative?   @relation(fields: [metaCreativeDbId], references: [id], onDelete: SetNull)
+  preset          AdPreset?       @relation(fields: [presetId], references: [id], onDelete: SetNull)
+  schedule        AdSchedule?     @relation(fields: [scheduleId], references: [id], onDelete: SetNull)
+  duplicatedFrom  MetaAd?         @relation("MetaAdDuplicate", fields: [duplicatedFromId], references: [id], onDelete: SetNull)
+  duplicates      MetaAd[]        @relation("MetaAdDuplicate")
+
+  @@unique([metaIntegrationId, metaAdId])
+  @@index([adSetId])
+  @@index([metaIntegrationId])
+  @@index([presetId])
+  @@index([scheduleId])
+  @@index([duplicatedFromId])
+  @@map("meta_ads")
+}
+
+/// Polled every 6h from Meta Insights API — one row per ad per date preset
+model MetaAdMetrics {
+  id             String   @id @default(cuid())
+  metaCampaignId String
+  metaAdId       String   @db.VarChar(100)
+  impressions    Int
+  clicks         Int
+  ctr            Float
+  spend          Float
+  cpc            Float?
+  roas           Float?
+  /// 3-second view rate — video ads only
+  hookRate       Float?
+  /// Computed: (today - publishedAt).days
+  daysRunning    Int?
+  /// FATIGUE | UNDERPERFORMER | WINNER — set by automation rule evaluator
+  statusSignal   String?  @db.VarChar(64)
+  actions        Json?
+  /// "last_7d" | "last_30d" | "lifetime"
+  datePreset     String   @db.VarChar(50)
+  recordedAt     DateTime @default(now()) @db.Timestamptz(3)
+
+  @@index([metaCampaignId])
+  @@index([metaAdId])
+  @@index([metaAdId, datePreset])
+  @@index([recordedAt(sort: Desc)])
+  @@map("meta_ad_metrics")
+}
+
+// ================================================================
+// PRESETS
+// ================================================================
+
+/// Ad-level creative preset: headline, landing URL, audience basics, pixel IDs
+model AdPreset {
+  id                String   @id @default(cuid())
+  companyId         String
+  name              String   @db.VarChar(120)
+  isDefault         Boolean  @default(false)
+  headline          String?  @db.VarChar(500)
+  landingPageUrl    String?  @db.VarChar(2000)
+  budgetOverride    Float?
+  targetAgeMin      Int?
+  targetAgeMax      Int?
+  targetGenders     String[] @default([])
+  targetProfessions String[] @default([])
+  pixelIds          String[] @default([])
+  createdAt         DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime @updatedAt @db.Timestamptz(3)
+
+  company Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  metaAds MetaAd[]
+
+  @@index([companyId])
+  @@index([companyId, isDefault])
+  @@map("ad_presets")
+}
+
+/// Adset-level preset: budget, bidding strategy, full Meta targeting object
+model AdsetPreset {
+  id             String    @id @default(cuid())
+  companyId      String
+  name           String    @db.VarChar(120)
+  isDefault      Boolean   @default(false)
+  dailyBudget    BigInt?
+  lifetimeBudget BigInt?
+  startTime      DateTime?
+  endTime        DateTime?
+  bidStrategy    String?   @db.VarChar(64)
+  bidAmount      BigInt?
+  bidConstraints Json?     @default("{}")
+  /// Full Meta targeting object stored as JSON — passed directly to API
+  targeting      Json?     @default("{}")
+  createdAt      DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime  @updatedAt @db.Timestamptz(3)
+
+  company Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  adSets  MetaAdSet[]
+
+  @@index([companyId])
+  @@index([companyId, isDefault])
+  @@map("adset_presets")
+}
+
+/// Campaign-level preset: objective, spend cap, bid strategy, special ad categories
+model CampaignPreset {
+  id                  String   @id @default(cuid())
+  companyId           String
+  name                String   @db.VarChar(120)
+  isDefault           Boolean  @default(false)
+  objective           String?  @db.VarChar(64)
+  status              String?  @db.VarChar(32)
+  spendCap            BigInt?
+  dailyBudget         BigInt?
+  lifetimeBudget      BigInt?
+  bidStrategy         String?  @db.VarChar(64)
+  specialAdCategories Json?    @default("[]")
+  createdAt           DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime @updatedAt @db.Timestamptz(3)
+
+  company   Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  campaigns MetaCampaign[]
+
+  @@index([companyId])
+  @@index([companyId, isDefault])
+  @@map("campaign_presets")
+}
+
+// ================================================================
+// SCHEDULING & AUTOMATION
+// ================================================================
+
+model AdSchedule {
+  id          String           @id @default(cuid())
+  companyId   String
+  scheduledAt DateTime         @db.Timestamptz(3)
+  status      AdScheduleStatus @default(PENDING)
+  createdAt   DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime         @updatedAt @db.Timestamptz(3)
+
+  company Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  ads     MetaAd[]
+
+  @@index([companyId])
+  @@index([companyId, status])
+  @@index([scheduledAt])
+  @@map("ad_schedules")
+}
+
+/// One rule per type per company — toggled on/off via UI
+model AdAutomationRule {
+  id               String    @id @default(cuid())
+  companyId        String
+  ruleType         RuleType
+  isEnabled        Boolean   @default(true)
+  /// Numeric trigger threshold (e.g. CPI ceiling, CTR drop %)
+  threshold        Float?
+  /// Lookback / evaluation window in days
+  window           Int?
+  lastTriggeredAt  DateTime? @db.Timestamptz(3)
+  requiresApproval Boolean   @default(false)
+  createdAt        DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime  @updatedAt @db.Timestamptz(3)
+
+  company Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  events  AdAutomationEvent[]
+
+  @@unique([companyId, ruleType])
+  @@index([companyId])
+  @@map("ad_automation_rules")
+}
+
+/// Audit log of every rule-triggered action
+model AdAutomationEvent {
+  id          String         @id @default(cuid())
+  companyId   String
+  ruleId      String
+  /// Meta ad id
+  adId        String         @db.VarChar(100)
+  actionTaken AutoActionType
+  details     Json           @default("{}")
+  /// null = pending approval | true = approved | false = rejected
+  approved    Boolean?
+  createdAt   DateTime       @default(now()) @db.Timestamptz(3)
+
+  company       Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  rule          AdAutomationRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  notifications Notification[]
+
+  @@index([companyId])
+  @@index([ruleId])
+  @@index([adId])
+  @@index([companyId, createdAt(sort: Desc)])
+  @@map("ad_automation_events")
+}
+
+/// UI notification bell — one row per user-facing alert
+model Notification {
+  id        String    @id @default(cuid())
+  companyId String
+  /// FK to AdAutomationEvent — nullable for manual/system notifications
+  eventId   String?
+  /// AUTO_PAUSE | FATIGUE_ALERT | BUDGET_PACING | SPEND_CONCENTRATION | WINNER_AMPLIFICATION
+  type      String    @db.VarChar(64)
+  title     String    @db.VarChar(255)
+  message   String    @db.Text
+  isRead    Boolean   @default(false)
+  readAt    DateTime? @db.Timestamptz(3)
+  createdAt DateTime  @default(now()) @db.Timestamptz(3)
+
+  company Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  event   AdAutomationEvent? @relation(fields: [eventId], references: [id], onDelete: SetNull)
+
+  @@index([companyId])
+  @@index([companyId, isRead])
+  @@index([createdAt(sort: Desc)])
+  @@map("notifications")
+}
+
+// ================================================================
+// ENUMS
+// ================================================================
+
+enum SubscriptionStatus {
+  ACTIVE
+  CANCELLED
+  EXPIRED
+  PENDING
+  FAILED
+  ON_HOLD
+}
+
+enum AssetType {
+  VIDEO
+  IMAGE
+  DOCUMENT
+}
+
+enum AssetStatus {
+  UPLOADING
+  PROCESSING
+  READY
+  ERROR
+  ARCHIVED
+}
+
+enum UploadSource {
+  NATIVE
+  YOUTUBE
+  GOOGLE_DRIVE
+  DROPBOX
+  URL
+}
+
+enum BulkUploadStatus {
+  PROCESSING
+  READY
+  PARTIAL
+  FAILED
+}
+
+enum BucketType {
+  ASPECT_RATIO
+  DURATION
+  FORMAT
+  ORIENTATION
+}
+
+enum AssetWarningType {
+  TEXT_OVERLAY_HIGH
+  WRONG_DIMENSIONS
+  LOW_RESOLUTION
+  UNSUPPORTED_FORMAT
+}
+
+enum WarningResolution {
+  SKIPPED
+  REUPLOADED
+  DELETED
+}
+
+enum AdScheduleStatus {
+  PENDING
+  PUBLISHED
+  FAILED
+  CANCELLED
+}
+
+enum RuleType {
+  AUTO_PAUSE
+  FATIGUE_ALERT
+  BUDGET_PACING
+  SPEND_CONCENTRATION
+  WINNER_AMPLIFICATION
+}
+
+enum AutoActionType {
+  PAUSED
+  NOTIFIED
+  FLAGGED
+  SUGGESTED
+}
