@@ -9,6 +9,7 @@ const PUBLIC_PATH_PREFIXES = [
   "/api/login",
   "/api/signup",
   "/api/logout",
+  "/api/auth/logout",
 ] as const;
 
 function isPublicPath(pathname: string): boolean {

@@ -125,6 +125,8 @@ model Asset {
   assetBucket AssetBucket? @relation(fields: [assetBucketId], references: [id], onDelete: SetNull)
   warnings    AssetWarning[]
   metaMedia   MetaMedia?
+  streamQueue StreamQueue[]
+
 
   @@index([companyId])
   @@index([bulkUploadId])
@@ -134,6 +136,29 @@ model Asset {
   @@index([assetType, companyId])
   @@index([createdAt(sort: Desc)])
   @@map("assets")
+}
+model StreamQueue {
+  id          String            @id @default(cuid())
+  assetId     String
+  r2Key       String            @db.VarChar(500)
+  r2Bucket    String            @db.VarChar(255)
+  status      StreamQueueStatus @default(PENDING)
+  priority    StreamQueuePriority @default(NORMAL)
+  attempts    Int               @default(0)
+  maxAttempts Int               @default(3)
+  streamId    String?           @db.VarChar(255)
+  lastError   String?           @db.Text
+  startedAt   DateTime?         @db.Timestamptz(3)
+  completedAt DateTime?         @db.Timestamptz(3)
+  createdAt   DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime          @updatedAt @db.Timestamptz(3)
+
+  asset Asset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  @@index([assetId])
+  @@index([status])
+  @@index([priority, createdAt])
+  @@map("stream_queues")
 }
 
 model AssetWarning {
@@ -155,9 +180,9 @@ model AssetWarning {
 
 model UploadSession {
   id            String   @id @default(cuid())
-  uploadId      String   @db.VarChar(255)
-  key           String   @db.VarChar(500)
-  fileName      String   @db.VarChar(255)
+  uploadId      String   @db.VarChar(1000)  // ← was 255, R2 UploadId is long
+  key           String   @db.VarChar(1000)
+  fileName      String   @db.VarChar(1000)   // ← was 255, allow longer filenames
   fileSize      BigInt
   fileType      String   @db.VarChar(200)
   totalParts    Int
@@ -675,4 +700,17 @@ enum AutoActionType {
   NOTIFIED
   FLAGGED
   SUGGESTED
+}
+
+enum StreamQueueStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum StreamQueuePriority {
+  LOW
+  NORMAL
+  HIGH
 }
