@@ -74,7 +74,7 @@ export default function AuthPage({ initialMode }: { initialMode: Mode }) {
       const data = (await res.json()) as { error?: string; company?: { id: string } };
       if (!res.ok) { setError(data.error ?? 'Login failed'); return; }
       setSuccess('Signed in!');
-      router.push('/home'); router.refresh();
+      router.push('/gallery'); router.refresh();
     } catch (err) {
       console.error(err);
       setError('Something went wrong, please try again.');
@@ -119,7 +119,7 @@ export default function AuthPage({ initialMode }: { initialMode: Mode }) {
         setMode('login'); setUserName(signupUserName);
         setError(loginData.error ?? 'Account created. Please log in.'); return;
       }
-      router.push('/home'); router.refresh();
+      router.push('/gallery'); router.refresh();
     } catch (err) {
       console.error(err);
       setError('Something went wrong, please try again.');

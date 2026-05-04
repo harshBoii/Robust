@@ -27,7 +27,7 @@ export async function proxy(request: NextRequest) {
       if (token) {
         try {
           await verifySessionToken(token);
-          return NextResponse.redirect(new URL("/", request.url));
+          return NextResponse.redirect(new URL("/gallery", request.url));
         } catch {
           const res = NextResponse.next();
           res.cookies.delete(AUTH_COOKIE_NAME);
