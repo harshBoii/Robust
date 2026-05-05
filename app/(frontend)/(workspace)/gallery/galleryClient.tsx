@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 
 import VideoPlayer from "@/app/components/Video/VideoPlayer";
 import { UploadZone } from "@/app/components/UI/uploadZone";
@@ -380,23 +381,43 @@ export default function GalleryClient({
       }
     }
 
-    const sections = [...byBucket.entries()].map(([bucketId, items]) => ({
+    type Section = {
+      bucketId: string;
+      label: string;
+      bucketType: string;
+      assets: GalleryAsset[];
+      groupTag?: string;
+    };
+
+    const sections: Section[] = [...byBucket.entries()].map(([bucketId, items]) => ({
       bucketId,
       label: items[0]?.assetBucket?.label ?? "Group",
+      bucketType: items[0]?.assetBucket?.bucketType ?? "ASPECT_RATIO",
       assets: items,
     }));
     sections.sort((a, b) => a.label.localeCompare(b.label));
+
+    // Add group indices for CONTENT buckets (group-1, group-2, etc.)
+    let contentGroupIndex = 1;
+    for (const section of sections) {
+      if (section.bucketType === "CONTENT") {
+        section.groupTag = `group-${contentGroupIndex}`;
+        contentGroupIndex++;
+      }
+    }
+
     if (other.length > 0) {
       sections.push({
         bucketId: "__other__",
         label: "Other",
+        bucketType: "ASPECT_RATIO",
         assets: other,
       });
     }
     return sections;
   }, [openFolder]);
 
-  const runAnalyzeBulk = useCallback(async () => {
+  const runAnalyzeBulk = useCallback(async (mode: 'metadata' | 'content' = 'metadata') => {
     const bulkId = openFolder?.bulk?.id;
     if (!bulkId) return;
     setAnalyzeBusy(true);
@@ -404,7 +425,9 @@ export default function GalleryClient({
     try {
       const res = await fetch(`/api/gallery/bulk-uploads/${bulkId}/analyze`, {
         method: "POST",
+        headers: { 'Content-Type': 'application/json' },
         credentials: "include",
+        body: JSON.stringify({ mode }),
       });
       const data = (await res.json().catch(() => ({}))) as { error?: string };
       if (!res.ok) {
@@ -619,27 +642,28 @@ export default function GalleryClient({
         </div>
       ) : null}
 
-      {openFolder ? (
-        <div
-          className="fixed inset-0 z-[100] flex items-stretch justify-center p-0 sm:p-6 sm:items-center"
-          role="presentation"
-        >
-          <button
-            type="button"
-            className="absolute inset-0 bg-black/55 backdrop-blur-[2px]"
-            aria-label="Close folder"
-            onClick={() => setOpenFolder(null)}
-          />
-          <div
-            role="dialog"
-            aria-modal
-            aria-label={
-              openFolder.bulk?.name ??
-              (openFolder.key === UNGROUPED_KEY ? "Ungrouped" : "Folder")
-            }
-            className="glass-modal relative z-[101] flex h-full w-full max-h-full flex-col overflow-hidden rounded-none border-0 shadow-2xl sm:max-h-[90vh] sm:max-w-6xl sm:rounded-2xl sm:border"
-            onClick={(e) => e.stopPropagation()}
-          >
+      {openFolder && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              className="fixed inset-0 z-[200] flex items-stretch justify-center bg-white p-0 sm:p-6 sm:items-center"
+              role="presentation"
+            >
+              <button
+                type="button"
+                className="absolute inset-0 bg-black/55 backdrop-blur-[2px]"
+                aria-label="Close folder"
+                onClick={() => setOpenFolder(null)}
+              />
+              <div
+                role="dialog"
+                aria-modal
+                aria-label={
+                  openFolder.bulk?.name ??
+                  (openFolder.key === UNGROUPED_KEY ? "Ungrouped" : "Folder")
+                }
+                className="relative z-[201] flex h-full w-full max-h-full flex-col overflow-hidden rounded-none border-0 bg-white shadow-2xl sm:max-h-[90vh] sm:max-w-6xl sm:rounded-2xl sm:border"
+                onClick={(e) => e.stopPropagation()}
+              >
             <div className="flex shrink-0 flex-wrap items-start gap-3 border-b border-[var(--glass-border)] px-4 py-3 sm:px-5">
               <div className="mt-0.5 hidden h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--glass-hover)] sm:flex">
                 <Folder className="h-5 w-5 text-primary/70" />
@@ -653,21 +677,36 @@ export default function GalleryClient({
                 />
               </div>
               {openFolder.bulk ? (
-                <button
-                  type="button"
-                  disabled={analyzeBusy}
-                  onClick={() => void runAnalyzeBulk()}
-                  className="glass-button mt-0.5 inline-flex shrink-0 items-center gap-2 self-start rounded-xl px-3 py-2 text-sm font-medium text-foreground disabled:opacity-60"
-                >
-                  {analyzeBusy ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <RefreshCw className="h-4 w-4" />
-                  )}
-                  {openFolder.assets.some((a) => a.assetBucketId)
-                    ? "Re-group"
-                    : "Group assets"}
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={analyzeBusy}
+                    onClick={() => void runAnalyzeBulk('metadata')}
+                    className="glass-button mt-0.5 inline-flex shrink-0 items-center gap-2 self-start rounded-xl px-3 py-2 text-sm font-medium text-foreground disabled:opacity-60"
+                  >
+                    {analyzeBusy ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <RefreshCw className="h-4 w-4" />
+                    )}
+                    {openFolder.assets.some((a) => a.assetBucketId)
+                      ? "Re-group by metadata"
+                      : "Group by metadata"}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={analyzeBusy}
+                    onClick={() => void runAnalyzeBulk('content')}
+                    className="glass-button-primary mt-0.5 inline-flex shrink-0 items-center gap-2 self-start rounded-xl px-3 py-2 text-sm font-medium disabled:opacity-60"
+                  >
+                    {analyzeBusy ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Layers className="h-4 w-4" />
+                    )}
+                    Group by content
+                  </button>
+                </div>
               ) : null}
               <button
                 type="button"
@@ -683,9 +722,14 @@ export default function GalleryClient({
                 <div className="space-y-8">
                   {folderGroupedSections.map((section) => (
                     <section key={section.bucketId} className="space-y-3">
-                      <h3 className="text-sm font-semibold text-foreground">
+                      <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
                         {section.label}
-                        <span className="ml-2 font-normal text-muted-foreground">
+                        {section.groupTag && (
+                          <span className="inline-flex items-center rounded-full bg-clipfox-primary/15 px-2 py-0.5 text-[11px] font-medium text-clipfox-primary">
+                            {section.groupTag}
+                          </span>
+                        )}
+                        <span className="ml-1 font-normal text-muted-foreground">
                           · {section.assets.length} item
                           {section.assets.length === 1 ? "" : "s"}
                         </span>
@@ -703,15 +747,18 @@ export default function GalleryClient({
               )}
             </div>
           </div>
-        </div>
-      ) : null}
+        </div>,
+            document.body,
+          )
+        : null}
 
-      {preview?.kind === "video" ? (
-        <div
-          className="fixed inset-0 z-[110] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
-          role="presentation"
-          onClick={() => setPreview(null)}
-        >
+      {preview?.kind === "video" && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              className="fixed inset-0 z-[210] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+              role="presentation"
+              onClick={() => setPreview(null)}
+            >
           <div
             className="glass-modal relative w-full max-w-4xl overflow-hidden rounded-2xl p-4 shadow-2xl"
             role="dialog"
@@ -733,15 +780,18 @@ export default function GalleryClient({
               className="mt-2 w-full max-h-[72vh] rounded-xl bg-black"
             />
           </div>
-        </div>
-      ) : null}
+        </div>,
+            document.body,
+          )
+        : null}
 
-      {preview?.kind === "image" ? (
-        <div
-          className="fixed inset-0 z-[110] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
-          onClick={() => setPreview(null)}
-          role="presentation"
-        >
+      {preview?.kind === "image" && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              className="fixed inset-0 z-[210] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+              onClick={() => setPreview(null)}
+              role="presentation"
+            >
           <div
             className="glass-modal relative max-h-[90vh] max-w-5xl overflow-auto rounded-2xl p-3"
             onClick={(e) => e.stopPropagation()}
@@ -761,8 +811,10 @@ export default function GalleryClient({
               className="max-h-[85vh] w-auto max-w-full rounded-lg"
             />
           </div>
-        </div>
-      ) : null}
+        </div>,
+            document.body,
+          )
+        : null}
     </div>
   );
 }

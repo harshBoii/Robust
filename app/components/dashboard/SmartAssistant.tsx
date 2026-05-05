@@ -2,6 +2,7 @@
 
 import Image from 'next/image';
 import { useEffect, useRef, useState } from 'react';
+import ReactMarkdown from 'react-markdown';
 
 type RuleType =
   | 'AUTO_PAUSE'
@@ -96,6 +97,61 @@ function RobustaAvatar({ size = 'sm' }: { size?: 'sm' | 'lg' }) {
         className="h-full w-full object-cover"
         unoptimized
       />
+    </div>
+  );
+}
+
+/* ── Quick Suggestions ── */
+const QUICK_SUGGESTIONS = [
+  { id: 'ideas', label: '💡 Give Me Ideas to Win', prompt: 'Give me ideas to improve my ad performance and win more customers' },
+  { id: 'summary', label: '📊 Summarize All Info', prompt: 'Summarize all my current ad performance data and key metrics' },
+  { id: 'pause', label: '🛑 Which Ads to Pause', prompt: 'Which ads should I pause right now and why' },
+  { id: 'scale', label: '🚀 What to Scale', prompt: 'Which ads are winners that I should scale up' },
+  { id: 'budget', label: '💰 Budget Tips', prompt: 'Give me budget optimization tips for my current campaigns' },
+  { id: 'hook', label: '🎬 Hook Rate Analysis', prompt: 'Analyze my hook rates and tell me which creatives are grabbing attention' },
+];
+
+/* ── Markdown Message Renderer ── */
+function MarkdownMessage({ content, isStreaming }: { content: string; isStreaming?: boolean }) {
+  if (!content) {
+    return isStreaming ? <TypingDots /> : null;
+  }
+
+  return (
+    <div className="prose prose-sm dark:prose-invert max-w-none">
+      <ReactMarkdown
+        components={{
+          h1: ({ children }) => <h1 className="text-base font-bold mb-2 mt-3 first:mt-0">{children}</h1>,
+          h2: ({ children }) => <h2 className="text-sm font-semibold mb-2 mt-3 first:mt-0 text-clipfox-primary">{children}</h2>,
+          h3: ({ children }) => <h3 className="text-xs font-semibold mb-1 mt-2 first:mt-0">{children}</h3>,
+          p: ({ children }) => <p className="mb-2 last:mb-0 leading-relaxed">{children}</p>,
+          strong: ({ children }) => <strong className="font-semibold text-clipfox-primary">{children}</strong>,
+          em: ({ children }) => <em className="italic opacity-90">{children}</em>,
+          ul: ({ children }) => <ul className="list-disc pl-4 mb-2 space-y-0.5">{children}</ul>,
+          ol: ({ children }) => <ol className="list-decimal pl-4 mb-2 space-y-0.5">{children}</ol>,
+          li: ({ children }) => <li className="leading-snug">{children}</li>,
+          code: ({ children }) => (
+            <code className="bg-black/10 dark:bg-white/10 px-1 py-0.5 rounded text-xs font-mono">{children}</code>
+          ),
+          pre: ({ children }) => (
+            <pre className="bg-black/5 dark:bg-white/5 p-2 rounded-lg overflow-x-auto text-xs my-2">{children}</pre>
+          ),
+          blockquote: ({ children }) => (
+            <blockquote className="border-l-2 border-clipfox-primary pl-3 italic opacity-80 my-2">{children}</blockquote>
+          ),
+          hr: () => <hr className="my-3 border-border/50" />,
+          a: ({ children, href }) => (
+            <a href={href} target="_blank" rel="noopener noreferrer" className="text-clipfox-primary underline hover:opacity-80">
+              {children}
+            </a>
+          ),
+        }}
+      >
+        {content}
+      </ReactMarkdown>
+      {isStreaming && (
+        <span className="ml-1 inline-block h-3.5 w-0.5 animate-pulse rounded-full bg-current opacity-70 align-middle" />
+      )}
     </div>
   );
 }
@@ -247,21 +303,42 @@ export default function SmartAssistant({
 
                 <div
                   className={[
-                    'max-w-[82%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed',
+                    'max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed',
                     msg.role === 'user'
                       ? 'glass-button-primary ml-auto rounded-br-sm text-white'
                       : 'glass-card rounded-bl-sm text-foreground',
                   ].join(' ')}
                 >
-                  {msg.content || (msg.streaming ? <TypingDots /> : '')}
-                  {msg.content && msg.streaming && (
-                    <span className="ml-1 inline-block h-3.5 w-0.5 animate-pulse rounded-full bg-current opacity-70 align-middle" />
+                  {msg.role === 'assistant' ? (
+                    <MarkdownMessage content={msg.content} isStreaming={msg.streaming} />
+                  ) : (
+                    <span className="whitespace-pre-wrap">{msg.content}</span>
                   )}
                 </div>
               </div>
             ))}
             <div ref={bottomRef} />
           </div>
+
+          {/* Quick Suggestions */}
+          {messages.length > 0 && messages[messages.length - 1].role === 'assistant' && !streaming && (
+            <div className="border-t border-border/30 px-3 py-2">
+              <p className="text-[10px] uppercase tracking-wide text-muted-foreground/70 mb-1.5 font-medium">
+                Quick Actions
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {QUICK_SUGGESTIONS.map((suggestion) => (
+                  <button
+                    key={suggestion.id}
+                    onClick={() => void send(suggestion.prompt)}
+                    className="text-[11px] px-2.5 py-1.5 rounded-full bg-clipfox-primary/10 hover:bg-clipfox-primary/20 text-clipfox-primary font-medium transition-colors text-left"
+                  >
+                    {suggestion.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Input */}
           <div className="border-t border-border/40 px-3 py-3">

@@ -117,6 +117,7 @@ model Asset {
   tags          String[]     @default([])
   metadata      Json         @default("{}")
   uploadSource  UploadSource @default(NATIVE)
+  videoHash     String?      @db.VarChar(80)
   createdAt     DateTime     @default(now()) @db.Timestamptz(3)
   updatedAt     DateTime     @updatedAt @db.Timestamptz(3)
 
@@ -665,6 +666,7 @@ enum BucketType {
   DURATION
   FORMAT
   ORIENTATION
+  CONTENT
 }
 
 enum AssetWarningType {

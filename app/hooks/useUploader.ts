@@ -159,7 +159,7 @@ export function useUploader(
           const timeout = setTimeout(() => {
             logErr(label, `Part ${partNumber}: PUT timed out after 60s`);
             controller.abort();
-          }, 60_000);
+          }, 180_000);
 
           let r2Res: Response;
           try {

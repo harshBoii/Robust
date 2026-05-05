@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { analyzeBulkUpload } from "@/lib/gallery/analyze-bulk";
 
 export async function POST(
-  _: Request,
+  req: Request,
   context: { params: Promise<{ id: string }> },
 ) {
   const session = await getSession();
@@ -23,8 +23,17 @@ export async function POST(
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
+  // Read mode from request body
+  const { mode = 'metadata' } = (await req.json().catch(() => ({}))) as {
+    mode?: string;
+  };
+
   try {
-    const result = await analyzeBulkUpload(id, session.companyId);
+    const result = await analyzeBulkUpload(
+      id,
+      session.companyId,
+      mode === 'content' ? 'content' : 'metadata',
+    );
     return NextResponse.json(result);
   } catch (e) {
     console.error("[gallery/bulk-uploads/analyze] POST", e);

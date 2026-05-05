@@ -9,6 +9,11 @@ import {
   BucketType,
 } from "@/app/generated/prisma/enums";
 import type { Asset, AssetBucket, Prisma } from "@/app/generated/prisma/client";
+import {
+  groupByDurationWindow,
+  clusterBySimilarity,
+  getOrComputeVideoHash,
+} from "./video-hash";
 
 /** Stable bucket key segment values */
 export type ResolutionTier = "SD" | "HD" | "FHD" | "QHD" | "FOURK" | "UNKNOWN";
@@ -353,12 +358,173 @@ export type AnalyzeBulkResult = {
 };
 
 /**
+ * Group videos by content similarity using duration pre-filtering + perceptual hashing.
+ * 1. Filter READY videos with thumbnails
+ * 2. Group by duration ±2s windows
+ * 3. Compute/retrieve pHash for each video
+ * 4. Cluster by Hamming distance ≤ 10
+ * 5. Fall back to metadata bucketing for non-video assets
+ */
+async function analyzeByContent(
+  assets: Asset[],
+  bulkUploadId: string,
+  companyId: string,
+): Promise<AnalyzeBulkResult> {
+  // Separate videos and non-videos
+  const videos = assets.filter(
+    (a) =>
+      a.assetType === AssetType.VIDEO &&
+      a.status === AssetStatus.READY &&
+      a.thumbnailUrl,
+  );
+  const nonVideos = assets.filter(
+    (a) => a.assetType !== AssetType.VIDEO && a.status === AssetStatus.READY,
+  );
+
+  // Step 1: Group by duration windows (±2s tolerance)
+  const videoAssets = videos.map((v) => ({
+    id: v.id,
+    duration: v.duration,
+    thumbnailUrl: v.thumbnailUrl,
+    videoHash: v.videoHash,
+  }));
+  const durationGroups = groupByDurationWindow(videoAssets, 2);
+
+  // Step 2: Compute/retrieve pHash for all videos
+  const hashMap = new Map<string, string>();
+  for (const group of durationGroups) {
+    for (const assetId of group) {
+      const asset = videos.find((v) => v.id === assetId);
+      if (!asset) continue;
+
+      const hash = await getOrComputeVideoHash(
+        asset.id,
+        asset.thumbnailUrl,
+        asset.duration,
+        asset.videoHash,
+      );
+      if (hash) {
+        hashMap.set(asset.id, hash);
+      }
+    }
+  }
+
+  // Step 3: Cluster by similarity within duration groups.
+  // Multi-frame wHash + "any frame matches" rule: bestHammingDistance picks the
+  // *minimum* distance across all (frame_a × frame_b) pairs (3×3 = 9 comparisons).
+  // wHash on 8x8 LL subband typically yields 0-8 bits diff for the same video,
+  // 25+ for unrelated content. 10/64 is the conservative match threshold.
+  const clusters = clusterBySimilarity(durationGroups, hashMap, 10);
+
+  // Step 4: Compute metadata buckets for non-videos (existing logic)
+  const nonVideoDescriptors = new Map<
+    string,
+    { desc: BucketDescriptor; assetIds: string[] }
+  >();
+
+  for (const asset of nonVideos) {
+    const metrics = await ensureAssetMetrics(asset);
+    const desc = computeBucketDescriptor(
+      asset.assetType,
+      metrics.width,
+      metrics.height,
+      metrics.durationSec,
+    );
+
+    const existing = nonVideoDescriptors.get(desc.bucketValue);
+    if (existing) {
+      existing.assetIds.push(asset.id);
+    } else {
+      nonVideoDescriptors.set(desc.bucketValue, {
+        desc,
+        assetIds: [asset.id],
+      });
+    }
+  }
+
+  // Step 5: Create buckets in transaction
+  const createdBuckets = await prisma.$transaction(async (tx) => {
+    await tx.asset.updateMany({
+      where: { bulkUploadId, companyId },
+      data: { assetBucketId: null },
+    });
+
+    await tx.assetBucket.deleteMany({
+      where: { bulkUploadId, companyId },
+    });
+
+    const bucketRows: AssetBucket[] = [];
+
+    // Create content buckets for video clusters (only clusters with 2+ items)
+    for (const [, assetIds] of clusters) {
+      if (assetIds.length >= 2) {
+        const row = await tx.assetBucket.create({
+          data: {
+            companyId,
+            bulkUploadId,
+            label: `Same content · ${assetIds.length} videos`,
+            bucketType: BucketType.CONTENT,
+            bucketValue: `content|${assetIds.sort().join(',')}`,
+          },
+        });
+        bucketRows.push(row);
+        await tx.asset.updateMany({
+          where: { id: { in: assetIds }, companyId },
+          data: { assetBucketId: row.id },
+        });
+      }
+    }
+
+    // Create metadata buckets for non-videos
+    for (const { desc, assetIds } of nonVideoDescriptors.values()) {
+      const row = await tx.assetBucket.create({
+        data: {
+          companyId,
+          bulkUploadId,
+          label: desc.label,
+          bucketType: desc.bucketType,
+          bucketValue: desc.bucketValue,
+        },
+      });
+      bucketRows.push(row);
+      await tx.asset.updateMany({
+        where: { id: { in: assetIds }, companyId },
+        data: { assetBucketId: row.id },
+      });
+    }
+
+    return bucketRows;
+  });
+
+  const videoAssigned = [...clusters.values()].reduce(
+    (sum, ids) => sum + (ids.length >= 2 ? ids.length : 0),
+    0,
+  );
+  const nonVideoAssigned = [...nonVideoDescriptors.values()].reduce(
+    (sum, g) => sum + g.assetIds.length,
+    0,
+  );
+
+  return {
+    buckets: createdBuckets.map((b) => ({
+      id: b.id,
+      label: b.label,
+      bucketValue: b.bucketValue,
+      bucketType: b.bucketType,
+    })),
+    assigned: videoAssigned + nonVideoAssigned,
+    skipped: assets.length - videoAssigned - nonVideoAssigned,
+  };
+}
+
+/**
  * Groups all READY assets in the bulk into AssetBuckets. Non-READY assets keep assetBucketId null.
  * Replaces existing buckets for this bulk upload (clean re-run).
  */
 export async function analyzeBulkUpload(
   bulkUploadId: string,
   companyId: string,
+  mode: 'metadata' | 'content' = 'metadata',
 ): Promise<AnalyzeBulkResult> {
   const bulk = await prisma.bulkUpload.findFirst({
     where: { id: bulkUploadId, companyId },
@@ -372,6 +538,12 @@ export async function analyzeBulkUpload(
     where: { bulkUploadId, companyId },
   });
 
+  // Content mode: use perceptual hashing for videos
+  if (mode === 'content') {
+    return analyzeByContent(assets, bulkUploadId, companyId);
+  }
+
+  // Metadata mode: existing aspect ratio + resolution + duration bucketing
   const descriptors = new Map<
     string,
     { desc: BucketDescriptor; assetIds: string[] }
