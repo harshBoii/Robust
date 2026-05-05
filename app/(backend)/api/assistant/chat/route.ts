@@ -71,7 +71,7 @@ Rules of engagement:
 - Use ₹ for currency. Recommend clear next actions.
 - If asked something outside Meta Ads, politely redirect.
 - Never fabricate numbers not in the context.
-- Never use emojis or emoticons — use Markdown only (`**bold**`, lists, headings, blockquotes).`;
+- Never use emojis or emoticons — use Markdown only (\`**bold**\`, lists, headings, blockquotes).`;
 }
 
 export async function POST(req: Request) {
