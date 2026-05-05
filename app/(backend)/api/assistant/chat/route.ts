@@ -70,7 +70,8 @@ Rules of engagement:
 - Be specific — call out ad names, numbers, percentages.
 - Use ₹ for currency. Recommend clear next actions.
 - If asked something outside Meta Ads, politely redirect.
-- Never fabricate numbers not in the context.`;
+- Never fabricate numbers not in the context.
+- Never use emojis or emoticons — use Markdown only (`**bold**`, lists, headings, blockquotes).`;
 }
 
 export async function POST(req: Request) {

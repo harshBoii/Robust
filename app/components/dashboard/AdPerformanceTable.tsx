@@ -2,6 +2,7 @@
 
 import Image from 'next/image';
 import { useMemo, useState } from 'react';
+import { AiOutlineLoading } from 'react-icons/ai';
 
 import StatusSignalBadge from '@/app/components/dashboard/StatusSignalBadge';
 import { convertToInr, fmtCurrency, type Currency } from '@/lib/currency';
@@ -294,7 +295,7 @@ export default function AdPerformanceTable({
 
         {/* ── Range filter panel ── */}
         {showRanges && (
-          <div className="animate-fade-up mt-3 rounded-2xl border border-border/50 bg-background/20 px-5 py-4">
+          <div className="mt-3 rounded-2xl border border-border/50 bg-background/20 px-5 py-4">
             <div className="flex flex-wrap gap-6">
               <RangeInputs label="Spend today" unit={sym} range={spendTodayRange} onChange={(r) => { setSpendTodayRange(r); setPage(0); }} />
               <RangeInputs label="Spend total" unit={sym} range={spendTotalRange} onChange={(r) => { setSpendTotalRange(r); setPage(0); }} />
@@ -402,10 +403,7 @@ export default function AdPerformanceTable({
                     >
                       {isBusy ? (
                         <span className="flex items-center justify-center gap-1">
-                          <svg className="h-3 w-3 animate-spin" viewBox="0 0 24 24" fill="none">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"/>
-                          </svg>
+                          <AiOutlineLoading className="h-3 w-3 animate-spin" aria-hidden />
                           …
                         </span>
                       ) : isActive ? 'Pause' : 'Turn on'}

@@ -3,6 +3,15 @@
 import Image from 'next/image';
 import { useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
+import {
+  HiOutlineChartBarSquare,
+  HiOutlineCurrencyDollar,
+  HiOutlineFilm,
+  HiOutlineLightBulb,
+  HiOutlinePauseCircle,
+  HiOutlineRocketLaunch,
+} from 'react-icons/hi2';
+import { AiOutlineLoading } from 'react-icons/ai';
 
 type RuleType =
   | 'AUTO_PAUSE'
@@ -41,7 +50,7 @@ const WELCOME: Message = {
   id: 'welcome',
   role: 'assistant',
   content:
-    "Hi! I'm Miss Robusta 👋 — your Meta Ads analyst. Ask me anything about your campaigns — which ads to pause, scale, or refresh.",
+    "Hi! I'm Miss Robusta — your Meta Ads analyst. Ask me anything about your campaigns — which ads to pause, scale, or refresh.",
 };
 
 function buildContext(rows: AssistantRow[]) {
@@ -66,15 +75,14 @@ function buildContext(rows: AssistantRow[]) {
   };
 }
 
-/* ── Typing indicator ── */
+/* ── Typing indicator (static — no bounce) ── */
 function TypingDots() {
   return (
-    <span className="inline-flex items-center gap-0.5">
+    <span className="inline-flex items-center gap-1">
       {[0, 1, 2].map((i) => (
         <span
           key={i}
-          className="h-1.5 w-1.5 animate-bounce rounded-full bg-current opacity-60"
-          style={{ animationDelay: `${i * 140}ms` }}
+          className="h-1.5 w-1.5 rounded-full bg-current opacity-40"
         />
       ))}
     </span>
@@ -103,13 +111,43 @@ function RobustaAvatar({ size = 'sm' }: { size?: 'sm' | 'lg' }) {
 
 /* ── Quick Suggestions ── */
 const QUICK_SUGGESTIONS = [
-  { id: 'ideas', label: '💡 Give Me Ideas to Win', prompt: 'Give me ideas to improve my ad performance and win more customers' },
-  { id: 'summary', label: '📊 Summarize All Info', prompt: 'Summarize all my current ad performance data and key metrics' },
-  { id: 'pause', label: '🛑 Which Ads to Pause', prompt: 'Which ads should I pause right now and why' },
-  { id: 'scale', label: '🚀 What to Scale', prompt: 'Which ads are winners that I should scale up' },
-  { id: 'budget', label: '💰 Budget Tips', prompt: 'Give me budget optimization tips for my current campaigns' },
-  { id: 'hook', label: '🎬 Hook Rate Analysis', prompt: 'Analyze my hook rates and tell me which creatives are grabbing attention' },
-];
+  {
+    id: 'ideas',
+    Icon: HiOutlineLightBulb,
+    label: 'Give me ideas to win',
+    prompt: 'Give me ideas to improve my ad performance and win more customers',
+  },
+  {
+    id: 'summary',
+    Icon: HiOutlineChartBarSquare,
+    label: 'Summarise all info',
+    prompt: 'Summarize all my current ad performance data and key metrics',
+  },
+  {
+    id: 'pause',
+    Icon: HiOutlinePauseCircle,
+    label: 'Which ads to pause',
+    prompt: 'Which ads should I pause right now and why',
+  },
+  {
+    id: 'scale',
+    Icon: HiOutlineRocketLaunch,
+    label: 'What to scale',
+    prompt: 'Which ads are winners that I should scale up',
+  },
+  {
+    id: 'budget',
+    Icon: HiOutlineCurrencyDollar,
+    label: 'Budget tips',
+    prompt: 'Give me budget optimization tips for my current campaigns',
+  },
+  {
+    id: 'hook',
+    Icon: HiOutlineFilm,
+    label: 'Hook rate analysis',
+    prompt: 'Analyze my hook rates and tell me which creatives are grabbing attention',
+  },
+] as const;
 
 /* ── Markdown Message Renderer ── */
 function MarkdownMessage({ content, isStreaming }: { content: string; isStreaming?: boolean }) {
@@ -150,7 +188,7 @@ function MarkdownMessage({ content, isStreaming }: { content: string; isStreamin
         {content}
       </ReactMarkdown>
       {isStreaming && (
-        <span className="ml-1 inline-block h-3.5 w-0.5 animate-pulse rounded-full bg-current opacity-70 align-middle" />
+        <span className="ml-1 inline-block h-3.5 w-px rounded-full bg-current opacity-50 align-middle" />
       )}
     </div>
   );
@@ -327,13 +365,15 @@ export default function SmartAssistant({
                 Quick Actions
               </p>
               <div className="flex flex-wrap gap-1.5">
-                {QUICK_SUGGESTIONS.map((suggestion) => (
+                {QUICK_SUGGESTIONS.map(({ id, Icon, label, prompt }) => (
                   <button
-                    key={suggestion.id}
-                    onClick={() => void send(suggestion.prompt)}
-                    className="text-[11px] px-2.5 py-1.5 rounded-full bg-clipfox-primary/10 hover:bg-clipfox-primary/20 text-clipfox-primary font-medium transition-colors text-left"
+                    key={id}
+                    type="button"
+                    onClick={() => void send(prompt)}
+                    className="inline-flex items-center gap-1.5 rounded-full bg-clipfox-primary/10 px-2.5 py-1.5 text-left text-[11px] font-medium text-clipfox-primary transition-colors hover:bg-clipfox-primary/20"
                   >
-                    {suggestion.label}
+                    <Icon className="size-3.5 shrink-0 opacity-90" aria-hidden />
+                    <span>{label}</span>
                   </button>
                 ))}
               </div>
@@ -362,12 +402,9 @@ export default function SmartAssistant({
                 aria-label="Send"
               >
                 {streaming ? (
-                  <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
-                  </svg>
+                  <AiOutlineLoading className="h-4 w-4 animate-spin" aria-hidden />
                 ) : (
-                  <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden>
                     <line x1="22" y1="2" x2="11" y2="13" />
                     <polygon points="22 2 15 22 11 13 2 9 22 2" />
                   </svg>
@@ -406,10 +443,6 @@ export default function SmartAssistant({
             className="h-full w-full rounded-full object-cover"
             unoptimized
           />
-        )}
-        {/* Pulse ring when closed */}
-        {!open && (
-          <span className="absolute inset-0 animate-ping rounded-full bg-clipfox-primary opacity-20" />
         )}
       </button>
     </div>
