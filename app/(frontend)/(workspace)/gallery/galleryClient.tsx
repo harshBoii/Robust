@@ -88,6 +88,99 @@ interface Props {
 
 const UNGROUPED_KEY = "__ungrouped__";
 
+type UsageTag =
+  | "Story material"
+  | "Reel material"
+  | "Square post"
+  | "Portrait post"
+  | "Landscape post"
+  | "Long-form";
+
+const TAG_STYLES: Record<UsageTag, string> = {
+  "Story material": "bg-rose-500/10 text-rose-600 border-rose-500/20",
+  "Reel material": "bg-fuchsia-500/10 text-fuchsia-600 border-fuchsia-500/25",
+  "Square post": "bg-sky-500/10 text-sky-600 border-sky-500/20",
+  "Portrait post": "bg-blue-500/10 text-blue-600 border-blue-500/20",
+  "Landscape post": "bg-amber-500/10 text-amber-700 border-amber-500/25",
+  "Long-form": "bg-emerald-500/10 text-emerald-600 border-emerald-500/20",
+};
+
+/**
+ * Classify a normalized aspect ratio. Tolerance ~6% so 1080x1920 (0.5625) still
+ * lands on 9:16 even with rounding from arbitrary upload sizes.
+ */
+function classifyAspect(
+  width: number,
+  height: number,
+): "9:16" | "1:1" | "4:5" | "16:9" | "OTHER" {
+  const r = width / height;
+  const targets: Array<{ key: "9:16" | "1:1" | "4:5" | "16:9"; ratio: number }> = [
+    { key: "1:1", ratio: 1 },
+    { key: "4:5", ratio: 4 / 5 },
+    { key: "9:16", ratio: 9 / 16 },
+    { key: "16:9", ratio: 16 / 9 },
+  ];
+  let best: "9:16" | "1:1" | "4:5" | "16:9" | "OTHER" = "OTHER";
+  let bestDiff = Infinity;
+  for (const t of targets) {
+    const d = Math.abs(r - t.ratio);
+    if (d < bestDiff) {
+      bestDiff = d;
+      best = t.key;
+    }
+  }
+  return bestDiff > 0.06 ? "OTHER" : best;
+}
+
+/**
+ * Derive social-media usage chips for an asset from its aspect ratio, duration,
+ * and asset type. Multiple chips can apply (e.g. a 30s 9:16 video is both
+ * "Story material" and "Reel material").
+ */
+function getUsageTags(asset: GalleryAsset): UsageTag[] {
+  const m = asset.resolution
+    ? /^(\d+)\s*x\s*(\d+)$/i.exec(asset.resolution.trim())
+    : null;
+  if (!m) return [];
+  const w = Number(m[1]);
+  const h = Number(m[2]);
+  if (!Number.isFinite(w) || !Number.isFinite(h) || w < 1 || h < 1) return [];
+
+  const aspect = classifyAspect(w, h);
+  const isVideo = asset.assetType === "VIDEO";
+  const isImage = asset.assetType === "IMAGE";
+  const dur = asset.duration ?? 0;
+
+  const tags: UsageTag[] = [];
+
+  // Story: 9:16 image, or 9:16 video ≤60s
+  if (aspect === "9:16" && (isImage || (isVideo && dur > 0 && dur <= 60))) {
+    tags.push("Story material");
+  }
+  // Reel: 9:16 video 5–90s
+  if (aspect === "9:16" && isVideo && dur >= 5 && dur <= 90) {
+    tags.push("Reel material");
+  }
+  // Square post: 1:1 image, or 1:1 video ≤90s
+  if (aspect === "1:1" && (isImage || (isVideo && dur > 0 && dur <= 90))) {
+    tags.push("Square post");
+  }
+  // Portrait post: 4:5 image, or 4:5 video ≤90s
+  if (aspect === "4:5" && (isImage || (isVideo && dur > 0 && dur <= 90))) {
+    tags.push("Portrait post");
+  }
+  // Landscape post: 16:9 image, or 16:9 video ≤60s
+  if (aspect === "16:9" && (isImage || (isVideo && dur > 0 && dur <= 60))) {
+    tags.push("Landscape post");
+  }
+  // Long-form: any video > 3 min
+  if (isVideo && dur > 180) {
+    tags.push("Long-form");
+  }
+
+  return tags;
+}
+
 function buildBulkGroups(assets: GalleryAsset[]): BulkGroup[] {
   const map = new Map<string, { bulk: GalleryBulk | null; assets: GalleryAsset[] }>();
   for (const a of assets) {
@@ -488,50 +581,65 @@ export default function GalleryClient({
     }
   };
 
-  const renderAssetCard = (asset: GalleryAsset) => (
-    <button
-      key={asset.id}
-      type="button"
-      disabled={openingId === asset.id}
-      onClick={() => void openAsset(asset)}
-      className="group glass-card overflow-hidden rounded-2xl p-0 text-left transition hover:border-primary/30 disabled:opacity-60"
-    >
-      <div className="relative aspect-video w-full bg-[var(--glass-hover)]">
-        {asset.thumbnailUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={asset.thumbnailUrl}
-            alt=""
-            className="h-full w-full object-cover"
-          />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center text-muted-foreground">
-            {asset.assetType === "VIDEO" ? (
-              <Film className="h-10 w-10 opacity-40" />
-            ) : asset.assetType === "IMAGE" ? (
-              <ImageIcon className="h-10 w-10 opacity-40" />
-            ) : (
-              <FileText className="h-10 w-10 opacity-40" />
-            )}
-          </div>
-        )}
-        {asset.assetType === "VIDEO" && (
-          <span className="absolute bottom-2 right-2 inline-flex items-center gap-1 rounded-full bg-black/60 px-2 py-0.5 text-[10px] font-semibold text-white">
-            <Play className="h-3 w-3" /> Stream
+  const renderAssetCard = (asset: GalleryAsset) => {
+    const usageTags = getUsageTags(asset);
+    return (
+      <button
+        key={asset.id}
+        type="button"
+        disabled={openingId === asset.id}
+        onClick={() => void openAsset(asset)}
+        className="group glass-card overflow-hidden rounded-2xl p-0 text-left transition hover:border-primary/30 disabled:opacity-60"
+      >
+        <div className="relative aspect-video w-full bg-[var(--glass-hover)]">
+          {asset.thumbnailUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={asset.thumbnailUrl}
+              alt=""
+              className="h-full w-full object-cover"
+            />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center text-muted-foreground">
+              {asset.assetType === "VIDEO" ? (
+                <Film className="h-10 w-10 opacity-40" />
+              ) : asset.assetType === "IMAGE" ? (
+                <ImageIcon className="h-10 w-10 opacity-40" />
+              ) : (
+                <FileText className="h-10 w-10 opacity-40" />
+              )}
+            </div>
+          )}
+          {asset.assetType === "VIDEO" && (
+            <span className="absolute bottom-2 right-2 inline-flex items-center gap-1 rounded-full bg-black/60 px-2 py-0.5 text-[10px] font-semibold text-white">
+              <Play className="h-3 w-3" /> Stream
+            </span>
+          )}
+          <span className="absolute left-2 top-2 rounded-md bg-black/55 px-1.5 py-0.5 text-[10px] font-medium uppercase text-white">
+            {asset.status}
           </span>
-        )}
-        <span className="absolute left-2 top-2 rounded-md bg-black/55 px-1.5 py-0.5 text-[10px] font-medium uppercase text-white">
-          {asset.status}
-        </span>
-      </div>
-      <div className="space-y-1 px-4 py-3">
-        <p className="truncate font-medium text-foreground">
-          {asset.title || asset.filename}
-        </p>
-        <p className="truncate text-xs text-muted-foreground">{asset.filename}</p>
-      </div>
-    </button>
-  );
+        </div>
+        <div className="space-y-1 px-4 py-3">
+          <p className="truncate font-medium text-foreground">
+            {asset.title || asset.filename}
+          </p>
+          <p className="truncate text-xs text-muted-foreground">{asset.filename}</p>
+          {usageTags.length > 0 && (
+            <div className="flex flex-wrap gap-1 pt-1.5">
+              {usageTags.map((tag) => (
+                <span
+                  key={tag}
+                  className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium ${TAG_STYLES[tag]}`}
+                >
+                  {tag}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+      </button>
+    );
+  };
 
   const gridClass =
     "grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5";
