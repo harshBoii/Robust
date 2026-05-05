@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE "assets" ALTER COLUMN "videoHash" SET DATA TYPE VARCHAR(300);

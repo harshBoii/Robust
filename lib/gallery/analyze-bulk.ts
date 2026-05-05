@@ -410,11 +410,10 @@ async function analyzeByContent(
   }
 
   // Step 3: Cluster by similarity within duration groups.
-  // Multi-frame wHash + "any frame matches" rule: bestHammingDistance picks the
-  // *minimum* distance across all (frame_a × frame_b) pairs (3×3 = 9 comparisons).
-  // wHash on 8x8 LL subband typically yields 0-8 bits diff for the same video,
-  // 25+ for unrelated content. 10/64 is the conservative match threshold.
-  const clusters = clusterBySimilarity(durationGroups, hashMap, 10);
+  // Multi-frame wHash composite gate: averageHammingDistance ≤ 12, frameAgreement ≥ 0.6,
+  // bestHammingDistance ≤ 6 — all three must hold. 5-frame sampling (10/30/50/70/90%)
+  // provides enough coverage that edge frames break midpoint-similarity false positives.
+  const clusters = clusterBySimilarity(durationGroups, hashMap);
 
   // Step 4: Compute metadata buckets for non-videos (existing logic)
   const nonVideoDescriptors = new Map<

@@ -117,7 +117,7 @@ model Asset {
   tags          String[]     @default([])
   metadata      Json         @default("{}")
   uploadSource  UploadSource @default(NATIVE)
-  videoHash     String?      @db.VarChar(80)
+  videoHash     String?      @db.VarChar(300)
   createdAt     DateTime     @default(now()) @db.Timestamptz(3)
   updatedAt     DateTime     @updatedAt @db.Timestamptz(3)
 

@@ -136,13 +136,15 @@ function thumbnailAtTime(thumbnailUrl: string, timeSec: number): string {
 }
 
 /**
- * Compute multi-frame hash for a video by sampling thumbnails at 25%, 50%, 75% of duration.
- * Returns ":"-joined hex string (e.g. "deadbeef…:1234abcd…:5678ef01…") or null on failure.
+ * Compute multi-frame hash for a video by sampling thumbnails at 0%, 25%, 50%, 75%, 100%
+ * of duration. Returns ":"-joined hex string or null on failure.
  *
- * This is far more robust than a single frame because:
- *   - Different CF Stream encodings pick different default frames; sampling 3 timestamps
- *     means at least one usually overlaps between two encodings of the same video.
- *   - Two unrelated videos rarely match on multiple frames simultaneously.
+ * 5-frame sampling is more robust than 3 frames because:
+ *   - Edge frames (0%, 100%) capture content that is far more distinctive than midpoints.
+ *   - A talking-head at 50% of any video looks similar across unrelated clips; sampling
+ *     the extremes breaks that degeneracy.
+ *   - Different CF Stream encodings pick different default frames; 5 samples maximise
+ *     overlap probability between two encodings of the same source.
  */
 export async function computeMultiFrameHash(
   thumbnailUrl: string,
@@ -154,7 +156,7 @@ export async function computeMultiFrameHash(
     return computePHash(normalizeThumbnail(thumbnailUrl));
   }
 
-  const samplePcts = [0.25, 0.5, 0.75];
+  const samplePcts = [0, 0.25, 0.5, 0.75, 1.0];
   const hashes = await Promise.all(
     samplePcts.map((pct) =>
       computePHash(thumbnailAtTime(thumbnailUrl, durationSec * pct)),
@@ -188,7 +190,7 @@ export function hammingDistance(a: string, b: string): number {
 
 /**
  * Compare two multi-frame hashes (":"-joined) and return the *minimum* Hamming
- * distance across all frame pairs. If any frame matches → it's the same video.
+ * distance across all frame pairs. Used as one component of the composite gate.
  */
 export function bestHammingDistance(a: string, b: string): number {
   const framesA = a.split(':').filter(Boolean);
@@ -198,13 +200,84 @@ export function bestHammingDistance(a: string, b: string): number {
   let best = 64;
   for (const fa of framesA) {
     for (const fb of framesB) {
-      // Both frames must be 16 hex chars (64-bit hash)
       if (fa.length !== 16 || fb.length !== 16) continue;
       const d = hammingDistance(fa, fb);
       if (d < best) best = d;
     }
   }
   return best;
+}
+
+/**
+ * Average Hamming distance across all cross-frame pairs from two multi-frame hashes.
+ * Returns 64 when either hash has no valid frames.
+ */
+export function averageHammingDistance(a: string, b: string): number {
+  const framesA = a.split(':').filter(Boolean);
+  const framesB = b.split(':').filter(Boolean);
+  if (framesA.length === 0 || framesB.length === 0) return 64;
+
+  let total = 0;
+  let count = 0;
+  for (const fa of framesA) {
+    for (const fb of framesB) {
+      if (fa.length !== 16 || fb.length !== 16) continue;
+      total += hammingDistance(fa, fb);
+      count++;
+    }
+  }
+  return count === 0 ? 64 : total / count;
+}
+
+/**
+ * Frame agreement score: fraction of frames in A whose best match in B is within
+ * the per-frame threshold. Requires majority agreement, not just one lucky pair.
+ *
+ * Returns a value in [0, 1]. A score of 1 means every frame in A found a close
+ * counterpart in B.
+ */
+function frameAgreementScore(a: string, b: string, threshold = 10): number {
+  const framesA = a.split(':').filter(Boolean);
+  const framesB = b.split(':').filter(Boolean);
+  let matches = 0;
+  let total = 0;
+
+  for (const fa of framesA) {
+    let bestForFrame = 64;
+    for (const fb of framesB) {
+      if (fa.length === 16 && fb.length === 16) {
+        bestForFrame = Math.min(bestForFrame, hammingDistance(fa, fb));
+      }
+    }
+    if (bestForFrame <= threshold) matches++;
+    total++;
+  }
+  return total > 0 ? matches / total : 0;
+}
+
+/**
+ * Positional frame match gate:
+ *   - Compare frame i of A against frame i of B (same timestamp position).
+ *     Frame 0 of A vs frame 0 of B (0%), frame 1 vs frame 1 (25%), etc.
+ *   - A frame pair matches when its Hamming distance ≤ 19 (≥70% of 64 bits agree).
+ *   - Videos are considered the same content when at least 2 of the 5 positional
+ *     pairs match. This avoids false positives from a single coincidental frame
+ *     while remaining robust to encoding variation on a small number of frames.
+ */
+function isSameContent(hashA: string, hashB: string): boolean {
+  const framesA = hashA.split(':').filter(Boolean);
+  const framesB = hashB.split(':').filter(Boolean);
+  const len = Math.min(framesA.length, framesB.length);
+  if (len === 0) return false;
+
+  let matchingFrames = 0;
+  for (let i = 0; i < len; i++) {
+    if (framesA[i].length !== 16 || framesB[i].length !== 16) continue;
+    if (hammingDistance(framesA[i], framesB[i]) <= 19) {
+      matchingFrames++;
+    }
+  }
+  return matchingFrames >= 2;
 }
 
 /**
@@ -322,13 +395,15 @@ class UnionFind {
  * Cluster assets by similarity using Union-Find.
  * Only compares assets within the same candidate groups.
  * Returns Map<rootId, assetIds[]> of clusters.
+ *
+ * Two assets are merged when isSameContent() passes — a three-signal AND gate
+ * (average distance, frame agreement, best distance) that is far more precise
+ * than the old single-threshold best-distance check.
  */
 export function clusterBySimilarity(
   candidateGroups: Set<string>[],
   hashMap: Map<string, string>,
-  threshold = 10,
 ): Map<string, string[]> {
-  // Flatten all asset IDs from candidate groups
   const allAssetIds = new Set<string>();
   for (const group of candidateGroups) {
     for (const id of group) {
@@ -340,7 +415,6 @@ export function clusterBySimilarity(
 
   const uf = new UnionFind(Array.from(allAssetIds));
 
-  // Compare within each candidate group
   for (const group of candidateGroups) {
     const ids = Array.from(group);
 
@@ -352,9 +426,7 @@ export function clusterBySimilarity(
         const hashB = hashMap.get(ids[j]);
         if (!hashB) continue;
 
-        // Multi-frame: take the best (minimum) distance across any frame pair
-        const distance = bestHammingDistance(hashA, hashB);
-        if (distance <= threshold) {
+        if (isSameContent(hashA, hashB)) {
           uf.union(ids[i], ids[j]);
         }
       }
@@ -366,7 +438,7 @@ export function clusterBySimilarity(
 
 /**
  * Compute or retrieve cached multi-frame video hash for an asset.
- * Hash format: "<frame1Hex>:<frame2Hex>:<frame3Hex>" (each frame = 16 hex chars).
+ * Hash format: up to 5 ":"-joined 16-char hex frames sampled at 0/25/50/75/100%.
  *
  * If asset.videoHash already contains a multi-frame hash (has ":"), returns it as-is.
  * Single-frame legacy hashes are recomputed (they'll be cleared by the migration anyway).
