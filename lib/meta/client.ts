@@ -342,9 +342,12 @@ export async function uploadAdImage(input: {
 
   const form = new FormData();
   form.set('filename', input.filename);
+
+  // Ensure BlobPart is backed by ArrayBuffer (not SharedArrayBuffer)
+  const bytesForBlob = input.bytes.buffer instanceof ArrayBuffer ? input.bytes : input.bytes.slice();
   form.set(
     'bytes',
-    new Blob([input.bytes], { type: 'application/octet-stream' }),
+    new Blob([bytesForBlob], { type: 'application/octet-stream' }),
   );
 
   const res = await fetch(url, { method: 'POST', body: form, cache: 'no-store' });
@@ -374,7 +377,9 @@ export async function uploadAdVideo(input: {
 
   const form = new FormData();
   form.set('name', input.name);
-  form.set('source', new Blob([input.bytes], { type: 'application/octet-stream' }), input.filename);
+  // Ensure BlobPart is backed by ArrayBuffer (not SharedArrayBuffer)
+  const bytesForBlob = input.bytes.buffer instanceof ArrayBuffer ? input.bytes : input.bytes.slice();
+  form.set('source', new Blob([bytesForBlob], { type: 'application/octet-stream' }), input.filename);
 
   const res = await fetch(url, { method: 'POST', body: form, cache: 'no-store' });
   const json = (await res.json()) as { id?: string; error?: { message?: string } };
