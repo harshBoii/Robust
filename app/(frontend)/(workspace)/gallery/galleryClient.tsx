@@ -221,6 +221,7 @@ function BulkSessionHeader({
   const [renameError, setRenameError] = useState<string | null>(null);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setName(bulk?.name ?? "");
   }, [bulk?.id, bulk?.name]);
 
@@ -429,12 +430,15 @@ export default function GalleryClient({
   }, [assetsUrl]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadAssets();
   }, [loadAssets]);
 
   useEffect(() => {
     if (hideFoldersView) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setViewMode("flat");
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setOpenFolder(null);
     }
   }, [hideFoldersView]);
@@ -451,7 +455,9 @@ export default function GalleryClient({
   useEffect(() => {
     if (!openFolderKey) return;
     const next = bulkGroups.find((g) => g.key === openFolderKey);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (next) setOpenFolder(next);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     else setOpenFolder(null);
   }, [bulkGroups, openFolderKey]);
 

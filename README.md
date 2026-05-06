@@ -20,6 +20,16 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
+## Worker / Cron setup (Meta publishing)
+
+The Meta publish pipeline queues rows in `ad_publish_jobs` and a worker drains them.
+
+- **Worker endpoint**: `POST /api/internal/worker/publish-jobs`
+- **Auth**: requires header `x-worker-secret: $WORKER_SECRET`
+- **Env**: set `WORKER_SECRET` (and Meta + R2 env vars) in your deployment.
+
+In production, configure a platform cron to call this endpoint every minute.
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:

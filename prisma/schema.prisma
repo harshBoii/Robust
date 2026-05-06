@@ -49,6 +49,7 @@ model Company {
   adAutomationRules  AdAutomationRule[]
   adAutomationEvents AdAutomationEvent[]
   notifications      Notification[]
+  adPublishJobs      AdPublishJob[]
 
   @@index([slug])
   @@map("companies")
@@ -127,6 +128,7 @@ model Asset {
   warnings    AssetWarning[]
   metaMedia   MetaMedia?
   streamQueue StreamQueue[]
+  adPublishJobs AdPublishJob[]
 
 
   @@index([companyId])
@@ -302,6 +304,9 @@ model MetaCampaign {
   campaignPreset  CampaignPreset? @relation(fields: [campaignPresetId], references: [id], onDelete: SetNull)
   creative        MetaCreative?
   adSets          MetaAdSet[]
+  adsetPresets    AdsetPreset[]
+  publishJobs     AdPublishJob[]
+
 
   @@unique([metaIntegrationId, metaCampaignId])
   @@index([metaIntegrationId])
@@ -376,6 +381,7 @@ model MetaAdSet {
   campaign        MetaCampaign    @relation(fields: [campaignId], references: [id], onDelete: Cascade)
   adsetPreset     AdsetPreset?    @relation(fields: [adsetPresetId], references: [id], onDelete: SetNull)
   ads             MetaAd[]
+  publishJobs      AdPublishJob[]
 
   @@unique([metaIntegrationId, metaAdSetId])
   @@index([campaignId])
@@ -410,6 +416,7 @@ model MetaAd {
   schedule        AdSchedule?     @relation(fields: [scheduleId], references: [id], onDelete: SetNull)
   duplicatedFrom  MetaAd?         @relation("MetaAdDuplicate", fields: [duplicatedFromId], references: [id], onDelete: SetNull)
   duplicates      MetaAd[]        @relation("MetaAdDuplicate")
+  publishJobs     AdPublishJob[]
 
   @@unique([metaIntegrationId, metaAdId])
   @@index([adSetId])
@@ -472,6 +479,7 @@ model AdPreset {
 
   company Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   metaAds MetaAd[]
+  publishJobs AdPublishJob[]
 
   @@index([companyId])
   @@index([companyId, isDefault])
@@ -488,8 +496,16 @@ model AdsetPreset {
   lifetimeBudget BigInt?
   startTime      DateTime?
   endTime        DateTime?
+  billingEvent     String?  @db.VarChar(64)
+  optimizationGoal String?  @db.VarChar(100)
+  destinationType  String?  @db.VarChar(64)
   bidStrategy    String?   @db.VarChar(64)
   bidAmount      BigInt?
+  isDefaultCreative Boolean @default(false)
+  pacingType        String? @db.VarChar(32)
+  promotedObject    Json?   @default("{}")
+  attributionSpec   Json?   @default("[]")
+  pinnedCampaignId  String?
   bidConstraints Json?     @default("{}")
   /// Full Meta targeting object stored as JSON — passed directly to API
   targeting      Json?     @default("{}")
@@ -497,10 +513,12 @@ model AdsetPreset {
   updatedAt      DateTime  @updatedAt @db.Timestamptz(3)
 
   company Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  pinnedCampaign MetaCampaign? @relation(fields: [pinnedCampaignId], references: [id], onDelete: SetNull)
   adSets  MetaAdSet[]
 
   @@index([companyId])
   @@index([companyId, isDefault])
+  @@index([pinnedCampaignId])
   @@map("adset_presets")
 }
 
@@ -542,11 +560,58 @@ model AdSchedule {
 
   company Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   ads     MetaAd[]
+  publishJobs AdPublishJob[]
 
   @@index([companyId])
   @@index([companyId, status])
   @@index([scheduledAt])
   @@map("ad_schedules")
+}
+
+// ================================================================
+// PUBLISH JOBS (META)
+// ================================================================
+
+model AdPublishJob {
+  id                 String           @id @default(cuid())
+  companyId          String
+  metaIntegrationId  String
+  campaignId         String
+  adSetId            String
+  assetId            String
+  adPresetId         String?
+  scheduleId         String?
+  status             PublishJobStatus @default(QUEUED)
+  attempts           Int              @default(0)
+  maxAttempts        Int              @default(3)
+  scheduledAt        DateTime?        @db.Timestamptz(3)
+  startedAt          DateTime?        @db.Timestamptz(3)
+  completedAt        DateTime?        @db.Timestamptz(3)
+  lastError          String?          @db.Text
+  metaCreativeDbId   String?
+  metaAdDbId         String?
+  duplicatedFromAdId String?
+  createdAt          DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime         @updatedAt @db.Timestamptz(3)
+
+  company  Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  campaign MetaCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  adSet    MetaAdSet   @relation(fields: [adSetId], references: [id], onDelete: Cascade)
+  asset    Asset       @relation(fields: [assetId], references: [id])
+  adPreset AdPreset?   @relation(fields: [adPresetId], references: [id], onDelete: SetNull)
+  schedule AdSchedule? @relation(fields: [scheduleId], references: [id], onDelete: SetNull)
+  metaAd   MetaAd?     @relation(fields: [metaAdDbId], references: [id], onDelete: SetNull)
+
+  @@index([companyId, status])
+  @@index([scheduledAt, status])
+  @@index([scheduleId])
+  @@index([metaIntegrationId])
+  @@index([campaignId])
+  @@index([adSetId])
+  @@index([assetId])
+  @@index([adPresetId])
+  @@index([metaAdDbId])
+  @@map("ad_publish_jobs")
 }
 
 /// One rule per type per company — toggled on/off via UI
@@ -702,6 +767,14 @@ enum AutoActionType {
   NOTIFIED
   FLAGGED
   SUGGESTED
+}
+
+enum PublishJobStatus {
+  QUEUED
+  PROCESSING
+  PUBLISHED
+  FAILED
+  CANCELLED
 }
 
 enum StreamQueueStatus {

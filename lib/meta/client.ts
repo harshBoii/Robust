@@ -12,6 +12,8 @@ type MetaGraphResponse<T> = {
 };
 
 export type MetaAdStatus = 'ACTIVE' | 'PAUSED';
+export type MetaCampaignStatus = 'ACTIVE' | 'PAUSED' | 'ARCHIVED';
+export type MetaAdSetStatus = 'ACTIVE' | 'PAUSED' | 'ARCHIVED';
 
 export type MetaAdInsightRow = {
   spend?: string;
@@ -98,6 +100,11 @@ async function metaFetch<T>(
   return json as unknown as T;
 }
 
+function assertOk<T>(res: T): T {
+  if (res == null) throw new Error('Meta API error');
+  return res;
+}
+
 export async function getAdsWithInsights(input: {
   adAccountId: string;
   datePreset: 'today' | 'maximum' | 'last_7d' | 'last_30d';
@@ -178,5 +185,268 @@ export async function getMyPages(): Promise<MetaPage[]> {
     },
   });
   return resp.data ?? [];
+}
+
+export type MetaCampaignRow = {
+  id: string;
+  name?: string;
+  objective?: string;
+  status?: MetaCampaignStatus | string;
+  daily_budget?: string;
+  lifetime_budget?: string;
+  bid_strategy?: string;
+  spend_cap?: string;
+  special_ad_categories?: string[];
+  created_time?: string;
+};
+
+export async function getCampaignsForAccount(input: {
+  adAccountId: string;
+}): Promise<MetaCampaignRow[]> {
+  const resp = await metaFetch<{ data: MetaCampaignRow[] }>(`/${input.adAccountId}/campaigns`, {
+    method: 'GET',
+    searchParams: {
+      fields: [
+        'id',
+        'name',
+        'objective',
+        'status',
+        'daily_budget',
+        'lifetime_budget',
+        'bid_strategy',
+        'spend_cap',
+        'special_ad_categories',
+        'created_time',
+      ].join(','),
+      limit: '200',
+    },
+  });
+  return resp.data ?? [];
+}
+
+export type MetaAdSetRow = {
+  id: string;
+  name?: string;
+  status?: MetaAdSetStatus | string;
+  daily_budget?: string;
+  lifetime_budget?: string;
+  bid_strategy?: string;
+  bid_amount?: string;
+  optimization_goal?: string;
+  billing_event?: string;
+  targeting?: Record<string, unknown>;
+  start_time?: string;
+  end_time?: string;
+  created_time?: string;
+};
+
+export async function getAdSetsForCampaign(input: {
+  metaCampaignId: string;
+}): Promise<MetaAdSetRow[]> {
+  const resp = await metaFetch<{ data: MetaAdSetRow[] }>(`/${input.metaCampaignId}/adsets`, {
+    method: 'GET',
+    searchParams: {
+      fields: [
+        'id',
+        'name',
+        'status',
+        'daily_budget',
+        'lifetime_budget',
+        'bid_strategy',
+        'bid_amount',
+        'optimization_goal',
+        'billing_event',
+        'targeting',
+        'start_time',
+        'end_time',
+        'created_time',
+      ].join(','),
+      limit: '200',
+    },
+  });
+  return resp.data ?? [];
+}
+
+export async function createCampaign(input: {
+  adAccountId: string;
+  name: string;
+  objective: string;
+  status?: MetaCampaignStatus;
+  specialAdCategories?: string[];
+  dailyBudget?: number | null;
+  lifetimeBudget?: number | null;
+  bidStrategy?: string | null;
+  spendCap?: number | null;
+}): Promise<{ id: string }> {
+  const resp = await metaFetch<{ id: string }>(`/${input.adAccountId}/campaigns`, {
+    method: 'POST',
+    searchParams: {
+      name: input.name,
+      objective: input.objective,
+      status: input.status ?? 'PAUSED',
+      ...(input.dailyBudget != null ? { daily_budget: String(Math.floor(input.dailyBudget)) } : {}),
+      ...(input.lifetimeBudget != null ? { lifetime_budget: String(Math.floor(input.lifetimeBudget)) } : {}),
+      ...(input.bidStrategy ? { bid_strategy: input.bidStrategy } : {}),
+      ...(input.spendCap != null ? { spend_cap: String(Math.floor(input.spendCap)) } : {}),
+      ...(input.specialAdCategories?.length
+        ? { special_ad_categories: JSON.stringify(input.specialAdCategories) }
+        : {}),
+    },
+  });
+  return assertOk(resp);
+}
+
+export async function createAdSet(input: {
+  adAccountId: string;
+  name: string;
+  campaignId: string; // meta campaign id
+  status?: MetaAdSetStatus;
+  dailyBudget?: number | null;
+  lifetimeBudget?: number | null;
+  bidStrategy?: string | null;
+  bidAmount?: number | null;
+  optimizationGoal?: string | null;
+  billingEvent?: string | null;
+  targeting?: Record<string, unknown> | null;
+  startTime?: string | null;
+  endTime?: string | null;
+}): Promise<{ id: string }> {
+  const resp = await metaFetch<{ id: string }>(`/${input.adAccountId}/adsets`, {
+    method: 'POST',
+    searchParams: {
+      name: input.name,
+      campaign_id: input.campaignId,
+      status: input.status ?? 'PAUSED',
+      ...(input.dailyBudget != null ? { daily_budget: String(Math.floor(input.dailyBudget)) } : {}),
+      ...(input.lifetimeBudget != null ? { lifetime_budget: String(Math.floor(input.lifetimeBudget)) } : {}),
+      ...(input.bidStrategy ? { bid_strategy: input.bidStrategy } : {}),
+      ...(input.bidAmount != null ? { bid_amount: String(Math.floor(input.bidAmount)) } : {}),
+      ...(input.optimizationGoal ? { optimization_goal: input.optimizationGoal } : {}),
+      ...(input.billingEvent ? { billing_event: input.billingEvent } : {}),
+      ...(input.targeting ? { targeting: JSON.stringify(input.targeting) } : {}),
+      ...(input.startTime ? { start_time: input.startTime } : {}),
+      ...(input.endTime ? { end_time: input.endTime } : {}),
+    },
+  });
+  return assertOk(resp);
+}
+
+export async function uploadAdImage(input: {
+  adAccountId: string;
+  bytes: Uint8Array;
+  filename: string;
+}): Promise<{ imageHash: string }> {
+  const token = requireSystemAccessToken();
+  const url = new URL(`${META_GRAPH_BASE}/${input.adAccountId}/adimages`);
+  url.searchParams.set('access_token', token);
+
+  const form = new FormData();
+  form.set('filename', input.filename);
+  form.set(
+    'bytes',
+    new Blob([input.bytes], { type: 'application/octet-stream' }),
+  );
+
+  const res = await fetch(url, { method: 'POST', body: form, cache: 'no-store' });
+  const json = (await res.json()) as {
+    images?: Record<string, { hash?: string }>;
+    error?: { message?: string };
+  };
+  if (!res.ok || json.error) throw new Error(json.error?.message ?? `Meta API error (${res.status})`);
+
+  const first = json.images ? Object.values(json.images)[0] : null;
+  const hash = first?.hash;
+  if (!hash) throw new Error('Meta image upload failed (missing hash)');
+  return { imageHash: hash };
+}
+
+export async function uploadAdVideo(input: {
+  adAccountId: string;
+  bytes: Uint8Array;
+  filename: string;
+  name: string;
+}): Promise<{ videoId: string }> {
+  // Simple (non-resumable) upload path; Meta may require resumable for large files.
+  // This is sufficient for MVP + typical small creatives; worker retries on failure.
+  const token = requireSystemAccessToken();
+  const url = new URL(`${META_GRAPH_BASE}/${input.adAccountId}/advideos`);
+  url.searchParams.set('access_token', token);
+
+  const form = new FormData();
+  form.set('name', input.name);
+  form.set('source', new Blob([input.bytes], { type: 'application/octet-stream' }), input.filename);
+
+  const res = await fetch(url, { method: 'POST', body: form, cache: 'no-store' });
+  const json = (await res.json()) as { id?: string; error?: { message?: string } };
+  if (!res.ok || json.error) throw new Error(json.error?.message ?? `Meta API error (${res.status})`);
+  if (!json.id) throw new Error('Meta video upload failed (missing id)');
+  return { videoId: json.id };
+}
+
+export async function createAdCreative(input: {
+  adAccountId: string;
+  fbPageId: string;
+  headline: string;
+  primaryText: string;
+  description?: string | null;
+  ctaType: string;
+  landingUrl: string;
+  imageHash?: string | null;
+  videoId?: string | null;
+  pixelIds?: string[] | null;
+}): Promise<{ id: string }> {
+  // For simplicity, use object_story_spec with link_data (image) or video_data (video).
+  const objectStorySpec: Record<string, unknown> = {
+    page_id: input.fbPageId,
+  };
+
+  if (input.imageHash) {
+    objectStorySpec.link_data = {
+      link: input.landingUrl,
+      message: input.primaryText,
+      name: input.headline,
+      description: input.description ?? undefined,
+      call_to_action: { type: input.ctaType, value: { link: input.landingUrl } },
+      image_hash: input.imageHash,
+    };
+  } else if (input.videoId) {
+    objectStorySpec.video_data = {
+      video_id: input.videoId,
+      message: input.primaryText,
+      title: input.headline,
+      call_to_action: { type: input.ctaType, value: { link: input.landingUrl } },
+    };
+  } else {
+    throw new Error('Missing creative media (imageHash or videoId)');
+  }
+
+  const resp = await metaFetch<{ id: string }>(`/${input.adAccountId}/adcreatives`, {
+    method: 'POST',
+    searchParams: {
+      name: `Robust Creative — ${input.headline.slice(0, 48)}`,
+      object_story_spec: JSON.stringify(objectStorySpec),
+      ...(input.pixelIds?.length ? { pixel_id: input.pixelIds[0] } : {}),
+    },
+  });
+  return assertOk(resp);
+}
+
+export async function createAd(input: {
+  adAccountId: string;
+  adSetId: string; // meta adset id
+  creativeId: string; // meta creative id
+  name: string;
+  status: MetaAdStatus;
+}): Promise<{ id: string }> {
+  const resp = await metaFetch<{ id: string }>(`/${input.adAccountId}/ads`, {
+    method: 'POST',
+    searchParams: {
+      name: input.name,
+      adset_id: input.adSetId,
+      status: input.status,
+      creative: JSON.stringify({ creative_id: input.creativeId }),
+    },
+  });
+  return assertOk(resp);
 }
 

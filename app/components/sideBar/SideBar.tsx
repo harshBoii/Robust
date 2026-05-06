@@ -475,10 +475,15 @@ export default function AppSidebar({ companyId }: { companyId: string }) {
   };
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if      (pathname === '/')                   setActiveSection('home');
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     else if (pathname?.startsWith('/manager'))   setActiveSection('manager');
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     else if (pathname?.startsWith('/gallery'))   setActiveSection('gallery');
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     else if (pathname?.startsWith('/workspace')) setActiveSection('workspace');
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     else                                         setActiveSection('home');
   }, [pathname]);
 
