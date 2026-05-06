@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+import { Prisma } from '@/app/generated/prisma/client';
+
 import { getSession } from '@/lib/auth/session';
 import { prisma } from '@/lib/prisma';
 
@@ -93,11 +95,11 @@ export async function POST(req: NextRequest) {
       bidAmount: typeof body.bidAmount === 'number' ? BigInt(Math.floor(body.bidAmount)) : null,
       isDefaultCreative: Boolean(body.isDefaultCreative),
       pacingType: typeof body.pacingType === 'string' ? body.pacingType : null,
-      promotedObject: typeof body.promotedObject === 'object' && body.promotedObject ? (body.promotedObject as Record<string, unknown>) : {},
-      attributionSpec: Array.isArray(body.attributionSpec) ? (body.attributionSpec as unknown[]) : [],
+      promotedObject: typeof body.promotedObject === 'object' && body.promotedObject ? (body.promotedObject as Prisma.InputJsonValue) : {},
+      attributionSpec: Array.isArray(body.attributionSpec) ? (body.attributionSpec as Prisma.InputJsonValue) : [],
       pinnedCampaignId,
-      bidConstraints: typeof body.bidConstraints === 'object' && body.bidConstraints ? (body.bidConstraints as Record<string, unknown>) : {},
-      targeting: typeof body.targeting === 'object' && body.targeting ? (body.targeting as Record<string, unknown>) : {},
+      bidConstraints: typeof body.bidConstraints === 'object' && body.bidConstraints ? (body.bidConstraints as Prisma.InputJsonValue) : {},
+      targeting: typeof body.targeting === 'object' && body.targeting ? (body.targeting as Prisma.InputJsonValue) : {},
     },
   });
 
