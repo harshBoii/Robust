@@ -8,6 +8,11 @@ import {
   getAdSetsForCampaign,
   getCampaignsForAccount,
 } from '@/lib/meta/client';
+import type { MetaCampaignStatus } from '@/lib/meta/client';
+
+function asMetaCampaignStatus(v: unknown): MetaCampaignStatus | undefined {
+  return v === 'ACTIVE' || v === 'PAUSED' || v === 'ARCHIVED' ? v : undefined;
+}
 
 export async function syncCampaigns(metaIntegrationId: string) {
   const integration = await prisma.metaIntegration.findUnique({
@@ -181,7 +186,7 @@ export async function createAndStoreCampaignFromPreset(input: {
     adAccountId: integration.adAccountId,
     name: input.name ?? preset.name,
     objective: preset.objective ?? 'OUTCOME_TRAFFIC',
-    status: (typeof preset.status === 'string' ? preset.status : undefined) ?? 'PAUSED',
+    status: asMetaCampaignStatus(preset.status) ?? 'PAUSED',
     bidStrategy: preset.bidStrategy,
     dailyBudget: preset.dailyBudget ? Number(preset.dailyBudget) : null,
     lifetimeBudget: preset.lifetimeBudget ? Number(preset.lifetimeBudget) : null,
