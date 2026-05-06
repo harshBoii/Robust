@@ -343,8 +343,10 @@ export async function uploadAdImage(input: {
   const form = new FormData();
   form.set('filename', input.filename);
 
-  // Ensure BlobPart is backed by ArrayBuffer (not SharedArrayBuffer)
-  const bytesForBlob = input.bytes.buffer instanceof ArrayBuffer ? input.bytes : input.bytes.slice();
+  // Ensure BlobPart is an ArrayBuffer (not SharedArrayBuffer-backed view)
+  const bytesForBlob: ArrayBuffer = input.bytes.buffer instanceof ArrayBuffer
+    ? input.bytes.buffer.slice(input.bytes.byteOffset, input.bytes.byteOffset + input.bytes.byteLength)
+    : input.bytes.slice().buffer;
   form.set(
     'bytes',
     new Blob([bytesForBlob], { type: 'application/octet-stream' }),
@@ -377,8 +379,10 @@ export async function uploadAdVideo(input: {
 
   const form = new FormData();
   form.set('name', input.name);
-  // Ensure BlobPart is backed by ArrayBuffer (not SharedArrayBuffer)
-  const bytesForBlob = input.bytes.buffer instanceof ArrayBuffer ? input.bytes : input.bytes.slice();
+  // Ensure BlobPart is an ArrayBuffer (not SharedArrayBuffer-backed view)
+  const bytesForBlob: ArrayBuffer = input.bytes.buffer instanceof ArrayBuffer
+    ? input.bytes.buffer.slice(input.bytes.byteOffset, input.bytes.byteOffset + input.bytes.byteLength)
+    : input.bytes.slice().buffer;
   form.set('source', new Blob([bytesForBlob], { type: 'application/octet-stream' }), input.filename);
 
   const res = await fetch(url, { method: 'POST', body: form, cache: 'no-store' });
