@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { getSession } from '@/lib/auth/session';
 import { prisma } from '@/lib/prisma';
+import { Prisma } from '@/app/generated/prisma/client';
 
 export const dynamic = 'force-dynamic';
 
@@ -92,11 +93,23 @@ export async function PATCH(
         : {}),
       ...(typeof body.isDefaultCreative === 'boolean' ? { isDefaultCreative: body.isDefaultCreative } : {}),
       ...(typeof body.pacingType === 'string' || body.pacingType === null ? { pacingType: body.pacingType as string | null } : {}),
-      ...(typeof body.promotedObject === 'object' && body.promotedObject ? { promotedObject: body.promotedObject as Record<string, unknown> } : {}),
-      ...(Array.isArray(body.attributionSpec) ? { attributionSpec: body.attributionSpec as unknown[] } : {}),
-      ...(pinnedCampaignId !== undefined ? { pinnedCampaignId: pinnedCampaignId || null } : {}),
-      ...(typeof body.bidConstraints === 'object' && body.bidConstraints ? { bidConstraints: body.bidConstraints as Record<string, unknown> } : {}),
-      ...(typeof body.targeting === 'object' && body.targeting ? { targeting: body.targeting as Record<string, unknown> } : {}),
+      ...(typeof body.promotedObject === 'object' && body.promotedObject
+        ? { promotedObject: body.promotedObject as Prisma.InputJsonValue }
+        : {}),
+      ...(Array.isArray(body.attributionSpec)
+        ? { attributionSpec: body.attributionSpec as Prisma.InputJsonValue }
+        : {}),
+      ...(pinnedCampaignId !== undefined
+        ? (pinnedCampaignId
+            ? { pinnedCampaign: { connect: { id: pinnedCampaignId } } }
+            : { pinnedCampaign: { disconnect: true } })
+        : {}),
+      ...(typeof body.bidConstraints === 'object' && body.bidConstraints
+        ? { bidConstraints: body.bidConstraints as Prisma.InputJsonValue }
+        : {}),
+      ...(typeof body.targeting === 'object' && body.targeting
+        ? { targeting: body.targeting as Prisma.InputJsonValue }
+        : {}),
     },
   });
 
