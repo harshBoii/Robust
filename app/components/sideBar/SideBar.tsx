@@ -359,9 +359,9 @@ const SecondarySidebarContent = ({
       return (
         <>
           <SectionLabel label="Dashboard" />
-          <SecondaryNavItem icon={BarChart3}         label="Performance"      href="/manager/dashboard" />
+          {/* <SecondaryNavItem icon={BarChart3}         label="Performance"      href="/manager/dashboard" /> */}
 
-          <SectionLabel label="Campaigns" />
+          {/* <SectionLabel label="Campaigns" /> */}
           <SecondaryNavItem icon={Megaphone}         label="Post to Meta"     href="/manager/post" />
           <SecondaryNavItem icon={History}           label="Ad History"       href="/manager/history" />
 
@@ -439,7 +439,7 @@ export default function AppSidebar({ companyId }: { companyId: string }) {
   const getFirstRoute = (sectionId: string) => {
     switch (sectionId) {
       case 'home':      return '/home';
-      case 'manager':   return '/manager/dashboard';
+      case 'manager':   return '/manager/post';
       case 'gallery':   return '/gallery';
       case 'workspace': return '/workspace/settings';
       default:          return '/';

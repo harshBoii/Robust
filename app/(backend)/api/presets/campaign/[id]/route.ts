@@ -5,6 +5,18 @@ import { prisma } from '@/lib/prisma';
 
 export const dynamic = 'force-dynamic';
 
+function jsonSafe<T>(v: T): T {
+  if (v === null) return v;
+  if (typeof v === 'bigint') return String(v) as unknown as T;
+  if (Array.isArray(v)) return v.map((x) => jsonSafe(x)) as unknown as T;
+  if (typeof v === 'object') {
+    const out: Record<string, unknown> = {};
+    for (const [k, val] of Object.entries(v as Record<string, unknown>)) out[k] = jsonSafe(val);
+    return out as unknown as T;
+  }
+  return v;
+}
+
 type PatchBody = {
   name?: unknown;
   isDefault?: unknown;
@@ -63,7 +75,7 @@ export async function PATCH(
     },
   });
 
-  return NextResponse.json({ preset });
+  return NextResponse.json({ preset: jsonSafe(preset) });
 }
 
 export async function DELETE(

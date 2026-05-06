@@ -42,6 +42,7 @@ const DEVICE_PLATFORM_OPTIONS = ['mobile','desktop'] as const;
 const PUBLISHER_PLATFORM_OPTIONS = ['facebook','instagram','messenger','audience_network'] as const;
 const FACEBOOK_POSITION_OPTIONS = ['feed','right_hand_column','story','reels','video_feeds','marketplace','search','instream_video','profile_feed','groups_feed'] as const;
 const INSTAGRAM_POSITION_OPTIONS = ['stream','story','reels','explore','explore_home','ig_search','profile_feed','profile_reels'] as const;
+const SPECIAL_AD_CATEGORY_OPTIONS = ['NONE','CREDIT','EMPLOYMENT','HOUSING','ISSUES_ELECTIONS_POLITICS','FINANCIAL_PRODUCTS_SERVICES'] as const;
 const CAMPAIGN_OBJECTIVE_OPTIONS = ['OUTCOME_SALES','OUTCOME_LEADS','OUTCOME_TRAFFIC','OUTCOME_ENGAGEMENT','OUTCOME_APP_PROMOTION','OUTCOME_AWARENESS'] as const;
 const CAMPAIGN_STATUS_OPTIONS = ['ACTIVE','PAUSED'] as const;
 
@@ -899,12 +900,12 @@ export default function PresetsClient() {
                     <div>
                       <FieldLabel>Daily budget <span className="text-[10px] normal-case tracking-normal font-normal opacity-60">int64</span></FieldLabel>
                       <input type="number" className="glass-input mt-1.5 w-full px-3 py-2 text-sm" value={draftCampaign.dailyBudget ?? ''}
-                        onChange={(e) => setDraftCampaign((p) => ({ ...p, dailyBudget: e.target.value || null }))} />
+                        onChange={(e) => setDraftCampaign((p) => ({ ...p, dailyBudget: e.target.value || null, lifetimeBudget: e.target.value ? null : p.lifetimeBudget }))} />
                     </div>
                     <div>
                       <FieldLabel>Lifetime budget <span className="text-[10px] normal-case tracking-normal font-normal opacity-60">int64</span></FieldLabel>
                       <input type="number" className="glass-input mt-1.5 w-full px-3 py-2 text-sm" value={draftCampaign.lifetimeBudget ?? ''}
-                        onChange={(e) => setDraftCampaign((p) => ({ ...p, lifetimeBudget: e.target.value || null }))} />
+                        onChange={(e) => setDraftCampaign((p) => ({ ...p, lifetimeBudget: e.target.value || null, dailyBudget: e.target.value ? null : p.dailyBudget }))} />
                     </div>
                     <div>
                       <FieldLabel>spend_cap <span className="text-[10px] normal-case tracking-normal font-normal opacity-60">int64</span></FieldLabel>
@@ -926,10 +927,32 @@ export default function PresetsClient() {
                     </div>
                     <div>
                       <FieldLabel>special_ad_categories</FieldLabel>
-                      <input className="glass-input mt-1.5 w-full px-3 py-2 text-sm"
-                        placeholder="NONE, CREDIT, EMPLOYMENT, HOUSING… (comma-sep)"
-                        value={(draftCampaign.specialAdCategories ?? []).join(',')}
-                        onChange={(e) => setDraftCampaign((p) => ({ ...p, specialAdCategories: parseCommaList(e.target.value) }))} />
+                      <div className="mt-1.5 grid grid-cols-2 gap-2">
+                        {SPECIAL_AD_CATEGORY_OPTIONS.map((opt) => {
+                          const curr = (draftCampaign.specialAdCategories ?? []).filter((x) => typeof x === 'string');
+                          const checked = curr.includes(opt);
+                          return (
+                            <label
+                              key={opt}
+                              className="flex items-center gap-2 rounded-xl border border-border/40 px-3 py-2 text-sm text-muted-foreground"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={(e) => {
+                                  const next = e.target.checked ? uniqStrings([...curr, opt]) : curr.filter((x) => x !== opt);
+                                  const normalized = next.includes('NONE') ? (['NONE'] as string[]) : next.filter((x) => x !== 'NONE');
+                                  setDraftCampaign((p) => ({ ...p, specialAdCategories: normalized }));
+                                }}
+                              />
+                              {opt}
+                            </label>
+                          );
+                        })}
+                      </div>
+                      <div className="mt-2 text-[11px] text-muted-foreground">
+                        Leave empty for default behavior, or select <span className="font-semibold">NONE</span>.
+                      </div>
                     </div>
                   </div>
                 </SectionBox>

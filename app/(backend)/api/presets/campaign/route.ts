@@ -5,6 +5,18 @@ import { prisma } from '@/lib/prisma';
 
 export const dynamic = 'force-dynamic';
 
+function jsonSafe<T>(v: T): T {
+  if (v === null) return v;
+  if (typeof v === 'bigint') return String(v) as unknown as T;
+  if (Array.isArray(v)) return v.map((x) => jsonSafe(x)) as unknown as T;
+  if (typeof v === 'object') {
+    const out: Record<string, unknown> = {};
+    for (const [k, val] of Object.entries(v as Record<string, unknown>)) out[k] = jsonSafe(val);
+    return out as unknown as T;
+  }
+  return v;
+}
+
 export async function GET() {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -15,7 +27,7 @@ export async function GET() {
     take: 200,
   });
 
-  return NextResponse.json({ presets });
+  return NextResponse.json({ presets: jsonSafe(presets) });
 }
 
 type PostBody = {
@@ -61,6 +73,6 @@ export async function POST(req: NextRequest) {
     },
   });
 
-  return NextResponse.json({ preset });
+  return NextResponse.json({ preset: jsonSafe(preset) });
 }
 
