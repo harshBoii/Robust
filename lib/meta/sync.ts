@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { prisma } from '@/lib/prisma';
+import { Prisma } from '@/app/generated/prisma/client';
 import {
   createAdSet,
   createCampaign,
@@ -113,7 +114,7 @@ export async function syncAdSets(input: {
         bidConstraints: {},
         optimizationGoal: a.optimization_goal ?? null,
         billingEvent: a.billing_event ?? null,
-        targeting: a.targeting ?? null,
+        targeting: a.targeting ? (a.targeting as Prisma.InputJsonValue) : Prisma.DbNull,
         startTime: a.start_time ? new Date(a.start_time) : null,
         endTime: a.end_time ? new Date(a.end_time) : null,
       },
@@ -126,7 +127,7 @@ export async function syncAdSets(input: {
         bidAmount: a.bid_amount ? Number(a.bid_amount) : null,
         optimizationGoal: a.optimization_goal ?? null,
         billingEvent: a.billing_event ?? null,
-        targeting: a.targeting ?? null,
+        targeting: a.targeting ? (a.targeting as Prisma.InputJsonValue) : Prisma.DbNull,
         startTime: a.start_time ? new Date(a.start_time) : null,
         endTime: a.end_time ? new Date(a.end_time) : null,
       },
