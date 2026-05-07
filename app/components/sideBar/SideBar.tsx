@@ -75,6 +75,7 @@ type MainSection = {
 const MAIN_SECTIONS: MainSection[] = [
   { id: 'home',      label: 'Home',      icon: IconHome,    hasSecondary: true },
   { id: 'manager',   label: 'Manager',   icon: IconManager, hasSecondary: true },
+  { id: 'createAd',  label: 'Create Ad', icon: PlusCircle,  hasSecondary: false },
   { id: 'gallery',   label: 'Gallery',   icon: IconGallery, hasSecondary: true },
   { id: 'workspace', label: 'Workspace', icon: Settings,    hasSecondary: true, hidden: true },
 ];
@@ -440,6 +441,7 @@ export default function AppSidebar({ companyId }: { companyId: string }) {
     switch (sectionId) {
       case 'home':      return '/home';
       case 'manager':   return '/manager/post';
+      case 'createAd':  return '/create-ad';
       case 'gallery':   return '/gallery';
       case 'workspace': return '/workspace/settings';
       default:          return '/';
@@ -479,6 +481,8 @@ export default function AppSidebar({ companyId }: { companyId: string }) {
     if      (pathname === '/')                   setActiveSection('home');
     // eslint-disable-next-line react-hooks/set-state-in-effect
     else if (pathname?.startsWith('/manager'))   setActiveSection('manager');
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    else if (pathname?.startsWith('/create-ad')) setActiveSection('createAd');
     // eslint-disable-next-line react-hooks/set-state-in-effect
     else if (pathname?.startsWith('/gallery'))   setActiveSection('gallery');
     // eslint-disable-next-line react-hooks/set-state-in-effect

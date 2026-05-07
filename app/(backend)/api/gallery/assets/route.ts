@@ -13,10 +13,12 @@ export async function GET(req: NextRequest) {
   const typeParam = req.nextUrl.searchParams.get("type");
   const assetTypeFilter =
     typeParam === "IMAGE" || typeParam === "VIDEO" ? typeParam : undefined;
+  const bulkUploadId = req.nextUrl.searchParams.get("bulkUploadId") ?? undefined;
 
   const assets = await prisma.asset.findMany({
     where: {
       companyId: session.companyId,
+      ...(bulkUploadId ? { bulkUploadId } : {}),
       ...(assetTypeFilter
         ? { assetType: assetTypeFilter as AssetType }
         : {}),

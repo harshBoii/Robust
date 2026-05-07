@@ -83,6 +83,12 @@ export async function POST(req: NextRequest) {
           assetId: true,
           adPresetId: true,
           duplicatedFromAdId: true,
+          headlineOverride: true,
+          primaryTextOverride: true,
+          descriptionOverride: true,
+          landingUrlOverride: true,
+          ctaTypeOverride: true,
+          pixelIdOverride: true,
         },
       });
     });
@@ -135,9 +141,20 @@ export async function POST(req: NextRequest) {
       if (!adSet) throw new Error('Ad set missing');
       if (!asset) throw new Error('Asset missing');
 
-      const headline = adPreset?.headline ?? asset.title ?? 'Robust Ad';
-      const landingUrl = adPreset?.landingPageUrl ?? 'https://example.com';
-      const primaryText = asset.title ?? '—';
+      const headline =
+        job.headlineOverride ?? adPreset?.headline ?? asset.title ?? 'Robust Ad';
+      const landingUrl =
+        job.landingUrlOverride ?? adPreset?.landingPageUrl ?? 'https://example.com';
+      const primaryText =
+        job.primaryTextOverride ?? asset.title ?? '—';
+      const description =
+        job.descriptionOverride ?? null;
+      const ctaType =
+        job.ctaTypeOverride ?? 'LEARN_MORE';
+      const pixelIds =
+        job.pixelIdOverride
+          ? [job.pixelIdOverride]
+          : (adPreset?.pixelIds ?? []);
 
       const bytes = await readAssetBytes({ r2Bucket: asset.r2Bucket, r2Key: asset.r2Key });
 
@@ -226,12 +243,12 @@ export async function POST(req: NextRequest) {
         fbPageId: integration.fbPageId,
         headline,
         primaryText,
-        description: null,
-        ctaType: 'LEARN_MORE',
+        description,
+        ctaType,
         landingUrl,
         imageHash,
         videoId,
-        pixelIds: adPreset?.pixelIds ?? [],
+        pixelIds,
       });
 
       const creativeDb = await prisma.metaCreative.create({

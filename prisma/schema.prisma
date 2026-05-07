@@ -593,6 +593,13 @@ model AdPublishJob {
   duplicatedFromAdId String?
   createdAt          DateTime         @default(now()) @db.Timestamptz(3)
   updatedAt          DateTime         @updatedAt @db.Timestamptz(3)
+  headlineOverride    String? @db.VarChar(500)
+  primaryTextOverride String? @db.Text
+  descriptionOverride String? @db.Text
+  landingUrlOverride  String? @db.VarChar(2000)
+  ctaTypeOverride     String? @db.VarChar(100)
+  pixelIdOverride     String? @db.VarChar(100)
+  groupKey            String? @db.VarChar(120)
 
   company  Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
   campaign MetaCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
