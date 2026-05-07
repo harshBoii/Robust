@@ -251,7 +251,7 @@ async function ensureAssetMetrics(asset: Asset): Promise<{
   let width: number | null = null;
   let height: number | null = null;
   let durationSec: number | null =
-    asset.duration != null ? asset.duration : null;
+    asset.duration != null && asset.duration > 0 ? asset.duration : null;
 
   const parsed = parseResolutionString(asset.resolution);
   if (parsed) {
@@ -267,7 +267,7 @@ async function ensureAssetMetrics(asset: Asset): Promise<{
         width = details.width;
         height = details.height;
       }
-      if (details?.duration != null) {
+      if (details?.duration != null && details.duration > 0) {
         rawDurationSec = details.duration;
         durationSec = Math.round(details.duration);
       }
@@ -276,10 +276,10 @@ async function ensureAssetMetrics(asset: Asset): Promise<{
     if (width && height) {
       updateData.resolution = `${width}x${height}`;
     }
-    if (durationSec != null) {
+    if (durationSec != null && durationSec > 0) {
       updateData.duration = durationSec;
     }
-    if (rawDurationSec != null) {
+    if (rawDurationSec != null && rawDurationSec > 0) {
       const meta = (asset.metadata as Record<string, unknown> | null) ?? {};
       updateData.metadata = {
         ...meta,
