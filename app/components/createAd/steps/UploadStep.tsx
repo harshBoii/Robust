@@ -3,7 +3,6 @@
 import { useCallback, useMemo, useState } from 'react';
 
 import { useUploader } from '@/app/hooks/useUploader';
-import { json } from '../shared';
 
 export default function UploadStep({
   companyId,
@@ -16,10 +15,11 @@ export default function UploadStep({
 }) {
   const [busy, setBusy] = useState(false);
   const [bulkUploadId, setBulkUploadId] = useState<string>('');
-  const { files, upload } = useUploader(companyId, (id) => setBulkUploadId(id));
+  const { files, uploadWithBulkId } = useUploader(companyId, (id) => setBulkUploadId(id));
 
+  // Only block on actual multipart uploading — not on video stream encoding.
   const anyUploading = useMemo(
-    () => files.some((f) => f.status === 'uploading' || f.status === 'processing'),
+    () => files.some((f) => f.status === 'uploading'),
     [files],
   );
 
@@ -28,29 +28,32 @@ export default function UploadStep({
     setBusy(true);
     try {
       const selected = Array.from(picked);
-      const assetIds = (await upload(selected, { bulkName: `Create Ad · ${new Date().toLocaleString()}` }))
-        .filter((x): x is string => typeof x === 'string' && x.length > 0);
-
-      const id = bulkUploadId || '';
-      if (!id) throw new Error('Missing bulkUploadId');
-
-      // Trigger perceptual-hash grouping
-      await json(
-        await fetch(`/api/gallery/bulk-uploads/${encodeURIComponent(id)}/analyze`, {
-          method: 'POST',
-          credentials: 'include',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ mode: 'content' }),
-        }),
+      const { bulkUploadId: id, assetIds } = await uploadWithBulkId(
+        selected,
+        { bulkName: `Create Ad · ${new Date().toLocaleString()}` },
       );
+      const okAssetIds = assetIds.filter((x): x is string => typeof x === 'string' && x.length > 0);
+      if (!id) throw new Error('Missing bulkUploadId');
+      setBulkUploadId(id);
 
-      onUploaded({ bulkUploadId: id, assetIds });
+      // Kick off analysis in the background — do NOT await.
+      // Videos may still be encoding on Cloudflare Stream; the Groups step
+      // will poll until buckets are ready.
+      void fetch(`/api/gallery/bulk-uploads/${encodeURIComponent(id)}/analyze`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode: 'content' }),
+      });
+
+      // Advance immediately — Groups step handles the "still analyzing" state.
+      onUploaded({ bulkUploadId: id, assetIds: okAssetIds });
     } catch (e) {
       onError(e instanceof Error ? e.message : 'Upload failed');
     } finally {
       setBusy(false);
     }
-  }, [upload, bulkUploadId, onUploaded, onError]);
+  }, [uploadWithBulkId, onUploaded, onError]);
 
   return (
     <div className="space-y-4">

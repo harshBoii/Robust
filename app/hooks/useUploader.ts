@@ -308,11 +308,11 @@ export function useUploader(
   }, []);
 
   // ── Main upload entry ────────────────────────────────────────────────────────
-  const upload = useCallback(
+  const uploadWithBulkId = useCallback(
     async (
       selectedFiles: File[],
       options?: { bulkName?: string },
-    ) => {
+    ): Promise<{ bulkUploadId: string; assetIds: Array<string | null> }> => {
       startFiredRef.current = false;
 
       logStep("bulk", `Starting batch upload of ${selectedFiles.length} file(s)`);
@@ -339,7 +339,10 @@ export function useUploader(
         throw new Error(bulkData?.error ?? "Failed to create bulk upload");
       }
 
-      const { bulkUploadId } = bulkData;
+      const { bulkUploadId } = bulkData as { bulkUploadId?: string };
+      if (!bulkUploadId || typeof bulkUploadId !== "string") {
+        throw new Error("bulk-start: missing bulkUploadId");
+      }
       logOk("bulk", "BulkUpload created", { bulkUploadId });
 
       // 2. Fire callback
@@ -377,10 +380,21 @@ export function useUploader(
         startSSE(videoIds);
       }
 
-      return assetIds;
+      return { bulkUploadId, assetIds };
     },
     [companyId, onUploadStart, uploadFile, startSSE]
   );
 
-  return { files, upload };
+  const upload = useCallback(
+    async (
+      selectedFiles: File[],
+      options?: { bulkName?: string },
+    ): Promise<Array<string | null>> => {
+      const { assetIds } = await uploadWithBulkId(selectedFiles, options);
+      return assetIds;
+    },
+    [uploadWithBulkId],
+  );
+
+  return { files, upload, uploadWithBulkId };
 }
