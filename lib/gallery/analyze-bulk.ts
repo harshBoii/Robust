@@ -532,7 +532,6 @@ async function analyzeByContent(
         data: { assetBucketId: row.id },
       });
     }
-
     return bucketRows;
   });
 
