@@ -3,7 +3,12 @@ import { maybeAnalyzeBulkUpload } from "@/lib/gallery/analyze-bulk";
 import { r2 } from "./r2";
 import { GetObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
-import { StreamQueuePriority, AssetStatus, StreamQueueStatus  } from "@/app/generated/prisma/enums";
+import {
+  AssetType,
+  AssetStatus,
+  StreamQueuePriority,
+  StreamQueueStatus,
+} from "@/app/generated/prisma/enums";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -346,4 +351,111 @@ export async function enqueueAssetStreamUpload(
     );
     throw error;
   }
+}
+
+/**
+ * Repair VIDEO assets stuck in PROCESSING: resets stale StreamQueue PROCESSING rows,
+ * enqueues assets missing an active queue row, then runs `processQueue` for pending items.
+ */
+export async function reconcileProcessingVideoAssets(options?: {
+  /** Queue rows in PROCESSING older than this are reset to PENDING (worker likely crashed). */
+  staleProcessingMs?: number;
+  processBatchSize?: number;
+}) {
+  const staleMs = options?.staleProcessingMs ?? 10 * 60 * 1000;
+  const batchSize = options?.processBatchSize ?? 10;
+  const staleBefore = new Date(Date.now() - staleMs);
+
+  const stuckQueues = await prisma.streamQueue.findMany({
+    where: {
+      status: StreamQueueStatus.PROCESSING,
+      startedAt: { lt: staleBefore },
+      asset: {
+        assetType: AssetType.VIDEO,
+        status: AssetStatus.PROCESSING,
+      },
+    },
+    select: { id: true },
+  });
+
+  let resetStaleQueueItems = 0;
+  if (stuckQueues.length) {
+    await prisma.streamQueue.updateMany({
+      where: { id: { in: stuckQueues.map((q) => q.id) } },
+      data: {
+        status: StreamQueueStatus.PENDING,
+        lastError: "Reset from stale PROCESSING (reconcile)",
+        startedAt: null,
+      },
+    });
+    resetStaleQueueItems = stuckQueues.length;
+  }
+
+  const orphansStartedUnknown = await prisma.streamQueue.findMany({
+    where: {
+      status: StreamQueueStatus.PROCESSING,
+      startedAt: null,
+      asset: {
+        assetType: AssetType.VIDEO,
+        status: AssetStatus.PROCESSING,
+      },
+    },
+    select: { id: true },
+  });
+
+  if (orphansStartedUnknown.length) {
+    await prisma.streamQueue.updateMany({
+      where: { id: { in: orphansStartedUnknown.map((q) => q.id) } },
+      data: {
+        status: StreamQueueStatus.PENDING,
+        lastError: "Reset PROCESSING with no startedAt (reconcile)",
+        startedAt: null,
+      },
+    });
+    resetStaleQueueItems += orphansStartedUnknown.length;
+  }
+
+  const processingVideos = await prisma.asset.findMany({
+    where: {
+      assetType: AssetType.VIDEO,
+      status: AssetStatus.PROCESSING,
+    },
+    select: {
+      id: true,
+      streamQueue: {
+        where: {
+          status: {
+            in: [StreamQueueStatus.PENDING, StreamQueueStatus.PROCESSING],
+          },
+        },
+        select: { id: true },
+      },
+    },
+  });
+
+  let newlyEnqueuedAssets = 0;
+  const enqueueErrors: { assetId: string; error: string }[] = [];
+
+  for (const asset of processingVideos) {
+    if (asset.streamQueue.length === 0) {
+      try {
+        await enqueueAssetStreamUpload(asset.id);
+        newlyEnqueuedAssets++;
+      } catch (e) {
+        enqueueErrors.push({
+          assetId: asset.id,
+          error: e instanceof Error ? e.message : String(e),
+        });
+      }
+    }
+  }
+
+  const processResults = await processQueue(batchSize);
+
+  return {
+    resetStaleQueueItems,
+    newlyEnqueuedAssets,
+    enqueueErrors,
+    processedQueueItems: processResults.length,
+  };
 }

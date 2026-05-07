@@ -10,6 +10,8 @@ const PUBLIC_PATH_PREFIXES = [
   "/api/signup",
   "/api/logout",
   "/api/auth/logout",
+  /** Stream queue reconcile (Bearer STREAM_QUEUE_RECONCILE_SECRET outside development). */
+  "/api/public/stream-queue",
 ] as const;
 
 function isPublicPath(pathname: string): boolean {

@@ -51,7 +51,7 @@ export async function GET(req: NextRequest) {
           return;
         }
 
-        setTimeout(poll, 30000);
+        setTimeout(poll, 3000);
       };
 
       await poll();

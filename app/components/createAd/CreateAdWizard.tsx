@@ -195,7 +195,6 @@ export default function CreateAdWizard({ companyId }: { companyId: string }) {
           {step === 'Groups' ? (
             <GroupsStep
               bulkUploadId={bulkUploadId}
-              uploadedAssetIds={uploadedAssetIds}
               onError={(m) => setError(m)}
               onGroupsReady={(gs) => upsertGroups(gs)}
             />

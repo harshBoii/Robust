@@ -1,11 +1,10 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { EmptyState, json } from '../shared';
 import type { Asset, AssetBucket, GroupModel } from '../types';
 
-/* ── API response shapes ──────────────────────────────────────────────────── */
 type BucketsResp = {
   buckets?: Array<{
     id: string;
@@ -23,20 +22,11 @@ type AssetsResp = {
     thumbnailUrl?: string | null;
     playbackUrl?: string | null;
     assetType: string;
-    status?: string;
     bulkUploadId?: string | null;
     assetBucketId?: string | null;
   }>;
 };
 
-type SseAsset = {
-  id: string;
-  status: string;
-  thumbnailUrl?: string | null;
-  playbackUrl?: string | null;
-};
-
-/* ── Helpers ──────────────────────────────────────────────────────────────── */
 function defaultCreative() {
   return {
     headline: '',
@@ -48,209 +38,66 @@ function defaultCreative() {
   };
 }
 
-function normaliseBuckets(raw: BucketsResp['buckets']): AssetBucket[] {
-  return (raw ?? []).map((x) => ({ id: x.id, label: x.label, assetCount: x.assetCount }));
-}
-
-function normaliseAssets(raw: AssetsResp['assets']): Asset[] {
-  return (raw ?? []).map((x) => ({
-    id: x.id,
-    title: x.title,
-    thumbnailUrl: x.thumbnailUrl ?? null,
-    playbackUrl: x.playbackUrl ?? null,
-    assetType: x.assetType,
-    bulkUploadId: x.bulkUploadId ?? null,
-    assetBucketId: x.assetBucketId ?? null,
-  }));
-}
-
-/* ── Component ────────────────────────────────────────────────────────────── */
 export default function GroupsStep({
   bulkUploadId,
-  uploadedAssetIds,
   onGroupsReady,
   onError,
 }: {
   bulkUploadId: string;
-  /** Asset IDs that were just uploaded — used to watch for video readiness. */
-  uploadedAssetIds?: string[];
   onGroupsReady: (groups: GroupModel[]) => void;
   onError: (message: string) => void;
 }) {
   const [loading, setLoading] = useState(false);
-  /** true while the content-mode upgrade is being fetched / analyzed */
-  const [refining, setRefining] = useState(false);
   const [buckets, setBuckets] = useState<AssetBucket[]>([]);
   const [assets, setAssets] = useState<Asset[]>([]);
   const [included, setIncluded] = useState<Set<string>>(new Set());
-  const sseRef = useRef<EventSource | null>(null);
 
-  /* ── fetch helpers ──────────────────────────────────────────────────────── */
-  const fetchBuckets = useCallback(async (id: string): Promise<AssetBucket[]> => {
-    const b = await json<BucketsResp>(
-      await fetch(`/api/gallery/bulk-uploads/${encodeURIComponent(id)}/analyze`, { credentials: 'include' }),
-    );
-    return normaliseBuckets(b.buckets);
-  }, []);
+  // Parent passes inline callbacks; keep stable refs to avoid effect loops.
+  const onErrorRef = useRef(onError);
+  const onGroupsReadyRef = useRef(onGroupsReady);
+  useEffect(() => {
+    onErrorRef.current = onError;
+    onGroupsReadyRef.current = onGroupsReady;
+  }, [onError, onGroupsReady]);
 
-  const fetchAssets = useCallback(async (id: string): Promise<Asset[]> => {
-    const a = await json<AssetsResp>(
-      await fetch(`/api/gallery/assets?bulkUploadId=${encodeURIComponent(id)}`, { credentials: 'include' }),
-    );
-    return normaliseAssets(a.assets);
-  }, []);
-
-  /* ── Phase-2: content re-analysis once all videos are READY ──────────────
-   * Merges the new buckets while preserving include/exclude choices the user
-   * may have already made on the metadata groups.
-   */
-  const upgradeToContent = useCallback(async (id: string) => {
-    setRefining(true);
-    try {
-      // Fire content analysis (awaited here since we want the result)
-      await fetch(`/api/gallery/bulk-uploads/${encodeURIComponent(id)}/analyze`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mode: 'content' }),
-      });
-
-      const [newBuckets, newAssets] = await Promise.all([
-        fetchBuckets(id),
-        fetchAssets(id),
-      ]);
-
-      setBuckets(newBuckets);
-      setAssets(newAssets);
-      // Preserve existing include choices; newly appearing buckets default to included
-      setIncluded((prev) => {
-        const next = new Set(prev);
-        for (const b of newBuckets) {
-          if (!next.has(b.id)) next.add(b.id);
-        }
-        return next;
-      });
-    } catch {
-      // Non-fatal — user already has the metadata groups
-    } finally {
-      setRefining(false);
-    }
-  }, [fetchBuckets, fetchAssets]);
-
-  /* ── Phase-1: load metadata groups immediately ──────────────────────────── */
   useEffect(() => {
     if (!bulkUploadId) return;
     let cancelled = false;
-
     void (async () => {
       setLoading(true);
       try {
-        // Metadata groups are usually available within ~200 ms of upload completion.
-        // Retry a few times quickly in case the background POST hasn't settled yet.
-        let metaBuckets: AssetBucket[] = [];
-        let metaAssets: Asset[] = [];
-
-        for (let attempt = 0; attempt < 5; attempt++) {
-          if (attempt > 0) {
-            await new Promise<void>((r) => setTimeout(r, 1500));
-          }
-          if (cancelled) return;
-
-          const [b, a] = await Promise.all([fetchBuckets(bulkUploadId), fetchAssets(bulkUploadId)]);
-          if (cancelled) return;
-
-          if (b.length > 0) {
-            metaBuckets = b;
-            metaAssets = a;
-            break;
-          }
-          // Buckets not ready yet — re-fire metadata analyze and retry
-          void fetch(`/api/gallery/bulk-uploads/${encodeURIComponent(bulkUploadId)}/analyze`, {
-            method: 'POST',
-            credentials: 'include',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ mode: 'metadata' }),
-          });
-        }
-
+        const [b, a] = await Promise.all([
+          json<BucketsResp>(await fetch(`/api/gallery/bulk-uploads/${encodeURIComponent(bulkUploadId)}/analyze`, { credentials: 'include' })),
+          json<AssetsResp>(await fetch(`/api/gallery/assets?bulkUploadId=${encodeURIComponent(bulkUploadId)}`, { credentials: 'include' })),
+        ]);
         if (cancelled) return;
 
-        setBuckets(metaBuckets);
-        setAssets(metaAssets);
-        setIncluded(new Set(metaBuckets.map((b) => b.id)));
+        const nextBuckets: AssetBucket[] = (b.buckets ?? []).map((x) => ({
+          id: x.id,
+          label: x.label,
+          assetCount: x.assetCount,
+        }));
+        const nextAssets: Asset[] = (a.assets ?? []).map((x) => ({
+          id: x.id,
+          title: x.title,
+          thumbnailUrl: x.thumbnailUrl ?? null,
+          playbackUrl: x.playbackUrl ?? null,
+          assetType: x.assetType,
+          bulkUploadId: x.bulkUploadId ?? null,
+          assetBucketId: x.assetBucketId ?? null,
+        }));
 
-        /* ── Phase-2 setup: watch video assets via SSE ──────────────────────
-         * Only kick off if there are video assets still PROCESSING.
-         */
-        const videoIds = (uploadedAssetIds ?? metaAssets
-          .filter((a) => a.assetType === 'VIDEO')
-          .map((a) => a.id));
-
-        if (videoIds.length === 0) return; // no videos — metadata groups are final
-
-        // Check current statuses first before opening SSE
-        const statusResp = await json<{ assets?: SseAsset[] }>(
-          await fetch(`/api/assets/status?ids=${videoIds.join(',')}`, { credentials: 'include' }),
-        ).catch(() => ({ assets: [] as SseAsset[] }));
-
-        if (cancelled) return;
-
-        const notReady = (statusResp?.assets ?? []).filter(
-          (a) => a.status !== 'READY' && a.status !== 'ERROR',
-        );
-
-        if (notReady.length === 0) {
-          // All videos already READY — upgrade content immediately
-          void upgradeToContent(bulkUploadId);
-          return;
-        }
-
-        // Open SSE to watch for readiness
-        if (sseRef.current) sseRef.current.close();
-        const sse = new EventSource(`/api/assets/status?ids=${videoIds.join(',')}`);
-        sseRef.current = sse;
-
-        sse.onmessage = (e) => {
-          if (cancelled) { sse.close(); return; }
-          const data = JSON.parse(e.data as string) as { assets?: SseAsset[]; done?: boolean };
-
-          // Update thumbnails/playbackUrls in local asset list as they trickle in
-          if (data.assets) {
-            setAssets((prev) => prev.map((a) => {
-              const updated = (data.assets ?? []).find((u) => u.id === a.id);
-              if (!updated) return a;
-              return {
-                ...a,
-                thumbnailUrl: updated.thumbnailUrl ?? a.thumbnailUrl,
-                playbackUrl: updated.playbackUrl ?? a.playbackUrl,
-              };
-            }));
-          }
-
-          if (data.done) {
-            sse.close();
-            sseRef.current = null;
-            void upgradeToContent(bulkUploadId);
-          }
-        };
-
-        sse.onerror = () => {
-          sse.close();
-          sseRef.current = null;
-        };
+        setBuckets(nextBuckets);
+        setAssets(nextAssets);
+        setIncluded(new Set(nextBuckets.map((x) => x.id)));
       } catch (e) {
-        if (!cancelled) onError(e instanceof Error ? e.message : 'Failed to load groups');
+        onErrorRef.current(e instanceof Error ? e.message : 'Failed to load groups');
       } finally {
         if (!cancelled) setLoading(false);
       }
     })();
-
-    return () => {
-      cancelled = true;
-      sseRef.current?.close();
-      sseRef.current = null;
-    };
-  }, [bulkUploadId, uploadedAssetIds, fetchBuckets, fetchAssets, upgradeToContent, onError]);
+    return () => { cancelled = true; };
+  }, [bulkUploadId]);
 
   /* ── Derived groups list ─────────────────────────────────────────────────── */
   const groups = useMemo<GroupModel[]>(() => {
@@ -275,8 +122,8 @@ export default function GroupsStep({
   }, [buckets, assets, included]);
 
   useEffect(() => {
-    onGroupsReady(groups);
-  }, [groups, onGroupsReady]);
+    onGroupsReadyRef.current(groups);
+  }, [groups]);
 
   /* ── Render ──────────────────────────────────────────────────────────────── */
   if (!bulkUploadId) {
@@ -310,19 +157,6 @@ export default function GroupsStep({
         </div>
         <span className="glass-badge">{buckets.length} group{buckets.length !== 1 ? 's' : ''}</span>
       </div>
-
-      {/* Refining banner — shown while content upgrade runs in background */}
-      {refining ? (
-        <div className="flex items-center gap-2.5 rounded-2xl border border-primary/20 bg-primary/5 px-4 py-2.5">
-          <svg className="h-3.5 w-3.5 flex-shrink-0 animate-spin text-primary" viewBox="0 0 24 24" fill="none">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
-          </svg>
-          <p className="text-xs text-primary">
-            Videos are ready — refining groups with content analysis…
-          </p>
-        </div>
-      ) : null}
 
       <div className="grid gap-3 sm:grid-cols-2">
         {groups.map((g) => (
