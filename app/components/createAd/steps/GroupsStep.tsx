@@ -50,6 +50,8 @@ export default function GroupsStep({
   const [loading, setLoading] = useState(false);
   const [retrying, setRetrying] = useState(false);
   const [dragOverBucketId, setDragOverBucketId] = useState<string | null>(null);
+  const [renamingBucketId, setRenamingBucketId] = useState<string | null>(null);
+  const [renameDraft, setRenameDraft] = useState<string>('');
   const [buckets, setBuckets] = useState<AssetBucket[]>([]);
   const [assets, setAssets] = useState<Asset[]>([]);
   const [included, setIncluded] = useState<Set<string>>(new Set());
@@ -197,6 +199,29 @@ export default function GroupsStep({
     }
   }
 
+  async function renameBucket(bucketId: string, label: string) {
+    if (!bulkUploadId) return;
+    const nextLabel = label.trim();
+    if (!nextLabel) return;
+    try {
+      await fetch(
+        `/api/gallery/bulk-uploads/${encodeURIComponent(bulkUploadId)}/rename-bucket`,
+        {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ bucketId, label: nextLabel }),
+        },
+      );
+      await loadGroups(bulkUploadId, { keepIncluded: true });
+    } catch (e) {
+      onErrorRef.current(e instanceof Error ? e.message : 'Failed to rename group');
+    } finally {
+      setRenamingBucketId(null);
+      setRenameDraft('');
+    }
+  }
+
   /* ── Render ──────────────────────────────────────────────────────────────── */
   if (!bulkUploadId) {
     return <EmptyState title="No upload yet" message="Upload creatives first to generate groups." />;
@@ -269,7 +294,53 @@ export default function GroupsStep({
           >
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <p className="text-sm font-semibold text-foreground truncate">{g.label}</p>
+                {renamingBucketId === g.bucketId ? (
+                  <form
+                    className="flex items-center gap-2"
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      void renameBucket(g.bucketId, renameDraft);
+                    }}
+                  >
+                    <input
+                      value={renameDraft}
+                      onChange={(e) => setRenameDraft(e.target.value)}
+                      className="h-8 w-44 rounded-lg border border-border/50 bg-background/40 px-2 text-sm text-foreground outline-none"
+                      autoFocus
+                    />
+                    <button
+                      type="submit"
+                      className="h-8 rounded-lg border border-border/40 bg-background/20 px-2 text-xs font-medium hover:bg-background/30"
+                    >
+                      Save
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setRenamingBucketId(null);
+                        setRenameDraft('');
+                      }}
+                      className="h-8 rounded-lg border border-border/40 bg-background/20 px-2 text-xs font-medium hover:bg-background/30"
+                    >
+                      Cancel
+                    </button>
+                  </form>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-semibold text-foreground truncate">{g.label}</p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setRenamingBucketId(g.bucketId);
+                        setRenameDraft(g.label);
+                      }}
+                      className="rounded-lg border border-border/40 bg-background/20 px-2 py-1 text-[11px] font-medium text-muted-foreground hover:bg-background/30"
+                      title="Rename group"
+                    >
+                      Rename
+                    </button>
+                  </div>
+                )}
                 <p className="text-[11px] text-muted-foreground">
                   {g.assets.length} asset{g.assets.length !== 1 ? 's' : ''}
                 </p>

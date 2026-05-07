@@ -430,6 +430,9 @@ async function analyzeByContent(
 
   // ── Phase 1: group by exact millisecond duration ────────────────────────────
   const durationGroups = groupByExactDurationMs(videos);
+  const durationGroupEntries = [...durationGroups.entries()].sort(
+    ([aMs], [bMs]) => aMs - bMs,
+  );
 
   // Legacy: perceptual hashing computation is disabled for now.
   // Grouping is strictly by exact duration (no perceptual comparisons).
@@ -479,14 +482,25 @@ async function analyzeByContent(
 
     const bucketRows: AssetBucket[] = [];
 
-    // Create duration buckets for videos (including singletons)
-    for (const [ms, assetIds] of durationGroups) {
-      const seconds = (ms / 1000).toFixed(2).replace(/\.00$/, "");
+    function alphaLabel(idx: number): string {
+      // 0 -> A, 1 -> B, ... 25 -> Z, 26 -> AA ...
+      let n = idx;
+      let out = "";
+      while (n >= 0) {
+        out = String.fromCharCode(65 + (n % 26)) + out;
+        n = Math.floor(n / 26) - 1;
+      }
+      return out;
+    }
+
+    // Create buckets for videos (including singletons), default label "Group A/B/…"
+    let groupIdx = 0;
+    for (const [ms, assetIds] of durationGroupEntries) {
       const row = await tx.assetBucket.create({
         data: {
           companyId,
           bulkUploadId,
-          label: `${seconds}s · ${assetIds.length} video${assetIds.length !== 1 ? "s" : ""}`,
+          label: `Group ${alphaLabel(groupIdx++)}`,
           bucketType: BucketType.DURATION,
           bucketValue: `durationMs|${ms}`,
         },
@@ -503,7 +517,7 @@ async function analyzeByContent(
         data: {
           companyId,
           bulkUploadId,
-          label: "Solo · 1 video",
+          label: `Group ${alphaLabel(groupIdx++)}`,
           bucketType: BucketType.DURATION,
           bucketValue: `durationMs|unknown|${assetId}`,
         },
