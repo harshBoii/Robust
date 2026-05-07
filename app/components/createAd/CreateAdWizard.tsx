@@ -29,6 +29,7 @@ export default function CreateAdWizard({ companyId }: { companyId: string }) {
   const stepIndex = CREATE_AD_STEPS.indexOf(step);
 
   const [bulkUploadId, setBulkUploadId] = useState<string>('');
+  const [uploadedAssetIds, setUploadedAssetIds] = useState<string[]>([]);
   const [campaignId, setCampaignId] = useState<string>('');
   const [groups, setGroups] = useState<GroupModel[]>([]);
 
@@ -183,8 +184,9 @@ export default function CreateAdWizard({ companyId }: { companyId: string }) {
             <UploadStep
               companyId={companyId}
               onError={(m) => setError(m)}
-              onUploaded={({ bulkUploadId: id }) => {
+              onUploaded={({ bulkUploadId: id, assetIds }) => {
                 setBulkUploadId(id);
+                setUploadedAssetIds(assetIds);
                 setStep('Groups');
               }}
             />
@@ -193,6 +195,7 @@ export default function CreateAdWizard({ companyId }: { companyId: string }) {
           {step === 'Groups' ? (
             <GroupsStep
               bulkUploadId={bulkUploadId}
+              uploadedAssetIds={uploadedAssetIds}
               onError={(m) => setError(m)}
               onGroupsReady={(gs) => upsertGroups(gs)}
             />

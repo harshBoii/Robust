@@ -36,14 +36,14 @@ export default function UploadStep({
       if (!id) throw new Error('Missing bulkUploadId');
       setBulkUploadId(id);
 
-      // Kick off analysis in the background — do NOT await.
-      // Videos may still be encoding on Cloudflare Stream; the Groups step
-      // will poll until buckets are ready.
+      // Fire fast metadata analysis immediately — reads only DB columns so it
+      // returns in milliseconds regardless of video encoding state.
+      // GroupsStep will upgrade to content analysis once videos are READY.
       void fetch(`/api/gallery/bulk-uploads/${encodeURIComponent(id)}/analyze`, {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mode: 'content' }),
+        body: JSON.stringify({ mode: 'metadata' }),
       });
 
       // Advance immediately — Groups step handles the "still analyzing" state.

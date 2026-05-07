@@ -1,10 +1,11 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { EmptyState, json } from '../shared';
 import type { Asset, AssetBucket, GroupModel } from '../types';
 
+/* ── API response shapes ──────────────────────────────────────────────────── */
 type BucketsResp = {
   buckets?: Array<{
     id: string;
@@ -15,16 +16,27 @@ type BucketsResp = {
   }>;
 };
 
-type AssetsResp = { assets?: Array<{
+type AssetsResp = {
+  assets?: Array<{
+    id: string;
+    title: string;
+    thumbnailUrl?: string | null;
+    playbackUrl?: string | null;
+    assetType: string;
+    status?: string;
+    bulkUploadId?: string | null;
+    assetBucketId?: string | null;
+  }>;
+};
+
+type SseAsset = {
   id: string;
-  title: string;
+  status: string;
   thumbnailUrl?: string | null;
   playbackUrl?: string | null;
-  assetType: string;
-  bulkUploadId?: string | null;
-  assetBucketId?: string | null;
-}> };
+};
 
+/* ── Helpers ──────────────────────────────────────────────────────────────── */
 function defaultCreative() {
   return {
     headline: '',
@@ -36,11 +48,12 @@ function defaultCreative() {
   };
 }
 
-const MAX_POLL_ATTEMPTS = 20;
-const POLL_INTERVAL_MS = 15_000;
+function normaliseBuckets(raw: BucketsResp['buckets']): AssetBucket[] {
+  return (raw ?? []).map((x) => ({ id: x.id, label: x.label, assetCount: x.assetCount }));
+}
 
-function toAssets(list: AssetsResp['assets']): Asset[] {
-  return (list ?? []).map((x) => ({
+function normaliseAssets(raw: AssetsResp['assets']): Asset[] {
+  return (raw ?? []).map((x) => ({
     id: x.id,
     title: x.title,
     thumbnailUrl: x.thumbnailUrl ?? null,
@@ -51,133 +64,201 @@ function toAssets(list: AssetsResp['assets']): Asset[] {
   }));
 }
 
-function toBuckets(list: BucketsResp['buckets']): AssetBucket[] {
-  return (list ?? []).map((x) => ({ id: x.id, label: x.label, assetCount: x.assetCount }));
-}
-
+/* ── Component ────────────────────────────────────────────────────────────── */
 export default function GroupsStep({
   bulkUploadId,
+  uploadedAssetIds,
   onGroupsReady,
   onError,
 }: {
   bulkUploadId: string;
+  /** Asset IDs that were just uploaded — used to watch for video readiness. */
+  uploadedAssetIds?: string[];
   onGroupsReady: (groups: GroupModel[]) => void;
   onError: (message: string) => void;
 }) {
-  const [loading, setLoading]     = useState(false);
-  const [analyzing, setAnalyzing] = useState(false);
-  const [timedOut, setTimedOut]   = useState(false);
-  const [pollAttempt, setPollAttempt] = useState(0);
-  const [retryKey, setRetryKey]   = useState(0);   // increment to restart the effect
-
+  const [loading, setLoading] = useState(false);
+  /** true while the content-mode upgrade is being fetched / analyzed */
+  const [refining, setRefining] = useState(false);
   const [buckets, setBuckets] = useState<AssetBucket[]>([]);
-  const [assets, setAssets]   = useState<Asset[]>([]);
+  const [assets, setAssets] = useState<Asset[]>([]);
   const [included, setIncluded] = useState<Set<string>>(new Set());
+  const sseRef = useRef<EventSource | null>(null);
 
-  const fetchData = useCallback(async (id: string) => {
-    const [b, a] = await Promise.all([
-      json<BucketsResp>(await fetch(`/api/gallery/bulk-uploads/${encodeURIComponent(id)}/analyze`, { credentials: 'include' })),
-      json<AssetsResp>(await fetch(`/api/gallery/assets?bulkUploadId=${encodeURIComponent(id)}`, { credentials: 'include' })),
-    ]);
-    return { b, a };
+  /* ── fetch helpers ──────────────────────────────────────────────────────── */
+  const fetchBuckets = useCallback(async (id: string): Promise<AssetBucket[]> => {
+    const b = await json<BucketsResp>(
+      await fetch(`/api/gallery/bulk-uploads/${encodeURIComponent(id)}/analyze`, { credentials: 'include' }),
+    );
+    return normaliseBuckets(b.buckets);
   }, []);
 
-  // Re-kick the background analyze POST (used on retry)
-  const triggerAnalyze = useCallback((id: string) => {
-    void fetch(`/api/gallery/bulk-uploads/${encodeURIComponent(id)}/analyze`, {
-      method: 'POST',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ mode: 'content' }),
-    });
+  const fetchAssets = useCallback(async (id: string): Promise<Asset[]> => {
+    const a = await json<AssetsResp>(
+      await fetch(`/api/gallery/assets?bulkUploadId=${encodeURIComponent(id)}`, { credentials: 'include' }),
+    );
+    return normaliseAssets(a.assets);
   }, []);
 
+  /* ── Phase-2: content re-analysis once all videos are READY ──────────────
+   * Merges the new buckets while preserving include/exclude choices the user
+   * may have already made on the metadata groups.
+   */
+  const upgradeToContent = useCallback(async (id: string) => {
+    setRefining(true);
+    try {
+      // Fire content analysis (awaited here since we want the result)
+      await fetch(`/api/gallery/bulk-uploads/${encodeURIComponent(id)}/analyze`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode: 'content' }),
+      });
+
+      const [newBuckets, newAssets] = await Promise.all([
+        fetchBuckets(id),
+        fetchAssets(id),
+      ]);
+
+      setBuckets(newBuckets);
+      setAssets(newAssets);
+      // Preserve existing include choices; newly appearing buckets default to included
+      setIncluded((prev) => {
+        const next = new Set(prev);
+        for (const b of newBuckets) {
+          if (!next.has(b.id)) next.add(b.id);
+        }
+        return next;
+      });
+    } catch {
+      // Non-fatal — user already has the metadata groups
+    } finally {
+      setRefining(false);
+    }
+  }, [fetchBuckets, fetchAssets]);
+
+  /* ── Phase-1: load metadata groups immediately ──────────────────────────── */
   useEffect(() => {
     if (!bulkUploadId) return;
     let cancelled = false;
 
-    // Reset per-run state
-    setLoading(true);
-    setAnalyzing(false);
-    setTimedOut(false);
-    setPollAttempt(0);
-
     void (async () => {
+      setLoading(true);
       try {
-        // Initial fetch — check if buckets already exist from a prior run
-        const { b, a } = await fetchData(bulkUploadId);
+        // Metadata groups are usually available within ~200 ms of upload completion.
+        // Retry a few times quickly in case the background POST hasn't settled yet.
+        let metaBuckets: AssetBucket[] = [];
+        let metaAssets: Asset[] = [];
+
+        for (let attempt = 0; attempt < 5; attempt++) {
+          if (attempt > 0) {
+            await new Promise<void>((r) => setTimeout(r, 1500));
+          }
+          if (cancelled) return;
+
+          const [b, a] = await Promise.all([fetchBuckets(bulkUploadId), fetchAssets(bulkUploadId)]);
+          if (cancelled) return;
+
+          if (b.length > 0) {
+            metaBuckets = b;
+            metaAssets = a;
+            break;
+          }
+          // Buckets not ready yet — re-fire metadata analyze and retry
+          void fetch(`/api/gallery/bulk-uploads/${encodeURIComponent(bulkUploadId)}/analyze`, {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ mode: 'metadata' }),
+          });
+        }
+
         if (cancelled) return;
 
-        const initial = toBuckets(b.buckets);
+        setBuckets(metaBuckets);
+        setAssets(metaAssets);
+        setIncluded(new Set(metaBuckets.map((b) => b.id)));
 
-        if (initial.length > 0) {
-          setBuckets(initial);
-          setAssets(toAssets(a.assets));
-          setIncluded(new Set(initial.map((x) => x.id)));
-          setLoading(false);
+        /* ── Phase-2 setup: watch video assets via SSE ──────────────────────
+         * Only kick off if there are video assets still PROCESSING.
+         */
+        const videoIds = (uploadedAssetIds ?? metaAssets
+          .filter((a) => a.assetType === 'VIDEO')
+          .map((a) => a.id));
+
+        if (videoIds.length === 0) return; // no videos — metadata groups are final
+
+        // Check current statuses first before opening SSE
+        const statusResp = await json<{ assets?: SseAsset[] }>(
+          await fetch(`/api/assets/status?ids=${videoIds.join(',')}`, { credentials: 'include' }),
+        ).catch(() => ({ assets: [] as SseAsset[] }));
+
+        if (cancelled) return;
+
+        const notReady = (statusResp?.assets ?? []).filter(
+          (a) => a.status !== 'READY' && a.status !== 'ERROR',
+        );
+
+        if (notReady.length === 0) {
+          // All videos already READY — upgrade content immediately
+          void upgradeToContent(bulkUploadId);
           return;
         }
 
-        // No buckets yet — enter polling mode
-        setLoading(false);
-        setAnalyzing(true);
+        // Open SSE to watch for readiness
+        if (sseRef.current) sseRef.current.close();
+        const sse = new EventSource(`/api/assets/status?ids=${videoIds.join(',')}`);
+        sseRef.current = sse;
 
-        for (let attempt = 1; attempt <= MAX_POLL_ATTEMPTS; attempt++) {
-          await new Promise<void>((res) => setTimeout(res, POLL_INTERVAL_MS));
-          if (cancelled) return;
+        sse.onmessage = (e) => {
+          if (cancelled) { sse.close(); return; }
+          const data = JSON.parse(e.data as string) as { assets?: SseAsset[]; done?: boolean };
 
-          setPollAttempt(attempt);
-
-          const { b: bPoll, a: aPoll } = await fetchData(bulkUploadId);
-          if (cancelled) return;
-
-          const polled = toBuckets(bPoll.buckets);
-
-          if (polled.length > 0) {
-            setBuckets(polled);
-            setAssets(toAssets(aPoll.assets));
-            setIncluded(new Set(polled.map((x) => x.id)));
-            setAnalyzing(false);
-            return;
+          // Update thumbnails/playbackUrls in local asset list as they trickle in
+          if (data.assets) {
+            setAssets((prev) => prev.map((a) => {
+              const updated = (data.assets ?? []).find((u) => u.id === a.id);
+              if (!updated) return a;
+              return {
+                ...a,
+                thumbnailUrl: updated.thumbnailUrl ?? a.thumbnailUrl,
+                playbackUrl: updated.playbackUrl ?? a.playbackUrl,
+              };
+            }));
           }
-        }
 
-        // Exhausted — surface latest assets so the Retry banner is meaningful
-        const { a: aFresh } = await fetchData(bulkUploadId);
-        if (!cancelled) {
-          setAssets(toAssets(aFresh.assets));
-          setAnalyzing(false);
-          setTimedOut(true);
-        }
+          if (data.done) {
+            sse.close();
+            sseRef.current = null;
+            void upgradeToContent(bulkUploadId);
+          }
+        };
+
+        sse.onerror = () => {
+          sse.close();
+          sseRef.current = null;
+        };
       } catch (e) {
-        if (!cancelled) {
-          onError(e instanceof Error ? e.message : 'Failed to load groups');
-          setLoading(false);
-          setAnalyzing(false);
-        }
+        if (!cancelled) onError(e instanceof Error ? e.message : 'Failed to load groups');
       } finally {
         if (!cancelled) setLoading(false);
       }
     })();
 
-    return () => { cancelled = true; };
-  // retryKey intentionally re-triggers this effect on manual retry
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bulkUploadId, fetchData, retryKey]);
+    return () => {
+      cancelled = true;
+      sseRef.current?.close();
+      sseRef.current = null;
+    };
+  }, [bulkUploadId, uploadedAssetIds, fetchBuckets, fetchAssets, upgradeToContent, onError]);
 
-  const handleRetry = useCallback(() => {
-    if (!bulkUploadId) return;
-    triggerAnalyze(bulkUploadId);
-    setRetryKey((k) => k + 1);
-  }, [bulkUploadId, triggerAnalyze]);
-
-  const groups = useMemo(() => {
+  /* ── Derived groups list ─────────────────────────────────────────────────── */
+  const groups = useMemo<GroupModel[]>(() => {
     const byBucket = new Map<string, Asset[]>();
     for (const a of assets) {
-      const bid = a.assetBucketId;
-      if (!bid) continue;
-      if (!byBucket.has(bid)) byBucket.set(bid, []);
-      byBucket.get(bid)!.push(a);
+      if (!a.assetBucketId) continue;
+      if (!byBucket.has(a.assetBucketId)) byBucket.set(a.assetBucketId, []);
+      byBucket.get(a.assetBucketId)!.push(a);
     }
     return buckets.map((b) => {
       const gAssets = byBucket.get(b.id) ?? [];
@@ -197,7 +278,7 @@ export default function GroupsStep({
     onGroupsReady(groups);
   }, [groups, onGroupsReady]);
 
-  /* ── guards ── */
+  /* ── Render ──────────────────────────────────────────────────────────────── */
   if (!bulkUploadId) {
     return <EmptyState title="No upload yet" message="Upload creatives first to generate groups." />;
   }
@@ -214,110 +295,34 @@ export default function GroupsStep({
     );
   }
 
-  if (analyzing) {
-    return (
-      <div className="flex flex-col items-center gap-4 py-12 text-center">
-        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10">
-          <svg className="h-5 w-5 animate-spin text-primary" viewBox="0 0 24 24" fill="none">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
-          </svg>
-        </div>
-        <div className="space-y-1">
-          <p className="text-sm font-semibold text-foreground">Analyzing creative groups…</p>
-          <p className="text-xs text-muted-foreground">
-            Videos are still being processed by Cloudflare Stream.
-            <br />Groups will appear automatically — this usually takes 1–3 minutes.
-          </p>
-          {pollAttempt > 0 ? (
-            <p className="font-ui text-[11px] text-muted-foreground/60">
-              Check {pollAttempt} / {MAX_POLL_ATTEMPTS} · next in ~15 s
-            </p>
-          ) : null}
-        </div>
-      </div>
-    );
-  }
-
-  if (timedOut) {
-    return (
-      <div className="flex flex-col items-center gap-4 py-12 text-center">
-        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-500/10">
-          <svg className="h-5 w-5 text-amber-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
-            <circle cx="12" cy="12" r="10" />
-            <line x1="12" y1="8" x2="12" y2="12" />
-            <line x1="12" y1="16" x2="12.01" y2="16" />
-          </svg>
-        </div>
-        <div className="space-y-1">
-          <p className="text-sm font-semibold text-foreground">Analysis timed out</p>
-          <p className="text-xs text-muted-foreground">
-            Cloudflare Stream is taking longer than expected to process your videos
-            ({MAX_POLL_ATTEMPTS} checks over ~5 min).
-            <br />Click <strong>Retry</strong> to wait further, or proceed without groups.
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={handleRetry}
-          className="glass-button-primary flex items-center gap-2 px-5 py-2.5 text-sm font-semibold"
-        >
-          <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-            <path d="M1 4v6h6M23 20v-6h-6" strokeLinecap="round" strokeLinejoin="round" />
-            <path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4-4.64 4.36A9 9 0 0 1 3.51 15" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-          Retry analysis
-        </button>
-      </div>
-    );
-  }
-
   if (buckets.length === 0) {
-    return (
-      <div className="flex flex-col items-center gap-4 py-12 text-center">
-        <p className="text-sm font-medium text-foreground">No groups found</p>
-        <p className="text-xs text-muted-foreground max-w-sm">
-          Analysis completed but produced no groups. This can happen if all videos are still encoding.
-        </p>
-        <button
-          type="button"
-          onClick={handleRetry}
-          className="glass-button flex items-center gap-2 px-4 py-2 text-sm"
-        >
-          <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-            <path d="M1 4v6h6M23 20v-6h-6" strokeLinecap="round" strokeLinejoin="round" />
-            <path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4-4.64 4.36A9 9 0 0 1 3.51 15" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-          Retry analysis
-        </button>
-      </div>
-    );
+    return <EmptyState title="No groups found" message="Analysis finished but produced no groups. Go back and re-upload, or continue without groups." />;
   }
 
-  /* ── groups found ── */
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3">
         <div>
           <p className="text-sm font-semibold text-foreground">Creative groups</p>
-          <p className="text-xs text-muted-foreground">Auto-generated from your uploaded batch.</p>
+          <p className="text-xs text-muted-foreground">
+            Auto-grouped from your uploaded batch.
+          </p>
         </div>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={handleRetry}
-            title="Re-run analysis"
-            className="glass-button flex items-center gap-1.5 px-2.5 py-1.5 text-xs text-muted-foreground"
-          >
-            <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-              <path d="M1 4v6h6M23 20v-6h-6" strokeLinecap="round" strokeLinejoin="round" />
-              <path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4-4.64 4.36A9 9 0 0 1 3.51 15" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-            Re-analyze
-          </button>
-          <span className="glass-badge">{buckets.length} group{buckets.length !== 1 ? 's' : ''}</span>
-        </div>
+        <span className="glass-badge">{buckets.length} group{buckets.length !== 1 ? 's' : ''}</span>
       </div>
+
+      {/* Refining banner — shown while content upgrade runs in background */}
+      {refining ? (
+        <div className="flex items-center gap-2.5 rounded-2xl border border-primary/20 bg-primary/5 px-4 py-2.5">
+          <svg className="h-3.5 w-3.5 flex-shrink-0 animate-spin text-primary" viewBox="0 0 24 24" fill="none">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+          </svg>
+          <p className="text-xs text-primary">
+            Videos are ready — refining groups with content analysis…
+          </p>
+        </div>
+      ) : null}
 
       <div className="grid gap-3 sm:grid-cols-2">
         {groups.map((g) => (
@@ -336,8 +341,7 @@ export default function GroupsStep({
                   checked={included.has(g.bucketId)}
                   onChange={(e) => {
                     const next = new Set(included);
-                    if (e.target.checked) next.add(g.bucketId);
-                    else next.delete(g.bucketId);
+                    if (e.target.checked) next.add(g.bucketId); else next.delete(g.bucketId);
                     setIncluded(next);
                   }}
                 />
@@ -347,13 +351,20 @@ export default function GroupsStep({
 
             <div className="mt-3 flex items-center gap-2">
               {g.assets.slice(0, 3).map((a) => (
-                <div key={a.id} className="h-12 w-12 rounded-xl overflow-hidden bg-muted">
+                <div key={a.id} className="h-12 w-12 rounded-xl overflow-hidden bg-muted relative">
                   {a.thumbnailUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={a.thumbnailUrl} alt={a.title} className="h-full w-full object-cover" />
                   ) : (
                     <div className="h-full w-full flex items-center justify-center text-[10px] text-muted-foreground/60">
-                      {a.assetType}
+                      {a.assetType === 'VIDEO' ? (
+                        <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+                        </svg>
+                      ) : (
+                        <span>{a.assetType}</span>
+                      )}
                     </div>
                   )}
                 </div>
