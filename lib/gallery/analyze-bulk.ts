@@ -9,10 +9,8 @@ import {
   BucketType,
 } from "@/app/generated/prisma/enums";
 import type { Asset, AssetBucket, Prisma } from "@/app/generated/prisma/client";
-import {
-  getOrComputeMultiFrameHashes,
-  hammingDistance,
-} from "./video-hash";
+// Legacy: perceptual hashing (disabled; duration-only grouping for now)
+// import { getOrComputeMultiFrameHashes } from "./video-hash";
 
 /** Stable bucket key segment values */
 export type ResolutionTier = "SD" | "HD" | "FHD" | "QHD" | "FOURK" | "UNKNOWN";
@@ -367,23 +365,12 @@ export type AnalyzeBulkResult = {
 };
 
 /**
- * Group videos by content similarity using duration pre-filtering + perceptual hashing.
- * 1. Filter READY videos with thumbnails
- * 2. Group by exact millisecond duration
- * 3. Compute/retrieve 5-frame pHash tuple per video
- * 4. Cluster using a per-pair "any 1/5 frames ≥50% similar" match
- * 5. Fall back to metadata bucketing for non-video assets
+ * Content mode currently groups videos ONLY by exact millisecond duration.
+ * (Perceptual hashing clustering is intentionally disabled for now.)
+ * Non-video assets still use metadata bucketing.
  */
 
 // ── Types ─────────────────────────────────────────────────────────────────────
-
-type MultiFrameHash = [string, string, string, string, string]; // hashes at 10/25/50/75/90%
-
-const FRAME_POSITIONS = [0.10, 0.25, 0.50, 0.75, 0.90] as const;
-const HASH_BITS = 64; // 8×8 pHash
-// 64-bit pHash: random frames agree on ~50% bits by chance, so keep this strict.
-// 19 differing bits corresponds to ≥70% bit agreement.
-const SIMILARITY_THRESH = 19; // dist ≤ 19  →  ≥70% bits agree
 
 // ── Step 1: exact millisecond duration grouping ───────────────────────────────
 
@@ -416,52 +403,6 @@ function groupByExactDurationMs(
   return groups;
 }
 
-// ── Step 2: point-by-point content match (any 1/5 at ≥50% similarity) ────────
-
-function contentMatch(
-  h1: MultiFrameHash,
-  h2: MultiFrameHash,
-): { matched: boolean; reason: string } {
-  const details: string[] = [];
-
-  for (let i = 0; i < FRAME_POSITIONS.length; i++) {
-    const pct = Math.round(FRAME_POSITIONS[i] * 100);
-    const dist = hammingDistance(h1[i], h2[i]);
-    const sim = Math.round((1 - dist / HASH_BITS) * 100);
-
-    if (dist <= SIMILARITY_THRESH) {
-      details.push(`✅@${pct}%(dist=${dist},sim=${sim}%)`);
-      return { matched: true, reason: details.join(" | ") + " → matched on first hit" };
-    }
-    details.push(`❌@${pct}%(dist=${dist},sim=${sim}%)`);
-  }
-
-  return { matched: false, reason: details.join(" | ") };
-}
-
-// ── Step 3: Union-Find ────────────────────────────────────────────────────────
-
-function makeUnionFind(ids: string[]) {
-  const parent = new Map(ids.map((id) => [id, id]));
-
-  function find(x: string): string {
-    while (parent.get(x) !== x) {
-      const gp = parent.get(parent.get(x)!)!;
-      parent.set(x, gp);
-      x = gp;
-    }
-    return x;
-  }
-
-  function union(x: string, y: string) {
-    const px = find(x),
-      py = find(y);
-    if (px !== py) parent.set(px, py);
-  }
-
-  return { find, union };
-}
-
 async function analyzeByContent(
   assets: Asset[],
   bulkUploadId: string,
@@ -478,61 +419,17 @@ async function analyzeByContent(
     (a) => a.assetType !== AssetType.VIDEO && a.status === AssetStatus.READY,
   );
 
-  // ── Phase 1: cluster by exact millisecond duration ──────────────────────────
+  // ── Phase 1: group by exact millisecond duration ────────────────────────────
   const durationGroups = groupByExactDurationMs(videos);
 
-  // ── Phase 2: compute 5-frame hashes for every video ────────────────────────
-  const multiHashMap = new Map<string, MultiFrameHash>();
+  // Legacy: perceptual hashing computation is disabled for now.
+  // Grouping is strictly by exact duration (no perceptual comparisons).
+  // for (const [, assetIds] of durationGroups) { ... }
 
-  for (const [, assetIds] of durationGroups) {
-    for (const assetId of assetIds) {
-      const asset = videos.find((v) => v.id === assetId);
-      if (!asset) continue;
-      if (!asset.thumbnailUrl || asset.duration == null) continue;
-
-      const hashes = await getOrComputeMultiFrameHashes(
-        asset.id,
-        asset.thumbnailUrl,
-        asset.duration,
-        asset.videoHash ?? null,
-        true,
-      );
-
-      if (hashes) multiHashMap.set(asset.id, hashes);
-    }
-  }
-
-  // ── Phase 3: pairwise content match within each duration group ──────────────
-  const clusters = new Map<string, string[]>(); // root id → [asset ids]
-
-  for (const [ms, assetIds] of durationGroups) {
-    const { find, union } = makeUnionFind(assetIds);
-
-    for (let i = 0; i < assetIds.length; i++) {
-      for (let j = i + 1; j < assetIds.length; j++) {
-        const id1 = assetIds[i],
-          id2 = assetIds[j];
-        const h1 = multiHashMap.get(id1);
-        const h2 = multiHashMap.get(id2);
-
-        if (!h1 || !h2) continue; // missing hash → treat as different
-
-        const { matched, reason } = contentMatch(h1, h2);
-        console.log(`[${ms}ms] ${matched ? "✅ SAME" : "❌ DIFF"} ${id1} ↔ ${id2} | ${reason}`);
-
-        if (matched) union(id1, id2);
-      }
-    }
-
-    // Collect sub-groups — every group is guaranteed same exact duration
-    const sub = new Map<string, string[]>();
-    for (const id of assetIds) {
-      const root = find(id);
-      if (!sub.has(root)) sub.set(root, []);
-      sub.get(root)!.push(id);
-    }
-    for (const [root, ids] of sub) clusters.set(root, ids);
-  }
+  // Videos with unknown duration still need a bucket (singleton).
+  const unknownDurationVideoIds = videos
+    .filter((v) => assetDurationMs(v) == null)
+    .map((v) => v.id);
 
   // Step 4: Compute metadata buckets for non-videos (existing logic)
   const nonVideoDescriptors = new Map<
@@ -573,24 +470,40 @@ async function analyzeByContent(
 
     const bucketRows: AssetBucket[] = [];
 
-    // Create content buckets for video clusters (only clusters with 2+ items)
-    for (const [, assetIds] of clusters) {
-      if (assetIds.length >= 2) {
-        const row = await tx.assetBucket.create({
-          data: {
-            companyId,
-            bulkUploadId,
-            label: `Same content · ${assetIds.length} videos`,
-            bucketType: BucketType.CONTENT,
-            bucketValue: `content|${assetIds.sort().join(',')}`,
-          },
-        });
-        bucketRows.push(row);
-        await tx.asset.updateMany({
-          where: { id: { in: assetIds }, companyId },
-          data: { assetBucketId: row.id },
-        });
-      }
+    // Create duration buckets for videos (including singletons)
+    for (const [ms, assetIds] of durationGroups) {
+      const seconds = (ms / 1000).toFixed(2).replace(/\.00$/, "");
+      const row = await tx.assetBucket.create({
+        data: {
+          companyId,
+          bulkUploadId,
+          label: `${seconds}s · ${assetIds.length} video${assetIds.length !== 1 ? "s" : ""}`,
+          bucketType: BucketType.DURATION,
+          bucketValue: `durationMs|${ms}`,
+        },
+      });
+      bucketRows.push(row);
+      await tx.asset.updateMany({
+        where: { id: { in: assetIds }, companyId },
+        data: { assetBucketId: row.id },
+      });
+    }
+
+    for (const assetId of unknownDurationVideoIds) {
+      const row = await tx.assetBucket.create({
+        data: {
+          companyId,
+          bulkUploadId,
+          label: "Unknown duration · 1 video",
+          bucketType: BucketType.DURATION,
+          bucketValue: `durationMs|unknown|${assetId}`,
+        },
+      });
+      bucketRows.push(row);
+      await tx.asset.update({
+        where: { id: assetId, companyId },
+        data: { assetBucketId: row.id },
+      });
     }
 
     // Create metadata buckets for non-videos
@@ -614,8 +527,8 @@ async function analyzeByContent(
     return bucketRows;
   });
 
-  const videoAssigned = [...clusters.values()].reduce(
-    (sum, ids) => sum + (ids.length >= 2 ? ids.length : 0),
+  const videoAssigned = [...durationGroups.values()].reduce(
+    (sum, ids) => sum + ids.length,
     0,
   );
   const nonVideoAssigned = [...nonVideoDescriptors.values()].reduce(

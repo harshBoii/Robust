@@ -48,6 +48,8 @@ export default function GroupsStep({
   onError: (message: string) => void;
 }) {
   const [loading, setLoading] = useState(false);
+  const [retrying, setRetrying] = useState(false);
+  const [dragOverBucketId, setDragOverBucketId] = useState<string | null>(null);
   const [buckets, setBuckets] = useState<AssetBucket[]>([]);
   const [assets, setAssets] = useState<Asset[]>([]);
   const [included, setIncluded] = useState<Set<string>>(new Set());
@@ -60,36 +62,60 @@ export default function GroupsStep({
     onGroupsReadyRef.current = onGroupsReady;
   }, [onError, onGroupsReady]);
 
+  async function loadGroups(id: string, opts?: { keepIncluded?: boolean }) {
+    const [b, a] = await Promise.all([
+      json<BucketsResp>(
+        await fetch(
+          `/api/gallery/bulk-uploads/${encodeURIComponent(id)}/analyze`,
+          { credentials: 'include' },
+        ),
+      ),
+      json<AssetsResp>(
+        await fetch(
+          `/api/gallery/assets?bulkUploadId=${encodeURIComponent(id)}`,
+          { credentials: 'include' },
+        ),
+      ),
+    ]);
+
+    const nextBuckets: AssetBucket[] = (b.buckets ?? []).map((x) => ({
+      id: x.id,
+      label: x.label,
+      assetCount: x.assetCount,
+    }));
+    const nextAssets: Asset[] = (a.assets ?? []).map((x) => ({
+      id: x.id,
+      title: x.title,
+      thumbnailUrl: x.thumbnailUrl ?? null,
+      playbackUrl: x.playbackUrl ?? null,
+      assetType: x.assetType,
+      bulkUploadId: x.bulkUploadId ?? null,
+      assetBucketId: x.assetBucketId ?? null,
+    }));
+
+    setBuckets(nextBuckets);
+    setAssets(nextAssets);
+
+    if (opts?.keepIncluded) {
+      setIncluded((prev) => {
+        const next = new Set<string>();
+        const valid = new Set(nextBuckets.map((x) => x.id));
+        for (const id of prev) if (valid.has(id)) next.add(id);
+        return next.size ? next : new Set(nextBuckets.map((x) => x.id));
+      });
+    } else {
+      setIncluded(new Set(nextBuckets.map((x) => x.id)));
+    }
+  }
+
   useEffect(() => {
     if (!bulkUploadId) return;
     let cancelled = false;
     void (async () => {
       setLoading(true);
       try {
-        const [b, a] = await Promise.all([
-          json<BucketsResp>(await fetch(`/api/gallery/bulk-uploads/${encodeURIComponent(bulkUploadId)}/analyze`, { credentials: 'include' })),
-          json<AssetsResp>(await fetch(`/api/gallery/assets?bulkUploadId=${encodeURIComponent(bulkUploadId)}`, { credentials: 'include' })),
-        ]);
+        await loadGroups(bulkUploadId);
         if (cancelled) return;
-
-        const nextBuckets: AssetBucket[] = (b.buckets ?? []).map((x) => ({
-          id: x.id,
-          label: x.label,
-          assetCount: x.assetCount,
-        }));
-        const nextAssets: Asset[] = (a.assets ?? []).map((x) => ({
-          id: x.id,
-          title: x.title,
-          thumbnailUrl: x.thumbnailUrl ?? null,
-          playbackUrl: x.playbackUrl ?? null,
-          assetType: x.assetType,
-          bulkUploadId: x.bulkUploadId ?? null,
-          assetBucketId: x.assetBucketId ?? null,
-        }));
-
-        setBuckets(nextBuckets);
-        setAssets(nextAssets);
-        setIncluded(new Set(nextBuckets.map((x) => x.id)));
       } catch (e) {
         onErrorRef.current(e instanceof Error ? e.message : 'Failed to load groups');
       } finally {
@@ -125,6 +151,52 @@ export default function GroupsStep({
     onGroupsReadyRef.current(groups);
   }, [groups]);
 
+  async function retryContentGrouping() {
+    if (!bulkUploadId) return;
+    setRetrying(true);
+    setLoading(true);
+    try {
+      await fetch(
+        `/api/gallery/bulk-uploads/${encodeURIComponent(bulkUploadId)}/analyze`,
+        {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mode: 'content' }),
+        },
+      );
+      await loadGroups(bulkUploadId, { keepIncluded: true });
+    } catch (e) {
+      onErrorRef.current(e instanceof Error ? e.message : 'Retry failed');
+    } finally {
+      setLoading(false);
+      setRetrying(false);
+    }
+  }
+
+  async function moveAssetToBucket(assetId: string, toBucketId: string) {
+    if (!bulkUploadId) return;
+    // optimistic UI
+    setAssets((prev) =>
+      prev.map((a) => (a.id === assetId ? { ...a, assetBucketId: toBucketId } : a)),
+    );
+    try {
+      await fetch(
+        `/api/gallery/bulk-uploads/${encodeURIComponent(bulkUploadId)}/move-asset`,
+        {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ assetId, toBucketId }),
+        },
+      );
+      await loadGroups(bulkUploadId, { keepIncluded: true });
+    } catch (e) {
+      onErrorRef.current(e instanceof Error ? e.message : 'Failed to move asset');
+      await loadGroups(bulkUploadId, { keepIncluded: true });
+    }
+  }
+
   /* ── Render ──────────────────────────────────────────────────────────────── */
   if (!bulkUploadId) {
     return <EmptyState title="No upload yet" message="Upload creatives first to generate groups." />;
@@ -154,13 +226,47 @@ export default function GroupsStep({
           <p className="text-xs text-muted-foreground">
             Auto-grouped from your uploaded batch.
           </p>
+          <p className="mt-1 text-[11px] text-muted-foreground/80">
+            Tip: drag a thumbnail and drop it onto another group to move it.
+          </p>
         </div>
-        <span className="glass-badge">{buckets.length} group{buckets.length !== 1 ? 's' : ''}</span>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={retryContentGrouping}
+            disabled={loading || retrying}
+            className="rounded-xl border border-border/40 bg-background/20 px-3 py-1.5 text-xs font-medium text-foreground hover:bg-background/30 disabled:opacity-60"
+            title="Re-run content-based grouping for this upload"
+          >
+            {retrying ? 'Retrying…' : 'Retry content grouping'}
+          </button>
+          <span className="glass-badge">{buckets.length} group{buckets.length !== 1 ? 's' : ''}</span>
+        </div>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2">
         {groups.map((g) => (
-          <div key={g.bucketId} className="rounded-2xl border border-border/40 bg-background/20 p-4">
+          <div
+            key={g.bucketId}
+            className={[
+              'rounded-2xl border bg-background/20 p-4',
+              dragOverBucketId === g.bucketId ? 'border-primary/60' : 'border-border/40',
+            ].join(' ')}
+            onDragOver={(e) => {
+              e.preventDefault();
+              setDragOverBucketId(g.bucketId);
+            }}
+            onDragLeave={() => {
+              setDragOverBucketId((cur) => (cur === g.bucketId ? null : cur));
+            }}
+            onDrop={(e) => {
+              e.preventDefault();
+              setDragOverBucketId(null);
+              const assetId = e.dataTransfer.getData('text/plain');
+              if (!assetId) return;
+              void moveAssetToBucket(assetId, g.bucketId);
+            }}
+          >
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <p className="text-sm font-semibold text-foreground truncate">{g.label}</p>
@@ -185,7 +291,15 @@ export default function GroupsStep({
 
             <div className="mt-3 flex items-center gap-2">
               {g.assets.slice(0, 3).map((a) => (
-                <div key={a.id} className="h-12 w-12 rounded-xl overflow-hidden bg-muted relative">
+                <div
+                  key={a.id}
+                  className="h-12 w-12 rounded-xl overflow-hidden bg-muted relative cursor-grab active:cursor-grabbing"
+                  draggable
+                  onDragStart={(e) => {
+                    e.dataTransfer.setData('text/plain', a.id);
+                    e.dataTransfer.effectAllowed = 'move';
+                  }}
+                >
                   {a.thumbnailUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={a.thumbnailUrl} alt={a.title} className="h-full w-full object-cover" />
