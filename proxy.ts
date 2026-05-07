@@ -10,6 +10,7 @@ const PUBLIC_PATH_PREFIXES = [
   "/api/signup",
   "/api/logout",
   "/api/auth/logout",
+  "/api/mcpServer",
   /** Stream queue reconcile (Bearer STREAM_QUEUE_RECONCILE_SECRET outside development). */
   "/api/public/stream-queue",
 ] as const;
