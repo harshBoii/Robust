@@ -10,6 +10,8 @@ export type AssetWithThumbnail = {
   videoHash: string | null;
 };
 
+export type MultiFrameHash = [string, string, string, string, string];
+
 /**
  * Apply N levels of 2D Haar wavelet decomposition and return the LL (low-low) subband.
  * Each level halves resolution: 64x64 -> 32x32 -> 16x16 -> 8x8.
@@ -126,7 +128,9 @@ function normalizeThumbnail(thumbnailUrl: string): string {
 function thumbnailAtTime(thumbnailUrl: string, timeSec: number): string {
   try {
     const url = new URL(thumbnailUrl);
-    url.searchParams.set('time', `${Math.max(0, Math.floor(timeSec))}s`);
+    // Keep sub-second precision so short videos don't collapse multiple sample
+    // positions onto the same frame.
+    url.searchParams.set('time', `${Math.max(0, Number(timeSec.toFixed(1)))}s`);
     url.searchParams.set('height', '64');
     url.searchParams.set('fit', 'crop');
     return url.toString();
@@ -136,7 +140,7 @@ function thumbnailAtTime(thumbnailUrl: string, timeSec: number): string {
 }
 
 /**
- * Compute multi-frame hash for a video by sampling thumbnails at 0%, 25%, 50%, 75%, 100%
+ * Compute multi-frame hash for a video by sampling thumbnails at 10%, 25%, 50%, 75%, 90%
  * of duration. Returns ":"-joined hex string or null on failure.
  *
  * 5-frame sampling is more robust than 3 frames because:
@@ -156,7 +160,7 @@ export async function computeMultiFrameHash(
     return computePHash(normalizeThumbnail(thumbnailUrl));
   }
 
-  const samplePcts = [0, 0.25, 0.5, 0.75, 1.0];
+  const samplePcts = [0.1, 0.25, 0.5, 0.75, 0.9];
   const hashes = await Promise.all(
     samplePcts.map((pct) =>
       computePHash(thumbnailAtTime(thumbnailUrl, durationSec * pct)),
@@ -462,4 +466,57 @@ export async function getOrComputeVideoHash(
   });
 
   return hash;
+}
+
+/**
+ * Compute or retrieve cached *5-frame* hash tuple for an asset.
+ *
+ * Frames are sampled at 10/25/50/75/90% of duration, and each frame is a 64-bit
+ * (16 hex chars) wavelet pHash. The DB cache is stored in `asset.videoHash` as
+ * a ":"-joined string of 5 frames.
+ *
+ * Returns null if duration/thumbnail is missing, or any frame hash fails.
+ */
+export async function getOrComputeMultiFrameHashes(
+  assetId: string,
+  thumbnailUrl: string,
+  durationSec: number,
+  existingHash: string | null,
+  forceRecompute = false,
+): Promise<MultiFrameHash | null> {
+  if (!forceRecompute) {
+    const parsed = existingHash?.split(':').filter(Boolean) ?? [];
+    if (parsed.length === 5 && parsed.every((h) => h.length === 16)) {
+      return parsed as MultiFrameHash;
+    }
+  }
+
+  if (!thumbnailUrl) return null;
+  if (!Number.isFinite(durationSec)) return null;
+
+  if (durationSec < 1) {
+    const single = await computePHash(thumbnailAtTime(thumbnailUrl, 0));
+    if (!single || single.length !== 16) return null;
+    const tuple: MultiFrameHash = [single, single, single, single, single];
+    await prisma.asset.update({
+      where: { id: assetId },
+      data: { videoHash: tuple.join(':') },
+    });
+    return tuple;
+  }
+
+  const samplePcts = [0.1, 0.25, 0.5, 0.75, 0.9] as const;
+  const hashes = await Promise.all(
+    samplePcts.map((pct) => computePHash(thumbnailAtTime(thumbnailUrl, durationSec * pct))),
+  );
+
+  if (hashes.some((h) => !h || h.length !== 16)) return null;
+  const tuple = hashes as MultiFrameHash;
+
+  await prisma.asset.update({
+    where: { id: assetId },
+    data: { videoHash: tuple.join(':') },
+  });
+
+  return tuple;
 }
