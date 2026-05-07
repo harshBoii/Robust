@@ -386,7 +386,9 @@ function assetDurationMs(asset: { duration: number | null; metadata: unknown }):
     return Math.round(rawSec * 1000);
   }
 
-  if (asset.duration == null) return null;
+  if (asset.duration == null || !Number.isFinite(asset.duration) || asset.duration <= 0) {
+    return null;
+  }
   return Math.round(asset.duration * 1000);
 }
 
@@ -418,6 +420,13 @@ async function analyzeByContent(
   const nonVideos = assets.filter(
     (a) => a.assetType !== AssetType.VIDEO && a.status === AssetStatus.READY,
   );
+
+  // Ensure any invalid/missing durations (e.g. -1) are refreshed from Stream when possible.
+  for (const v of videos) {
+    if (assetDurationMs(v) == null) {
+      await ensureAssetMetrics(v);
+    }
+  }
 
   // ── Phase 1: group by exact millisecond duration ────────────────────────────
   const durationGroups = groupByExactDurationMs(videos);
@@ -494,7 +503,7 @@ async function analyzeByContent(
         data: {
           companyId,
           bulkUploadId,
-          label: "Unknown duration · 1 video",
+          label: "Solo · 1 video",
           bucketType: BucketType.DURATION,
           bucketValue: `durationMs|unknown|${assetId}`,
         },
