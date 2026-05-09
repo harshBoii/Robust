@@ -105,6 +105,25 @@ function assertOk<T>(res: T): T {
   return res;
 }
 
+export type MetaCreativePreviewRow = {
+  body?: string;
+  // Some preview responses may include additional fields; keep it loose.
+  [key: string]: unknown;
+};
+
+export async function getAdCreativePreviews(input: {
+  creativeId: string;
+  adFormat?: string;
+}): Promise<MetaCreativePreviewRow[]> {
+  const resp = await metaFetch<{ data?: MetaCreativePreviewRow[] }>(`/${input.creativeId}/previews`, {
+    method: 'GET',
+    searchParams: {
+      ad_format: input.adFormat ?? 'DESKTOP_FEED_STANDARD',
+    },
+  });
+  return resp.data ?? [];
+}
+
 export async function getAdsWithInsights(input: {
   adAccountId: string;
   datePreset: 'today' | 'maximum' | 'last_7d' | 'last_30d';

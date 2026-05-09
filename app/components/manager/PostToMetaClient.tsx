@@ -1,22 +1,51 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useToast } from '@/app/components/UI/ToastProvider';
 
 /* ─────────────────────────────────────────── types ── */
-type Campaign  = { id: string; name: string; objective?: string; status?: string };
-type AdSet     = { id: string; name: string; status?: string };
-type Preset    = { id: string; name: string };
+type Campaign = { id: string; name: string; objective?: string; status?: string };
+type AdSet = { id: string; name: string; status?: string };
+type Preset = { id: string; name: string };
 type AssetBucket = { id: string; label: string };
-type Asset     = {
-  id: string; title: string; thumbnailUrl: string | null;
-  assetType: string; bulkUploadId: string | null; assetBucketId: string | null;
+type Asset = {
+  id: string;
+  title: string;
+  thumbnailUrl: string | null;
+  playbackUrl?: string | null;
+  resolution?: string | null;
+  assetType: string;
+  bulkUploadId: string | null;
+  assetBucketId: string | null;
 };
-type JobRow    = { id: string; status: string; lastError?: string | null };
+type JobRow = { id: string; status: string; lastError?: string | null };
 type GalleryAssetApiRow = {
-  id: string; title: string; thumbnailUrl?: string | null;
-  assetType: string; bulkUploadId?: string | null; assetBucketId?: string | null;
+  id: string;
+  title: string;
+  thumbnailUrl?: string | null;
+  playbackUrl?: string | null;
+  resolution?: string | null;
+  assetType: string;
+  bulkUploadId?: string | null;
+  assetBucketId?: string | null;
   bulkUpload?: { id: string; name: string } | null;
+};
+type CreativeFields = {
+  headline: string;
+  primaryText: string;
+  description: string;
+  landingUrl: string;
+  ctaType: string;
+  pixelId: string;
+};
+type GroupModel = {
+  groupId: string;
+  label: string;
+  included: boolean;
+  adSetId: string;
+  assets: Asset[];
+  selectedAssetIds: string[];
+  creative: CreativeFields;
 };
 
 async function json<T>(res: Response): Promise<T> {
@@ -26,206 +55,189 @@ async function json<T>(res: Response): Promise<T> {
 }
 
 /* ─────────────────────────────────────── step config ── */
-const STEPS = ['Campaign', 'Ad Set', 'Creatives', 'Preset', 'Publish'] as const;
+const STEPS = ['Campaign', 'Ad Set', 'Media', 'Creative Fields', 'Preview', 'Publish'] as const;
 type Step = (typeof STEPS)[number];
 
-const STEP_META: Record<Step, { icon: React.ReactNode; description: string }> = {
-  'Campaign': {
+const CTA_OPTIONS = [
+  'LEARN_MORE',
+  'SHOP_NOW',
+  'SIGN_UP',
+  'DOWNLOAD',
+  'GET_QUOTE',
+  'CONTACT_US',
+  'BOOK_TRAVEL',
+  'SUBSCRIBE',
+] as const;
+
+const STEP_META: Record<Step, { description: string; icon: ReactNode }> = {
+  Campaign: {
     description: 'Choose an existing campaign or create one from a preset.',
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" className="h-4 w-4">
-        <path d="M15 3H7a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V7.5L15 3z" strokeLinecap="round" strokeLinejoin="round"/>
-        <polyline points="15 3 15 8 20 8" strokeLinecap="round" strokeLinejoin="round"/>
-        <line x1="9" y1="13" x2="15" y2="13" strokeLinecap="round"/>
-        <line x1="9" y1="17" x2="11" y2="17" strokeLinecap="round"/>
+        <path d="M15 3H7a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V7.5L15 3z" strokeLinecap="round" strokeLinejoin="round" />
+        <polyline points="15 3 15 8 20 8" strokeLinecap="round" strokeLinejoin="round" />
+        <line x1="9" y1="13" x2="15" y2="13" strokeLinecap="round" />
+        <line x1="9" y1="17" x2="11" y2="17" strokeLinecap="round" />
       </svg>
     ),
   },
   'Ad Set': {
-    description: 'Pick an ad set within the selected campaign.',
+    description: 'Pick a default ad set and optionally override it per group later.',
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" className="h-4 w-4">
-        <rect x="3" y="3" width="7" height="7" rx="1" strokeLinecap="round"/>
-        <rect x="14" y="3" width="7" height="7" rx="1" strokeLinecap="round"/>
-        <rect x="3" y="14" width="7" height="7" rx="1" strokeLinecap="round"/>
-        <rect x="14" y="14" width="7" height="7" rx="1" strokeLinecap="round"/>
+        <rect x="3" y="3" width="7" height="7" rx="1" />
+        <rect x="14" y="3" width="7" height="7" rx="1" />
+        <rect x="3" y="14" width="7" height="7" rx="1" />
+        <rect x="14" y="14" width="7" height="7" rx="1" />
       </svg>
     ),
   },
-  'Creatives': {
-    description: 'Select creative assets to publish in this ad set.',
+  Media: {
+    description: 'Select a bulk upload, include the right groups, and choose the assets to publish.',
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" className="h-4 w-4">
-        <rect x="3" y="3" width="18" height="18" rx="2" strokeLinecap="round"/>
-        <circle cx="8.5" cy="8.5" r="1.5"/>
-        <polyline points="21 15 16 10 5 21" strokeLinecap="round" strokeLinejoin="round"/>
+        <rect x="3" y="3" width="18" height="18" rx="2" />
+        <circle cx="8.5" cy="8.5" r="1.5" />
+        <polyline points="21 15 16 10 5 21" strokeLinecap="round" strokeLinejoin="round" />
       </svg>
     ),
   },
-  'Preset': {
-    description: 'Optionally apply a saved ad configuration.',
+  'Creative Fields': {
+    description: 'Fill in the ad copy and landing data for every included group.',
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" className="h-4 w-4">
-        <circle cx="12" cy="12" r="3"/>
-        <path d="M19.07 4.93a10 10 0 010 14.14M4.93 4.93a10 10 0 000 14.14" strokeLinecap="round"/>
+        <path d="M4 19.5V4a2 2 0 012-2h9l5 5v12.5a2 2 0 01-2 2H6a2 2 0 01-2-2z" strokeLinecap="round" />
+        <path d="M14 2v6h6" strokeLinecap="round" />
+        <path d="M8 12h8M8 16h6" strokeLinecap="round" />
       </svg>
     ),
   },
-  'Publish': {
-    description: 'Publish now or schedule for a future time.',
+  Preview: {
+    description: 'Review selected assets, placements, and the copy that will be sent.',
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" className="h-4 w-4">
-        <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" strokeLinecap="round" strokeLinejoin="round"/>
+        <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" strokeLinecap="round" strokeLinejoin="round" />
+        <circle cx="12" cy="12" r="3" />
+      </svg>
+    ),
+  },
+  Publish: {
+    description: 'Publish immediately or schedule for a future time.',
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" className="h-4 w-4">
+        <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" strokeLinecap="round" strokeLinejoin="round" />
       </svg>
     ),
   },
 };
 
-/* ─────────────────────────────── job status helpers ── */
 const JOB_STATUS_STYLES: Record<string, string> = {
-  PENDING:    'bg-yellow-500/10 text-yellow-600 dark:text-yellow-400',
-  PROCESSING: 'bg-blue-500/10 text-blue-600 dark:text-blue-400',
-  DONE:       'bg-clipfox-primary/10 text-clipfox-primary',
-  ERROR:      'bg-destructive/10 text-destructive',
+  PENDING: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-300 border-yellow-500/20',
+  PROCESSING: 'bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-500/20',
+  DONE: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/20',
+  ERROR: 'bg-red-500/10 text-red-700 dark:text-red-300 border-red-500/20',
 };
+
 function jobStatusStyle(s: string) {
-  return JOB_STATUS_STYLES[s.toUpperCase()] ?? 'bg-muted text-muted-foreground';
+  return JOB_STATUS_STYLES[s.toUpperCase()] ?? 'bg-muted text-muted-foreground border-border';
 }
 
-/* ──────────────────────── reusable sub-components ── */
-
-/** Single selectable card used in Campaign / Ad Set lists */
-function SelectCard({
-  selected, onClick, title, sub,
-}: { selected: boolean; onClick: () => void; title: string; sub?: string }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={[
-        'group relative rounded-2xl border p-4 text-left transition-all duration-200',
-        selected
-          ? 'border-primary/50 bg-primary/5 shadow-sm ring-1 ring-primary/30'
-          : 'border-border/50 bg-background/30 hover:border-border hover:bg-[var(--glass-hover)]',
-      ].join(' ')}
-    >
-      {selected && (
-        <span className="absolute right-3 top-3 flex h-5 w-5 items-center justify-center rounded-full bg-primary">
-          <svg className="h-2.5 w-2.5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-            <polyline points="20 6 9 17 4 12"/>
-          </svg>
-        </span>
-      )}
-      <p className="pr-6 text-sm font-medium text-foreground leading-snug">{title}</p>
-      {sub && <p className="mt-1 font-ui text-[11px] text-muted-foreground">{sub}</p>}
-    </button>
-  );
+function defaultCreative(): CreativeFields {
+  return {
+    headline: '',
+    primaryText: '',
+    description: '',
+    landingUrl: '',
+    ctaType: 'LEARN_MORE',
+    pixelId: '',
+  };
 }
 
-/** "Create from preset" inline panel */
-function CreateFromPreset({
-  presets, selectId, label, onCreate,
+/* ───────────────────────────────────── reusable ui ── */
+function cx(...classes: Array<string | false | null | undefined>) {
+  return classes.filter(Boolean).join(' ');
+}
+
+function Card({
+  title,
+  description,
+  action,
+  children,
 }: {
-  presets: Preset[];
-  selectId: string;
-  label: string;
-  onCreate: (presetId: string) => Promise<void>;
+  title?: string;
+  description?: string;
+  action?: ReactNode;
+  children: ReactNode;
 }) {
-  const [selectedPresetId, setSelectedPresetId] = useState('');
-  const [busy, setBusy] = useState(false);
-
   return (
-    <div className="rounded-2xl border border-border/40 bg-background/20 p-4">
-      <p className="font-ui text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-        Create from preset
-      </p>
-      {presets.length === 0 ? (
-        <p className="mt-2 text-xs text-muted-foreground">No presets available.</p>
-      ) : (
-        <div className="mt-3 flex flex-wrap items-center gap-2">
-          <select
-            id={selectId}
-            className="glass-input flex-1 px-3 py-2 text-sm"
-            value={selectedPresetId}
-            onChange={(e) => setSelectedPresetId(e.target.value)}
-          >
-            <option value="">Select a preset…</option>
-            {presets.map((p) => (
-              <option key={p.id} value={p.id}>{p.name}</option>
-            ))}
-          </select>
-          <button
-            type="button"
-            disabled={!selectedPresetId || busy}
-            onClick={async () => {
-              if (!selectedPresetId) return;
-              setBusy(true);
-              try { await onCreate(selectedPresetId); } finally { setBusy(false); }
-            }}
-            className="glass-button-primary flex items-center gap-1.5 px-4 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {busy ? (
-              <svg className="h-3.5 w-3.5 animate-spin" viewBox="0 0 24 24" fill="none">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"/>
-              </svg>
-            ) : (
-              <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-              </svg>
-            )}
-            {busy ? 'Creating…' : label}
-          </button>
+    <section className="rounded-2xl border border-border bg-card shadow-sm">
+      {(title || description || action) && (
+        <div className="flex flex-wrap items-start justify-between gap-4 border-b border-border px-5 py-4">
+          <div className="space-y-1">
+            {title && <h3 className="text-sm font-semibold text-foreground">{title}</h3>}
+            {description && <p className="text-sm text-muted-foreground">{description}</p>}
+          </div>
+          {action}
         </div>
       )}
-    </div>
+      <div className="p-5">{children}</div>
+    </section>
   );
 }
 
-/* ──────────────────────────────── step progress bar ── */
-function StepBar({ steps, current }: { steps: readonly Step[]; current: Step }) {
-  const currentIdx = steps.indexOf(current);
+/* ──────────────────────── Stepper (fixed top bar) ── */
+function Stepper({ current }: { current: Step }) {
+  const currentIndex = STEPS.indexOf(current);
+
   return (
     <nav aria-label="Progress" className="w-full">
-      <ol className="flex items-center gap-0">
-        {steps.map((s, i) => {
-          const done    = i < currentIdx;
-          const active  = s === current;
-          const isLast  = i === steps.length - 1;
+      <ol className="flex items-center gap-1">
+        {STEPS.map((step, index) => {
+          const isDone = index < currentIndex;
+          const isCurrent = index === currentIndex;
+          const isLast = index === STEPS.length - 1;
+
           return (
-            <li key={s} className="flex flex-1 items-center">
-              <div className="flex flex-col items-center gap-1.5">
+            <li key={step} className="flex flex-1 items-center gap-1 min-w-0">
+              {/* Step pill */}
+              <div className="flex min-w-0 flex-1 items-center gap-1.5">
+                {/* Circle */}
                 <div
-                  className={[
-                    'flex h-7 w-7 items-center justify-center rounded-full transition-all duration-300 text-xs font-semibold',
-                    done   ? 'bg-primary text-white shadow-sm'
-                    : active ? 'bg-primary/15 text-primary ring-2 ring-primary/40'
-                    : 'bg-muted text-muted-foreground',
-                  ].join(' ')}
+                  className={cx(
+                    'flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold transition-colors',
+                    isDone && 'bg-primary text-primary-foreground',
+                    isCurrent && 'bg-primary/15 text-primary ring-1 ring-primary/40',
+                    !isDone && !isCurrent && 'bg-muted text-muted-foreground',
+                  )}
+                  aria-current={isCurrent ? 'step' : undefined}
                 >
-                  {done ? (
-                    <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-                      <polyline points="20 6 9 17 4 12"/>
+                  {isDone ? (
+                    <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                      <polyline points="20 6 9 17 4 12" />
                     </svg>
                   ) : (
-                    <span>{i + 1}</span>
+                    index + 1
                   )}
                 </div>
+
+                {/* Label — hidden on small screens */}
                 <span
-                  className={[
-                    'hidden whitespace-nowrap font-ui text-[10px] font-semibold uppercase tracking-widest sm:block',
-                    active ? 'text-foreground' : 'text-muted-foreground',
-                  ].join(' ')}
+                  className={cx(
+                    'hidden truncate text-[11px] font-medium sm:block',
+                    isCurrent ? 'text-foreground' : isDone ? 'text-muted-foreground' : 'text-muted-foreground/60',
+                  )}
                 >
-                  {s}
+                  {step}
                 </span>
               </div>
+
+              {/* Connector line */}
               {!isLast && (
                 <div
-                  className={[
-                    'mx-2 mb-4 h-px flex-1 transition-all duration-500',
-                    i < currentIdx ? 'bg-primary/50' : 'bg-border/50',
-                  ].join(' ')}
+                  className={cx(
+                    'h-px w-3 shrink-0 rounded-full transition-colors',
+                    isDone ? 'bg-primary/50' : 'bg-border',
+                  )}
                 />
               )}
             </li>
@@ -235,70 +247,387 @@ function StepBar({ steps, current }: { steps: readonly Step[]; current: Step }) 
     </nav>
   );
 }
+function EmptyState({
+  icon,
+  title,
+  description,
+}: {
+  icon: 'folder' | 'alert' | 'image';
+  title: string;
+  description?: string;
+}) {
+  const icons: Record<string, ReactNode> = {
+    folder: (
+      <svg className="h-8 w-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+        <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z" strokeLinecap="round" />
+      </svg>
+    ),
+    alert: (
+      <svg className="h-8 w-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+        <circle cx="12" cy="12" r="10" />
+        <line x1="12" y1="8" x2="12" y2="12" />
+        <line x1="12" y1="16" x2="12.01" y2="16" />
+      </svg>
+    ),
+    image: (
+      <svg className="h-8 w-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+        <rect x="3" y="3" width="18" height="18" rx="2" />
+        <circle cx="8.5" cy="8.5" r="1.5" />
+        <polyline points="21 15 16 10 5 21" />
+      </svg>
+    ),
+  };
+
+  return (
+    <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-muted/30 px-6 py-12 text-center">
+      <div className="text-muted-foreground/60">{icons[icon]}</div>
+      <h3 className="mt-3 text-sm font-semibold text-foreground">{title}</h3>
+      {description && <p className="mt-1 max-w-md text-sm text-muted-foreground">{description}</p>}
+    </div>
+  );
+}
+
+function MediaGroupSkeleton() {
+  return (
+    <div className="space-y-4">
+      {[1, 2].map((i) => (
+        <div key={i} className="rounded-2xl border border-border bg-background">
+          {/* group header */}
+          <div className="flex items-center justify-between border-b border-border px-4 py-4">
+            <div className="space-y-2">
+              <div className="h-4 w-32 animate-pulse rounded-md bg-muted" />
+              <div className="h-3 w-20 animate-pulse rounded-md bg-muted" />
+            </div>
+            <div className="h-5 w-24 animate-pulse rounded-md bg-muted" />
+          </div>
+          {/* asset grid */}
+          <div className="grid grid-cols-2 gap-3 p-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+            {Array.from({ length: 5 }).map((_, j) => (
+              <div key={j} className="overflow-hidden rounded-2xl border border-border">
+                <div className="aspect-square w-full animate-pulse bg-muted" />
+                <div className="space-y-1.5 p-3">
+                  <div className="h-3.5 w-3/4 animate-pulse rounded bg-muted" />
+                  <div className="h-3 w-1/2 animate-pulse rounded bg-muted" />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function OptionCard({
+  selected,
+  title,
+  subtitle,
+  onClick,
+}: {
+  selected: boolean;
+  title: string;
+  subtitle?: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cx(
+        'group relative w-full overflow-hidden rounded-2xl border p-4 text-left transition-all duration-150',
+        selected
+          ? 'border-primary bg-primary/5 shadow-sm ring-1 ring-primary/20'
+          : 'border-border bg-background hover:border-primary/30 hover:bg-muted/30',
+      )}
+    >
+      {/* reserve space for the check circle on the right */}
+      <div className="min-w-0 pr-7">
+        <p className="truncate text-sm font-medium text-foreground" title={title}>
+          {title}
+        </p>
+        {subtitle && (
+          <p className="mt-0.5 truncate text-xs text-muted-foreground" title={subtitle}>
+            {subtitle}
+          </p>
+        )}
+      </div>
+
+      <div
+        className={cx(
+          'absolute right-3 top-3 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border',
+          selected ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-background',
+        )}
+      >
+        {selected && (
+          <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+            <polyline points="20 6 9 17 4 12" />
+          </svg>
+        )}
+      </div>
+    </button>
+  );
+}
+function InlinePresetCreate({
+  presets,
+  value,
+  onChange,
+  onCreate,
+  buttonLabel,
+  loading,
+}: {
+  presets: Preset[];
+  value: string;
+  onChange: (value: string) => void;
+  onCreate: () => Promise<void>;
+  buttonLabel: string;
+  loading: boolean;
+}) {
+  return (
+    <Card title="Create from preset" description="Use an existing preset to create a new entity without leaving this screen.">
+      {presets.length === 0 ? (
+        <p className="text-sm text-muted-foreground">No presets available.</p>
+      ) : (
+        <div className="flex flex-col gap-3 sm:flex-row">
+          <select
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            className="h-10 flex-1 rounded-xl border border-input bg-background px-3 text-sm outline-none ring-0 transition focus:border-primary"
+          >
+            <option value="">Select a preset…</option>
+            {presets.map((preset) => (
+              <option key={preset.id} value={preset.id}>
+                {preset.name}
+              </option>
+            ))}
+          </select>
+
+          <button
+            type="button"
+            onClick={onCreate}
+            disabled={!value || loading}
+            className="inline-flex h-10 items-center justify-center rounded-xl bg-primary px-4 text-sm font-medium text-primary-foreground transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {loading ? 'Creating…' : buttonLabel}
+          </button>
+        </div>
+      )}
+    </Card>
+  );
+}
+
+function Label({ htmlFor, children, optional }: { htmlFor?: string; children: ReactNode; optional?: boolean }) {
+  return (
+    <label htmlFor={htmlFor} className="mb-1.5 block text-xs font-medium text-foreground">
+      {children}
+      {optional && <span className="ml-1 text-muted-foreground">(optional)</span>}
+    </label>
+  );
+}
+
+function Input(props: React.InputHTMLAttributes<HTMLInputElement>) {
+  return (
+    <input
+      {...props}
+      className={cx(
+        'h-10 w-full rounded-xl border border-input bg-background px-3 text-sm outline-none transition',
+        'placeholder:text-muted-foreground focus:border-primary',
+        props.className,
+      )}
+    />
+  );
+}
+
+function Textarea(props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
+  return (
+    <textarea
+      {...props}
+      className={cx(
+        'min-h-[96px] w-full rounded-xl border border-input bg-background px-3 py-2.5 text-sm outline-none transition',
+        'placeholder:text-muted-foreground focus:border-primary',
+        props.className,
+      )}
+    />
+  );
+}
+
+function Select(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
+  return (
+    <select
+      {...props}
+      className={cx(
+        'h-10 w-full rounded-xl border border-input bg-background px-3 text-sm outline-none transition focus:border-primary',
+        props.className,
+      )}
+    />
+  );
+}
+
+function SummaryRow({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <div className="flex items-start justify-between gap-3 py-2">
+      <span className="text-sm text-muted-foreground">{label}</span>
+      <span className="max-w-[65%] truncate text-right text-sm font-medium text-foreground">{value}</span>
+    </div>
+  );
+}
+
+function StatusPill({ children, className }: { children: ReactNode; className?: string }) {
+  return (
+    <span className={cx('inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium', className)}>
+      {children}
+    </span>
+  );
+}
 
 /* ══════════════════════════════════ main component ══ */
 export default function PostToMetaClient() {
   const toast = useToast();
+
   const [step, setStep] = useState<Step>('Campaign');
-
-  const [campaigns, setCampaigns]           = useState<Campaign[]>([]);
-  const [adSets, setAdSets]                 = useState<AdSet[]>([]);
-  const [adPresets, setAdPresets]           = useState<Preset[]>([]);
-  const [campaignPresets, setCampaignPresets] = useState<Preset[]>([]);
-  const [adsetPresets, setAdsetPresets]     = useState<Preset[]>([]);
-
-  const [selectedCampaignId, setSelectedCampaignId] = useState('');
-  const [selectedAdSetId, setSelectedAdSetId]       = useState('');
-  const [selectedAdPresetId, setSelectedAdPresetId] = useState('');
-
-  const [bulkUploads, setBulkUploads]     = useState<{ id: string; name: string }[]>([]);
-  const [activeBulkUploadId, setActiveBulkUploadId] = useState('');
-  const [buckets, setBuckets]             = useState<AssetBucket[]>([]);
-  const [activeBucketId, setActiveBucketId] = useState('');
-  const [assets, setAssets]               = useState<Asset[]>([]);
-  const [selectedAssetIds, setSelectedAssetIds] = useState<Set<string>>(new Set());
-
-  const [scheduledAt, setScheduledAt]     = useState('');
-  const [jobIds, setJobIds]               = useState<string[]>([]);
-  const [jobRows, setJobRows]             = useState<JobRow[]>([]);
-
-  const [loading, setLoading]             = useState(false);
-  const [error, setError]                 = useState<string | null>(null);
-
-  /* ── derived ── */
   const stepIndex = STEPS.indexOf(step);
 
+  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+  const [adSets, setAdSets] = useState<AdSet[]>([]);
+  const [campaignPresets, setCampaignPresets] = useState<Preset[]>([]);
+  const [adsetPresets, setAdsetPresets] = useState<Preset[]>([]);
+
+  const [selectedCampaignId, setSelectedCampaignId] = useState('');
+  const [selectedAdSetId, setSelectedAdSetId] = useState('');
+  const [useAdSetPerGroup, setUseAdSetPerGroup] = useState(false);
+
+  const [bulkUploads, setBulkUploads] = useState<{ id: string; name: string }[]>([]);
+  const [activeBulkUploadId, setActiveBulkUploadId] = useState('');
+  const [mediaLoading, setMediaLoading] = useState(false);
+  const [buckets, setBuckets] = useState<AssetBucket[]>([]);
+  const [groups, setGroups] = useState<GroupModel[]>([]);
+
+  const [scheduledAt, setScheduledAt] = useState('');
+  const [jobIds, setJobIds] = useState<string[]>([]);
+  const [jobRows, setJobRows] = useState<JobRow[]>([]);
+
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const [campaignPresetId, setCampaignPresetId] = useState('');
+  const [adsetPresetId, setAdsetPresetId] = useState('');
+  const [creatingCampaign, setCreatingCampaign] = useState(false);
+  const [creatingAdSet, setCreatingAdSet] = useState(false);
+
+  const selectedCampaign = useMemo(
+    () => campaigns.find((c) => c.id === selectedCampaignId),
+    [campaigns, selectedCampaignId],
+  );
+  const selectedAdSet = useMemo(
+    () => adSets.find((a) => a.id === selectedAdSetId),
+    [adSets, selectedAdSetId],
+  );
+  const activeBulkUpload = useMemo(
+    () => bulkUploads.find((b) => b.id === activeBulkUploadId),
+    [bulkUploads, activeBulkUploadId],
+  );
+  const includedGroups = useMemo(() => groups.filter((g) => g.included), [groups]);
+  const totalSelectedAssets = useMemo(
+    () => includedGroups.reduce((sum, group) => sum + group.selectedAssetIds.length, 0),
+    [includedGroups],
+  );
+
+  const updateGroup = useCallback((groupId: string, patch: Partial<GroupModel>) => {
+    setGroups((prev) => prev.map((group) => (group.groupId === groupId ? { ...group, ...patch } : group)));
+  }, []);
+
+  const updateGroupCreative = useCallback((groupId: string, patch: Partial<CreativeFields>) => {
+    setGroups((prev) =>
+      prev.map((group) =>
+        group.groupId === groupId ? { ...group, creative: { ...group.creative, ...patch } } : group,
+      ),
+    );
+  }, []);
+
+  const toggleAsset = useCallback((groupId: string, assetId: string) => {
+    setGroups((prev) =>
+      prev.map((group) => {
+        if (group.groupId !== groupId) return group;
+        const next = new Set(group.selectedAssetIds);
+        if (next.has(assetId)) next.delete(assetId);
+        else next.add(assetId);
+        return { ...group, selectedAssetIds: [...next] };
+      }),
+    );
+  }, []);
+
   const canNext = useMemo(() => {
-    if (step === 'Campaign')  return Boolean(selectedCampaignId);
-    if (step === 'Ad Set')    return Boolean(selectedAdSetId);
-    if (step === 'Creatives') return selectedAssetIds.size > 0;
+    if (step === 'Campaign') return Boolean(selectedCampaignId);
+    if (step === 'Ad Set') return Boolean(selectedAdSetId);
+
+    if (step === 'Media') {
+      if (!activeBulkUploadId) return false;
+      if (includedGroups.length === 0) return false;
+      if (includedGroups.some((group) => group.selectedAssetIds.length === 0)) return false;
+      if (useAdSetPerGroup && includedGroups.some((group) => !group.adSetId)) return false;
+      return true;
+    }
+
+    if (step === 'Creative Fields') {
+      if (includedGroups.length === 0) return false;
+      return includedGroups.every(
+        (group) => Boolean(group.creative.headline.trim()) && Boolean(group.creative.landingUrl.trim()),
+      );
+    }
+
     return true;
-  }, [step, selectedCampaignId, selectedAdSetId, selectedAssetIds]);
+  }, [step, selectedCampaignId, selectedAdSetId, activeBulkUploadId, includedGroups, useAdSetPerGroup]);
+
+  const validationMessage = useMemo(() => {
+    if (step === 'Campaign' && !selectedCampaignId) return 'Select a campaign to continue.';
+    if (step === 'Ad Set' && !selectedAdSetId) return 'Select an ad set to continue.';
+    if (step === 'Media') {
+      if (!activeBulkUploadId) return 'Select a bulk upload session.';
+      if (includedGroups.length === 0) return 'Include at least one group.';
+      if (includedGroups.some((group) => group.selectedAssetIds.length === 0)) {
+        return 'Each included group needs at least one selected asset.';
+      }
+      if (useAdSetPerGroup && includedGroups.some((group) => !group.adSetId)) {
+        return 'Choose an ad set for every included group.';
+      }
+    }
+    if (step === 'Creative Fields') {
+      if (includedGroups.length === 0) return 'Include at least one group before entering copy.';
+      if (
+        includedGroups.some(
+          (group) => !group.creative.headline.trim() || !group.creative.landingUrl.trim(),
+        )
+      ) {
+        return 'Headline and landing URL are required for every included group.';
+      }
+    }
+    return null;
+  }, [step, selectedCampaignId, selectedAdSetId, activeBulkUploadId, includedGroups, useAdSetPerGroup]);
 
   const next = useCallback(() => {
     if (!canNext) return;
-    setStep(STEPS[Math.min(STEPS.length - 1, stepIndex + 1)]);
+    setStep(STEPS[Math.min(stepIndex + 1, STEPS.length - 1)]);
   }, [canNext, stepIndex]);
 
   const prev = useCallback(() => {
-    setStep(STEPS[Math.max(0, stepIndex - 1)]);
+    setStep(STEPS[Math.max(stepIndex - 1, 0)]);
   }, [stepIndex]);
 
   /* ── load base lists ── */
   useEffect(() => {
     void (async () => {
-      setLoading(true); setError(null);
+      setLoading(true);
+      setError(null);
+
       try {
-        const [c, pAd, pC, pAs] = await Promise.all([
+        const [campaignResp, campaignPresetResp, adsetPresetResp] = await Promise.all([
           json<{ campaigns: Campaign[] }>(await fetch('/api/meta/campaigns', { credentials: 'include' })),
-          json<{ presets: Preset[] }>(await fetch('/api/presets/ad', { credentials: 'include' })),
           json<{ presets: Preset[] }>(await fetch('/api/presets/campaign', { credentials: 'include' })),
           json<{ presets: Preset[] }>(await fetch('/api/presets/adset', { credentials: 'include' })),
         ]);
-        setCampaigns(c.campaigns ?? []);
-        setAdPresets(pAd.presets ?? []);
-        setCampaignPresets(pC.presets ?? []);
-        setAdsetPresets(pAs.presets ?? []);
+
+        setCampaigns(campaignResp.campaigns ?? []);
+        setCampaignPresets(campaignPresetResp.presets ?? []);
+        setAdsetPresets(adsetPresetResp.presets ?? []);
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Failed to load');
       } finally {
@@ -309,11 +638,18 @@ export default function PostToMetaClient() {
 
   /* ── load ad sets when campaign selected ── */
   useEffect(() => {
-    if (!selectedCampaignId) return;
+    if (!selectedCampaignId) {
+      setAdSets([]);
+      setSelectedAdSetId('');
+      return;
+    }
+
     void (async () => {
       try {
         const data = await json<{ adSets: AdSet[] }>(
-          await fetch(`/api/meta/adsets?campaignId=${encodeURIComponent(selectedCampaignId)}`, { credentials: 'include' }),
+          await fetch(`/api/meta/adsets?campaignId=${encodeURIComponent(selectedCampaignId)}`, {
+            credentials: 'include',
+          }),
         );
         setAdSets(data.adSets ?? []);
       } catch (e) {
@@ -322,88 +658,139 @@ export default function PostToMetaClient() {
     })();
   }, [selectedCampaignId]);
 
-  /* ── load assets for creatives step ── */
+  /* ── load assets for bulk upload dropdown ── */
   useEffect(() => {
-    if (step !== 'Creatives') return;
     void (async () => {
       try {
         const resp = await json<{ assets: GalleryAssetApiRow[] }>(
           await fetch('/api/gallery/assets', { credentials: 'include' }),
         );
-        const a: Asset[] = (resp.assets ?? []).map((x) => ({
-          id: x.id, title: x.title,
-          thumbnailUrl: x.thumbnailUrl ?? null,
-          assetType: x.assetType,
-          bulkUploadId: x.bulkUploadId ?? null,
-          assetBucketId: x.assetBucketId ?? null,
-        }));
-        setAssets(a);
+
         const bulks = new Map<string, string>();
-        for (const x of resp.assets ?? []) {
-          if (x.bulkUpload?.id && x.bulkUpload?.name) bulks.set(x.bulkUpload.id, x.bulkUpload.name);
+        for (const asset of resp.assets ?? []) {
+          if (asset.bulkUpload?.id && asset.bulkUpload?.name) {
+            bulks.set(asset.bulkUpload.id, asset.bulkUpload.name);
+          }
         }
+
         setBulkUploads([...bulks.entries()].map(([id, name]) => ({ id, name })));
       } catch (e) {
-        setError(e instanceof Error ? e.message : 'Failed to load creatives');
+        setError(e instanceof Error ? e.message : 'Failed to load assets');
       }
     })();
-  }, [step]);
+  }, []);
 
-  /* ── derive buckets ── */
+  /* ── load buckets + group assets when upload changes ── */
   useEffect(() => {
     if (!activeBulkUploadId) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setBuckets([]);
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setActiveBucketId('');
+      setGroups([]);
+      setMediaLoading(false);
       return;
     }
-    const m = new Map<string, string>();
-    for (const a of assets) {
-      if (a.bulkUploadId !== activeBulkUploadId || !a.assetBucketId) continue;
-      m.set(a.assetBucketId, a.assetBucketId);
-    }
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setBuckets([...m.entries()].map(([id, label]) => ({ id, label })));
-  }, [activeBulkUploadId, assets]);
 
-  const visibleAssets = useMemo(() => assets.filter((a) => {
-    if (activeBulkUploadId && a.bulkUploadId !== activeBulkUploadId) return false;
-    if (activeBucketId     && a.assetBucketId !== activeBucketId)    return false;
-    return true;
-  }), [assets, activeBulkUploadId, activeBucketId]);
+    void (async () => {
+      setMediaLoading(true);
+      try {
+        const [bucketResp, assetResp] = await Promise.all([
+          json<{ buckets?: Array<{ id: string; label: string }> }>(
+            await fetch(`/api/gallery/bulk-uploads/${encodeURIComponent(activeBulkUploadId)}/analyze`, {
+              credentials: 'include',
+            }),
+          ),
+          json<{ assets: GalleryAssetApiRow[] }>(
+            await fetch(`/api/gallery/assets?bulkUploadId=${encodeURIComponent(activeBulkUploadId)}`, {
+              credentials: 'include',
+            }),
+          ),
+        ]);
 
-  const toggleAsset = useCallback((id: string) => {
-    setSelectedAssetIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
-    });
-  }, []);
+        const nextBuckets: AssetBucket[] = (bucketResp.buckets ?? []).map((bucket) => ({
+          id: bucket.id,
+          label: bucket.label,
+        }));
+
+        const nextAssets: Asset[] = (assetResp.assets ?? []).map((asset) => ({
+          id: asset.id,
+          title: asset.title,
+          thumbnailUrl: asset.thumbnailUrl ?? null,
+          playbackUrl: asset.playbackUrl ?? null,
+          resolution: asset.resolution ?? null,
+          assetType: asset.assetType,
+          bulkUploadId: asset.bulkUploadId ?? null,
+          assetBucketId: asset.assetBucketId ?? null,
+        }));
+
+        const byBucket = new Map<string, Asset[]>();
+        for (const asset of nextAssets) {
+          if (!asset.assetBucketId) continue;
+          if (!byBucket.has(asset.assetBucketId)) byBucket.set(asset.assetBucketId, []);
+          byBucket.get(asset.assetBucketId)?.push(asset);
+        }
+
+        setBuckets(nextBuckets);
+
+        setGroups((prev) => {
+          const prevById = new Map(prev.map((group) => [group.groupId, group]));
+          return nextBuckets.map((bucket) => {
+            const old = prevById.get(bucket.id);
+            const assets = byBucket.get(bucket.id) ?? [];
+
+            return {
+              groupId: bucket.id,
+              label: bucket.label,
+              included: old?.included ?? true,
+              adSetId: old?.adSetId ?? selectedAdSetId,
+              assets,
+              selectedAssetIds: old?.selectedAssetIds?.filter((id) => assets.some((asset) => asset.id === id)) ?? [],
+              creative: old?.creative ?? defaultCreative(),
+            } satisfies GroupModel;
+          });
+        });
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Failed to load groups');
+      } finally {
+        setMediaLoading(false);
+      }
+    })();
+  }, [activeBulkUploadId, selectedAdSetId]);
 
   /* ── publish ── */
   const publish = useCallback(async () => {
-    setLoading(true); setError(null);
+    setLoading(true);
+    setError(null);
+
     try {
       const resp = await json<{ jobIds: string[] }>(
-        await fetch('/api/meta/publish', {
-          method: 'POST', credentials: 'include',
+        await fetch('/api/meta/publish/bulk', {
+          method: 'POST',
+          credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             campaignId: selectedCampaignId,
-            adSetId: selectedAdSetId,
-            assetIds: [...selectedAssetIds],
-            adPresetId: selectedAdPresetId || undefined,
             scheduledAt: scheduledAt || undefined,
+            groups: includedGroups.map((group) => ({
+              bucketId: group.groupId,
+              assetIds: group.selectedAssetIds,
+              adSetId: useAdSetPerGroup ? group.adSetId : selectedAdSetId,
+              headline: group.creative.headline,
+              primaryText: group.creative.primaryText,
+              description: group.creative.description || undefined,
+              landingUrl: group.creative.landingUrl,
+              ctaType: group.creative.ctaType,
+              pixelId: group.creative.pixelId || undefined,
+            })),
           }),
         }),
       );
+
       setJobIds(resp.jobIds ?? []);
       toast.push({
         kind: 'success',
         title: scheduledAt ? 'Ads scheduled' : 'Ads queued',
         message: `${(resp.jobIds ?? []).length} job(s) created`,
       });
+      setStep('Publish');
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Publish failed';
       setError(msg);
@@ -411,538 +798,880 @@ export default function PostToMetaClient() {
     } finally {
       setLoading(false);
     }
-  }, [selectedCampaignId, selectedAdSetId, selectedAssetIds, selectedAdPresetId, scheduledAt, toast]);
+  }, [includedGroups, scheduledAt, selectedAdSetId, selectedCampaignId, toast, useAdSetPerGroup]);
 
   /* ── SSE job tracking ── */
   useEffect(() => {
     if (!jobIds.length) return;
+
     let aborted = false;
     const ctrl = new AbortController();
     const qs = `ids=${encodeURIComponent(jobIds.join(','))}`;
+
     void (async () => {
       try {
-        const res = await fetch(`/api/meta/publish/jobs?${qs}`, { method: 'POST', signal: ctrl.signal });
+        const res = await fetch(`/api/meta/publish/jobs?${qs}`, {
+          method: 'POST',
+          signal: ctrl.signal,
+        });
+
         if (!res.body) return;
+
         const reader = res.body.getReader();
-        const dec = new TextDecoder();
-        let buf = '';
+        const decoder = new TextDecoder();
+        let buffer = '';
+
         while (!aborted) {
           const { done, value } = await reader.read();
           if (done) break;
-          buf += dec.decode(value, { stream: true });
-          const parts = buf.split('\n\n');
-          buf = parts.pop() ?? '';
-          for (const p of parts) {
-            const line = p.split('\n').find((l) => l.startsWith('data: '));
+
+          buffer += decoder.decode(value, { stream: true });
+          const parts = buffer.split('\n\n');
+          buffer = parts.pop() ?? '';
+
+          for (const part of parts) {
+            const line = part.split('\n').find((row) => row.startsWith('data: '));
             if (!line) continue;
+
             const payload = JSON.parse(line.slice(6)) as { jobs?: JobRow[]; done?: boolean };
             if (payload.jobs) setJobRows(payload.jobs);
             if (payload.done) return;
           }
         }
-      } catch { /* ignored */ }
+      } catch {
+        //
+      }
     })();
-    return () => { aborted = true; ctrl.abort(); };
+
+    return () => {
+      aborted = true;
+      ctrl.abort();
+    };
   }, [jobIds]);
 
-  /* ── campaign create helper ── */
-  const createCampaign = useCallback(async (presetId: string) => {
+  const createCampaign = useCallback(async () => {
+    if (!campaignPresetId) return;
+
+    setCreatingCampaign(true);
     setError(null);
-    const data = await json<{ campaign: Campaign }>(
-      await fetch('/api/meta/campaigns', {
-        method: 'POST', credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ presetId }),
-      }),
-    );
-    setCampaigns((prev) => [data.campaign, ...prev]);
-    setSelectedCampaignId(data.campaign.id);
-  }, []);
 
-  /* ── adset create helper ── */
-  const createAdSet = useCallback(async (presetId: string) => {
-    if (!selectedCampaignId) return;
+    try {
+      const data = await json<{ campaign: Campaign }>(
+        await fetch('/api/meta/campaigns', {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ presetId: campaignPresetId }),
+        }),
+      );
+
+      setCampaigns((prev) => [data.campaign, ...prev]);
+      setSelectedCampaignId(data.campaign.id);
+      setCampaignPresetId('');
+      toast.push({ kind: 'success', title: 'Campaign created', message: data.campaign.name });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Failed to create campaign';
+      setError(msg);
+      toast.push({ kind: 'error', title: 'Campaign creation failed', message: msg });
+    } finally {
+      setCreatingCampaign(false);
+    }
+  }, [campaignPresetId, toast]);
+
+  const createAdSet = useCallback(async () => {
+    if (!adsetPresetId || !selectedCampaignId) return;
+
+    setCreatingAdSet(true);
     setError(null);
-    const data = await json<{ adSet: AdSet }>(
-      await fetch('/api/meta/adsets', {
-        method: 'POST', credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ presetId, campaignId: selectedCampaignId }),
-      }),
-    );
-    setAdSets((prev) => [data.adSet, ...prev]);
-    setSelectedAdSetId(data.adSet.id);
-  }, [selectedCampaignId]);
 
-  /* ── summary bar data ── */
-  const selectedCampaign = campaigns.find((c) => c.id === selectedCampaignId);
-  const selectedAdSet    = adSets.find((a) => a.id === selectedAdSetId);
+    try {
+      const data = await json<{ adSet: AdSet }>(
+        await fetch('/api/meta/adsets', {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ presetId: adsetPresetId, campaignId: selectedCampaignId }),
+        }),
+      );
 
-  /* ──────────────────────────────────────── render ── */
+      setAdSets((prev) => [data.adSet, ...prev]);
+      setSelectedAdSetId(data.adSet.id);
+      setAdsetPresetId('');
+      toast.push({ kind: 'success', title: 'Ad set created', message: data.adSet.name });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Failed to create ad set';
+      setError(msg);
+      toast.push({ kind: 'error', title: 'Ad set creation failed', message: msg });
+    } finally {
+      setCreatingAdSet(false);
+    }
+  }, [adsetPresetId, selectedCampaignId, toast]);
+
+  const copyCreativeFromPrevious = useCallback(
+    (groupId: string) => {
+      const currentIndex = includedGroups.findIndex((group) => group.groupId === groupId);
+      if (currentIndex <= 0) return;
+      const source = includedGroups[currentIndex - 1]?.creative;
+      if (!source) return;
+      updateGroupCreative(groupId, { ...source });
+    },
+    [includedGroups, updateGroupCreative],
+  );
+
   return (
-    <div className="mx-auto max-w-4xl space-y-0">
-
-      {/* ── Page Header ── */}
-      <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <span className="flex h-7 w-7 items-center justify-center rounded-xl bg-clipfox-primary/15 text-clipfox-primary">
+    <div className="mx-auto max-w-7xl space-y-6 px-4 py-6 sm:px-6">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div className="space-y-2">
+          <div className="inline-flex items-center gap-2 rounded-full border border-border bg-muted/40 px-3 py-1 text-xs font-medium text-muted-foreground">
+            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/10 text-primary">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3.5 w-3.5">
-                <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" strokeLinecap="round" strokeLinejoin="round"/>
+                <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </span>
-            <span className="font-ui text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-              Meta Ads
-            </span>
+            Meta Ads
           </div>
-          <h1 className="font-display text-2xl font-semibold tracking-tight">Post to Meta</h1>
-          <p className="text-sm text-muted-foreground">
-            Walk through each step to publish or schedule your ads.
-          </p>
-        </div>
 
-        {/* Nav buttons */}
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={prev}
-            disabled={stepIndex === 0}
-            className="glass-button flex items-center gap-1.5 px-4 py-2 text-sm disabled:opacity-40"
-          >
-            <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-              <polyline points="15 18 9 12 15 6"/>
-            </svg>
-            Back
-          </button>
-          <button
-            type="button"
-            onClick={next}
-            disabled={!canNext || stepIndex >= STEPS.length - 1}
-            className="glass-button-primary flex items-center gap-1.5 px-4 py-2 text-sm disabled:opacity-40"
-          >
-            Next
-            <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-              <polyline points="9 18 15 12 9 6"/>
-            </svg>
-          </button>
-        </div>
-      </div>
-
-      {/* ── Step Progress Bar ── */}
-      <div className="glass-card px-6 py-5">
-        <StepBar steps={STEPS} current={step} />
-      </div>
-
-      {/* ── Selection Summary Bar ── */}
-      {(selectedCampaign || selectedAdSet || selectedAssetIds.size > 0) && (
-        <div className="animate-fade-up mt-3 flex flex-wrap items-center gap-2 rounded-2xl border border-border/40 bg-background/30 px-4 py-2.5">
-          <span className="font-ui text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-            Selected
-          </span>
-          {selectedCampaign && (
-            <span className="glass-badge border-primary/20 bg-primary/8 text-primary">
-              {selectedCampaign.name}
-            </span>
-          )}
-          {selectedAdSet && (
-            <span className="glass-badge border-clipfox-accent/20 bg-clipfox-accent/8 text-clipfox-accent">
-              {selectedAdSet.name}
-            </span>
-          )}
-          {selectedAssetIds.size > 0 && (
-            <span className="glass-badge border-border/50 bg-muted text-muted-foreground">
-              {selectedAssetIds.size} creative{selectedAssetIds.size !== 1 ? 's' : ''}
-            </span>
-          )}
-        </div>
-      )}
-
-      {/* ── Error Banner ── */}
-      {error && (
-        <div className="animate-fade-up mt-3 flex items-start gap-3 rounded-2xl border border-destructive/30 bg-destructive/8 px-4 py-3 text-sm text-destructive">
-          <svg className="mt-0.5 h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <circle cx="12" cy="12" r="10"/>
-            <line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
-          </svg>
-          <span>{error}</span>
-        </div>
-      )}
-
-      {/* ── Main Step Card ── */}
-      <div className="glass-card mt-3 overflow-hidden">
-
-        {/* Step card header */}
-        <div className="flex items-center gap-3 border-b border-border/40 px-6 py-4">
-          <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-primary/10 text-primary">
-            {STEP_META[step].icon}
-          </div>
           <div>
-            <h2 className="font-display text-base font-semibold tracking-tight">{step}</h2>
-            <p className="font-ui text-xs text-muted-foreground">{STEP_META[step].description}</p>
+            <h1 className="text-2xl font-semibold tracking-tight text-foreground">Post to Meta</h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Build, review, and publish grouped ads from one guided workflow.
+            </p>
           </div>
-          {loading && (
-            <div className="ml-auto flex items-center gap-2 text-xs text-muted-foreground">
-              <svg className="h-3.5 w-3.5 animate-spin" viewBox="0 0 24 24" fill="none">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"/>
-              </svg>
-              Loading…
-            </div>
-          )}
         </div>
 
-        <div className="p-6">
-
-          {/* ══ Campaign step ══ */}
-          {step === 'Campaign' && (
-            <div className="space-y-4">
-              {campaigns.length === 0 && !loading ? (
-                <EmptyState icon="folder" message="No campaigns found." sub="Create one from a preset below." />
-              ) : (
-                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                  {campaigns.map((c) => (
-                    <SelectCard
-                      key={c.id}
-                      selected={selectedCampaignId === c.id}
-                      onClick={() => setSelectedCampaignId(c.id)}
-                      title={c.name}
-                      sub={[c.objective, c.status].filter(Boolean).join(' · ') || undefined}
-                    />
-                  ))}
-                </div>
-              )}
-              <CreateFromPreset
-                presets={campaignPresets}
-                selectId="campaignPresetSelect"
-                label="Create campaign"
-                onCreate={createCampaign}
-              />
-            </div>
-          )}
-
-          {/* ══ Ad Set step ══ */}
-          {step === 'Ad Set' && (
-            <div className="space-y-4">
-              {!selectedCampaignId ? (
-                <EmptyState icon="alert" message="No campaign selected." sub="Go back and pick a campaign first." />
-              ) : adSets.length === 0 && !loading ? (
-                <EmptyState icon="folder" message="No ad sets in this campaign." sub="Create one from a preset below." />
-              ) : (
-                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                  {adSets.map((a) => (
-                    <SelectCard
-                      key={a.id}
-                      selected={selectedAdSetId === a.id}
-                      onClick={() => setSelectedAdSetId(a.id)}
-                      title={a.name}
-                      sub={a.status ?? undefined}
-                    />
-                  ))}
-                </div>
-              )}
-              <CreateFromPreset
-                presets={adsetPresets}
-                selectId="adsetPresetSelect"
-                label="Create ad set"
-                onCreate={createAdSet}
-              />
-            </div>
-          )}
-
-          {/* ══ Creatives step ══ */}
-          {step === 'Creatives' && (
-            <div className="space-y-4">
-              {/* Filter bar */}
-              <div className="flex flex-wrap items-center gap-2">
-                <select
-                  className="glass-input flex-1 px-3 py-2 text-sm"
-                  value={activeBulkUploadId}
-                  onChange={(e) => setActiveBulkUploadId(e.target.value)}
-                >
-                  <option value="">All folders</option>
-                  {bulkUploads.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
-                </select>
-                <select
-                  className="glass-input flex-1 px-3 py-2 text-sm"
-                  value={activeBucketId}
-                  onChange={(e) => setActiveBucketId(e.target.value)}
-                  disabled={!buckets.length}
-                >
-                  <option value="">All classifications</option>
-                  {buckets.map((b) => <option key={b.id} value={b.id}>{b.label}</option>)}
-                </select>
-                {selectedAssetIds.size > 0 && (
-                  <div className="ml-auto flex items-center gap-1.5">
-                    <span className="glass-badge border-primary/20 bg-primary/8 text-primary">
-                      {selectedAssetIds.size} selected
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => setSelectedAssetIds(new Set())}
-                      className="font-ui text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
-                    >
-                      Clear
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              {/* Asset grid */}
-              {visibleAssets.length === 0 && !loading ? (
-                <EmptyState icon="image" message="No assets found." sub="Try a different folder or upload assets first." />
-              ) : (
-                <div className="grid gap-2 grid-cols-3 sm:grid-cols-4 lg:grid-cols-6">
-                  {visibleAssets.map((a) => {
-                    const selected = selectedAssetIds.has(a.id);
-                    return (
-                      <button
-                        key={a.id}
-                        type="button"
-                        onClick={() => toggleAsset(a.id)}
-                        className={[
-                          'group relative overflow-hidden rounded-2xl border text-left transition-all duration-200',
-                          selected
-                            ? 'border-primary/50 shadow-sm ring-1 ring-primary/30'
-                            : 'border-border/40 hover:border-border',
-                        ].join(' ')}
-                      >
-                        {/* Thumbnail */}
-                        <div className="aspect-square w-full overflow-hidden bg-muted">
-                          {a.thumbnailUrl ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img
-                              src={a.thumbnailUrl}
-                              alt={a.title}
-                              className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
-                            />
-                          ) : (
-                            <div className="flex h-full w-full items-center justify-center text-muted-foreground/30">
-                              <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                                <rect x="3" y="3" width="18" height="18" rx="2"/>
-                                <circle cx="8.5" cy="8.5" r="1.5"/>
-                                <polyline points="21 15 16 10 5 21"/>
-                              </svg>
-                            </div>
-                          )}
-                        </div>
-                        {/* Check overlay */}
-                        {selected && (
-                          <div className="absolute inset-0 flex items-center justify-center bg-primary/20 backdrop-blur-[2px]">
-                            <div className="flex h-7 w-7 items-center justify-center rounded-full bg-primary shadow-md">
-                              <svg className="h-3.5 w-3.5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-                                <polyline points="20 6 9 17 4 12"/>
-                              </svg>
-                            </div>
-                          </div>
-                        )}
-                        {/* Meta */}
-                        <div className="p-2">
-                          <p className="truncate font-ui text-[11px] font-medium leading-tight text-foreground">{a.title}</p>
-                          <p className="font-ui text-[10px] uppercase tracking-wide text-muted-foreground">{a.assetType}</p>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* ══ Preset step ══ */}
-          {step === 'Preset' && (
-            <div className="space-y-4 max-w-md">
-              <div>
-                <label htmlFor="adPreset" className="font-ui mb-2 block text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-                  Ad Preset <span className="normal-case tracking-normal font-normal opacity-60">(optional)</span>
-                </label>
-                <select
-                  id="adPreset"
-                  className="glass-input w-full px-3 py-2.5 text-sm"
-                  value={selectedAdPresetId}
-                  onChange={(e) => setSelectedAdPresetId(e.target.value)}
-                >
-                  <option value="">No preset — use defaults</option>
-                  {adPresets.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-                </select>
-              </div>
-              <div className="rounded-2xl border border-border/40 bg-background/20 p-4 text-xs text-muted-foreground leading-relaxed">
-                <p className="font-semibold text-foreground mb-1">What does a preset do?</p>
-                Presets carry saved values for headline, landing URL, targeting, and pixel
-                settings. The creative media always comes from the assets you selected in the
-                previous step — presets never override that.
-              </div>
-            </div>
-          )}
-
-          {/* ══ Publish step ══ */}
-          {step === 'Publish' && (
-            <div className="space-y-5">
-              {/* Summary */}
-              <div className="grid gap-3 sm:grid-cols-3">
-                {[
-                  { label: 'Campaign',  value: selectedCampaign?.name  ?? '—' },
-                  { label: 'Ad Set',    value: selectedAdSet?.name     ?? '—' },
-                  { label: 'Creatives', value: `${selectedAssetIds.size} asset${selectedAssetIds.size !== 1 ? 's' : ''}` },
-                ].map(({ label, value }) => (
-                  <div key={label} className="rounded-2xl border border-border/40 bg-background/20 px-4 py-3">
-                    <p className="font-ui text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">{label}</p>
-                    <p className="mt-0.5 truncate text-sm font-medium text-foreground">{value}</p>
-                  </div>
-                ))}
-              </div>
-
-              {/* Schedule + publish */}
-              <div className="flex flex-wrap items-end gap-3">
-                <div className="flex flex-col gap-1.5">
-                  <label htmlFor="scheduleAt" className="font-ui text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-                    Schedule <span className="normal-case tracking-normal font-normal opacity-60">(optional)</span>
-                  </label>
-                  <input
-                    id="scheduleAt"
-                    type="datetime-local"
-                    value={scheduledAt}
-                    onChange={(e) => setScheduledAt(e.target.value)}
-                    className="glass-input px-3 py-2 text-sm"
-                  />
-                </div>
-                <button
-                  type="button"
-                  onClick={publish}
-                  disabled={loading || selectedAssetIds.size === 0}
-                  className="glass-button-primary flex items-center gap-2 px-6 py-2.5 text-sm font-semibold disabled:opacity-50"
-                >
-                  {loading ? (
-                    <svg className="h-3.5 w-3.5 animate-spin" viewBox="0 0 24 24" fill="none">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"/>
-                    </svg>
-                  ) : (
-                    <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                      <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" strokeLinecap="round" strokeLinejoin="round"/>
-                    </svg>
-                  )}
-                  {loading ? 'Publishing…' : scheduledAt ? 'Schedule ads' : 'Publish now'}
-                </button>
-              </div>
-
-              {/* Job tracker */}
-              {jobIds.length > 0 && (
-                <div className="animate-fade-up rounded-2xl border border-border/40 bg-background/20 overflow-hidden">
-                  <div className="flex items-center justify-between border-b border-border/40 px-4 py-3">
-                    <p className="font-ui text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-                      Job tracker
-                    </p>
-                    <span className="glass-badge">{jobIds.length} job{jobIds.length !== 1 ? 's' : ''}</span>
-                  </div>
-                  <div className="divide-y divide-border/30">
-                    {jobRows.length ? jobRows.map((j) => (
-                      <div key={j.id} className="flex items-center justify-between gap-4 px-4 py-2.5">
-                        <span className="font-data text-[11px] text-muted-foreground truncate">{j.id}</span>
-                        <div className="flex items-center gap-2 shrink-0">
-                          <span className={[
-                            'rounded-full px-2.5 py-0.5 font-ui text-[10px] font-semibold uppercase tracking-wide',
-                            jobStatusStyle(j.status),
-                          ].join(' ')}>
-                            {j.status}
-                          </span>
-                          {j.lastError && (
-                            <span className="text-[11px] text-destructive truncate max-w-[180px]" title={j.lastError}>
-                              {j.lastError}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    )) : (
-                      <div className="flex items-center gap-2 px-4 py-3 text-xs text-muted-foreground">
-                        <svg className="h-3.5 w-3.5 animate-spin" viewBox="0 0 24 24" fill="none">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"/>
-                        </svg>
-                        Waiting for job updates…
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-        </div>
-
-        {/* ── Card Footer nav ── */}
-        <div className="flex items-center justify-between border-t border-border/40 px-6 py-4">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
             onClick={prev}
             disabled={stepIndex === 0}
-            className="glass-button flex items-center gap-1.5 px-4 py-2 text-sm disabled:opacity-40"
+            className="inline-flex h-10 items-center justify-center rounded-xl border border-input bg-background px-4 text-sm font-medium text-foreground transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
           >
-            <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-              <polyline points="15 18 9 12 15 6"/>
-            </svg>
             Back
           </button>
 
-          <span className="font-ui text-[11px] text-muted-foreground">
-            Step {stepIndex + 1} of {STEPS.length}
-          </span>
-
-          {step !== 'Publish' ? (
+          {step === 'Publish' ? (
             <button
               type="button"
-              onClick={next}
-              disabled={!canNext}
-              className="glass-button-primary flex items-center gap-1.5 px-4 py-2 text-sm disabled:opacity-40"
+              onClick={publish}
+              disabled={loading || includedGroups.length === 0}
+              className="inline-flex h-10 items-center justify-center rounded-xl bg-primary px-4 text-sm font-medium text-primary-foreground transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              Continue
-              <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                <polyline points="9 18 15 12 9 6"/>
-              </svg>
+              {loading ? 'Publishing…' : scheduledAt ? 'Schedule ads' : 'Publish now'}
             </button>
           ) : (
             <button
               type="button"
-              onClick={publish}
-              disabled={loading || selectedAssetIds.size === 0}
-              className="glass-button-primary flex items-center gap-1.5 px-4 py-2 text-sm disabled:opacity-50"
+              onClick={next}
+              disabled={!canNext}
+              className="inline-flex h-10 items-center justify-center rounded-xl bg-primary px-4 text-sm font-medium text-primary-foreground transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-              {scheduledAt ? 'Schedule' : 'Publish'}
+              Continue
             </button>
           )}
         </div>
+      </div>
+
+      <div className="sticky top-0 z-20 -mx-4 border-b border-border bg-background/95 px-5 py-2.5 backdrop-blur-sm sm:-mx-6">
+          <Stepper current={step} />
+      </div>
+
+      {error && (
+        <div className="rounded-2xl border border-red-500/20 bg-red-500/5 px-4 py-3 text-sm text-red-700 dark:text-red-300">
+          {error}
+        </div>
+      )}
+
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="space-y-6">
+          <Card
+            title={step}
+            description={STEP_META[step].description}
+            action={
+              loading ? (
+                <div className="inline-flex items-center gap-2 text-sm text-muted-foreground">
+                  <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+                  </svg>
+                  Loading…
+                </div>
+              ) : (
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                  {STEP_META[step].icon}
+                </div>
+              )
+            }
+          >
+            {step === 'Campaign' && (
+              <div className="space-y-5">
+                {campaigns.length === 0 && !loading ? (
+                  <EmptyState
+                    icon="folder"
+                    title="No campaigns found"
+                    description="Create your first campaign from a preset below."
+                  />
+                ) : (
+                  <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                    {campaigns.map((campaign) => (
+                      <OptionCard
+                        key={campaign.id}
+                        selected={selectedCampaignId === campaign.id}
+                        onClick={() => setSelectedCampaignId(campaign.id)}
+                        title={campaign.name}
+                        subtitle={[campaign.objective, campaign.status].filter(Boolean).join(' · ') || undefined}
+                      />
+                    ))}
+                  </div>
+                )}
+
+                <InlinePresetCreate
+                  presets={campaignPresets}
+                  value={campaignPresetId}
+                  onChange={setCampaignPresetId}
+                  onCreate={createCampaign}
+                  buttonLabel="Create campaign"
+                  loading={creatingCampaign}
+                />
+              </div>
+            )}
+
+            {step === 'Ad Set' && (
+              <div className="space-y-5">
+                {!selectedCampaignId ? (
+                  <EmptyState
+                    icon="alert"
+                    title="No campaign selected"
+                    description="Go back and choose a campaign before selecting an ad set."
+                  />
+                ) : (
+                  <>
+                    {adSets.length === 0 && !loading ? (
+                      <EmptyState
+                        icon="folder"
+                        title="No ad sets found"
+                        description="Create an ad set from a preset below."
+                      />
+                    ) : (
+                      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                        {adSets.map((adSet) => (
+                          <OptionCard
+                            key={adSet.id}
+                            selected={selectedAdSetId === adSet.id}
+                            onClick={() => setSelectedAdSetId(adSet.id)}
+                            title={adSet.name}
+                            subtitle={adSet.status ?? undefined}
+                          />
+                        ))}
+                      </div>
+                    )}
+
+                    <div className="rounded-2xl border border-border bg-muted/20 p-4">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div>
+                          <p className="text-sm font-medium text-foreground">Per-group ad set override</p>
+                          <p className="mt-1 text-sm text-muted-foreground">
+                            Turn this on if different groups should publish to different ad sets.
+                          </p>
+                        </div>
+
+                        <label className="inline-flex items-center gap-2 text-sm font-medium text-foreground">
+                          <input
+                            type="checkbox"
+                            checked={useAdSetPerGroup}
+                            onChange={(e) => {
+                              const enabled = e.target.checked;
+                              setUseAdSetPerGroup(enabled);
+                              if (!enabled) {
+                                setGroups((prev) => prev.map((group) => ({ ...group, adSetId: selectedAdSetId })));
+                              }
+                            }}
+                            className="h-4 w-4 rounded border-input"
+                          />
+                          Enable
+                        </label>
+                      </div>
+
+                      {useAdSetPerGroup && groups.length > 0 && (
+                        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                          {groups.map((group) => (
+                            <div key={group.groupId}>
+                              <Label htmlFor={`group-adset-${group.groupId}`}>{group.label}</Label>
+                              <Select
+                                id={`group-adset-${group.groupId}`}
+                                value={group.adSetId || ''}
+                                onChange={(e) => updateGroup(group.groupId, { adSetId: e.target.value })}
+                              >
+                                <option value="">Select ad set…</option>
+                                {adSets.map((adSet) => (
+                                  <option key={adSet.id} value={adSet.id}>
+                                    {adSet.name}
+                                  </option>
+                                ))}
+                              </Select>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    <InlinePresetCreate
+                      presets={adsetPresets}
+                      value={adsetPresetId}
+                      onChange={setAdsetPresetId}
+                      onCreate={createAdSet}
+                      buttonLabel="Create ad set"
+                      loading={creatingAdSet}
+                    />
+                  </>
+                )}
+              </div>
+            )}
+
+            {step === 'Media' && (
+              <div className="space-y-5">
+                <div>
+                  <Label htmlFor="bulk-upload">Bulk upload session</Label>
+                  <Select
+                    id="bulk-upload"
+                    value={activeBulkUploadId}
+                    onChange={(e) => setActiveBulkUploadId(e.target.value)}
+                  >
+                    <option value="">Select an upload…</option>
+                    {bulkUploads.map((upload) => (
+                      <option key={upload.id} value={upload.id}>
+                        {upload.name}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+
+                {mediaLoading ? (
+                  <MediaGroupSkeleton />
+                ) : !activeBulkUploadId ? (
+                  <EmptyState
+                    icon="image"
+                    title="No upload selected"
+                    description="Pick a bulk upload session to load grouped assets."
+                  />
+                ) : groups.length === 0 ? (
+                  <EmptyState
+                    icon="image"
+                    title="No groups found"
+                    description="This upload does not have any analyzed groups yet."
+                  />
+                ) : (
+                  <div className="space-y-4">
+                    {groups.map((group) => {
+                      const selected = new Set(group.selectedAssetIds);
+
+                      return (
+                        <div key={group.groupId} className="rounded-2xl border border-border bg-background">
+                          <div className="flex flex-col gap-3 border-b border-border px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+                            <div>
+                              <h3 className="text-sm font-semibold text-foreground">{group.label}</h3>
+                              <p className="text-sm text-muted-foreground">
+                                {group.assets.length} asset{group.assets.length !== 1 ? 's' : ''} available
+                              </p>
+                            </div>
+
+                            <label className="inline-flex items-center gap-2 text-sm font-medium text-foreground">
+                              <input
+                                type="checkbox"
+                                checked={group.included}
+                                onChange={(e) => updateGroup(group.groupId, { included: e.target.checked })}
+                                className="h-4 w-4 rounded border-input"
+                              />
+                              Include group
+                            </label>
+                          </div>
+
+                          <div className="p-4">
+                            {!group.included ? (
+                              <p className="text-sm text-muted-foreground">This group is excluded from publishing.</p>
+                            ) : group.assets.length === 0 ? (
+                              <EmptyState
+                                icon="image"
+                                title="No assets in this group"
+                                description="Add assets to this bucket before publishing."
+                              />
+                            ) : (
+                              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+                                {group.assets.map((asset) => {
+                                  const isSelected = selected.has(asset.id);
+
+                                  return (
+                                    <button
+                                      key={asset.id}
+                                      type="button"
+                                      onClick={() => toggleAsset(group.groupId, asset.id)}
+                                      className={cx(
+                                        'overflow-hidden rounded-2xl border text-left transition',
+                                        isSelected
+                                          ? 'border-primary ring-1 ring-primary/20'
+                                          : 'border-border hover:border-primary/30',
+                                      )}
+                                    >
+                                      <div className="relative aspect-square overflow-hidden bg-muted">
+                                        {asset.thumbnailUrl ? (
+                                          // eslint-disable-next-line @next/next/no-img-element
+                                          <img
+                                            src={asset.thumbnailUrl}
+                                            alt={asset.title}
+                                            className="h-full w-full object-cover"
+                                          />
+                                        ) : (
+                                          <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
+                                            {asset.assetType}
+                                          </div>
+                                        )}
+
+                                        {isSelected && (
+                                          <div className="absolute inset-0 flex items-center justify-center bg-primary/15">
+                                            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm">
+                                              <svg
+                                                className="h-4 w-4"
+                                                viewBox="0 0 24 24"
+                                                fill="none"
+                                                stroke="currentColor"
+                                                strokeWidth="3"
+                                              >
+                                                <polyline points="20 6 9 17 4 12" />
+                                              </svg>
+                                            </div>
+                                          </div>
+                                        )}
+                                      </div>
+
+                                      <div className="space-y-1 p-3">
+                              <p className="truncate text-sm font-medium text-foreground" title={asset.title}>
+                                {asset.title}
+                              </p>
+                              <p className="truncate text-xs text-muted-foreground">
+                                {asset.assetType}
+                                {asset.resolution ? ` · ${asset.resolution}` : ''}
+                              </p>
+                            </div>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {step === 'Creative Fields' && (
+              <div className="space-y-4">
+                {includedGroups.length === 0 ? (
+                  <EmptyState
+                    icon="alert"
+                    title="No included groups"
+                    description="Go back to Media and include at least one group."
+                  />
+                ) : (
+                  includedGroups.map((group, index) => (
+                    <div key={group.groupId} className="rounded-2xl border border-border bg-background">
+                      <div className="flex flex-col gap-3 border-b border-border px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                          <h3 className="text-sm font-semibold text-foreground">{group.label}</h3>
+                          <p className="text-sm text-muted-foreground">
+                            {group.selectedAssetIds.length} selected asset
+                            {group.selectedAssetIds.length !== 1 ? 's' : ''}
+                          </p>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => copyCreativeFromPrevious(group.groupId)}
+                          disabled={index === 0}
+                          className="inline-flex h-9 items-center justify-center rounded-xl border border-input bg-background px-3 text-sm font-medium text-foreground transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          Copy from previous
+                        </button>
+                      </div>
+
+                      <div className="grid gap-4 p-4 sm:grid-cols-2">
+                        <div>
+                          <Label htmlFor={`headline-${group.groupId}`}>Headline</Label>
+                          <Input
+                            id={`headline-${group.groupId}`}
+                            value={group.creative.headline}
+                            onChange={(e) => updateGroupCreative(group.groupId, { headline: e.target.value })}
+                            placeholder="Enter headline"
+                          />
+                        </div>
+
+                        <div>
+                          <Label htmlFor={`landing-${group.groupId}`}>Landing URL</Label>
+                          <Input
+                            id={`landing-${group.groupId}`}
+                            value={group.creative.landingUrl}
+                            onChange={(e) => updateGroupCreative(group.groupId, { landingUrl: e.target.value })}
+                            placeholder="https://example.com"
+                          />
+                        </div>
+
+                        <div className="sm:col-span-2">
+                          <Label htmlFor={`primary-${group.groupId}`}>Primary text</Label>
+                          <Textarea
+                            id={`primary-${group.groupId}`}
+                            value={group.creative.primaryText}
+                            onChange={(e) => updateGroupCreative(group.groupId, { primaryText: e.target.value })}
+                            placeholder="Write the main ad copy"
+                          />
+                        </div>
+
+                        <div className="sm:col-span-2">
+                          <Label htmlFor={`description-${group.groupId}`} optional>
+                            Description
+                          </Label>
+                          <Input
+                            id={`description-${group.groupId}`}
+                            value={group.creative.description}
+                            onChange={(e) => updateGroupCreative(group.groupId, { description: e.target.value })}
+                            placeholder="Optional supporting description"
+                          />
+                        </div>
+
+                        <div>
+                          <Label htmlFor={`cta-${group.groupId}`}>CTA</Label>
+                          <Select
+                            id={`cta-${group.groupId}`}
+                            value={group.creative.ctaType}
+                            onChange={(e) => updateGroupCreative(group.groupId, { ctaType: e.target.value })}
+                          >
+                            {CTA_OPTIONS.map((cta) => (
+                              <option key={cta} value={cta}>
+                                {cta}
+                              </option>
+                            ))}
+                          </Select>
+                        </div>
+
+                        <div>
+                          <Label htmlFor={`pixel-${group.groupId}`} optional>
+                            Pixel ID
+                          </Label>
+                          <Input
+                            id={`pixel-${group.groupId}`}
+                            value={group.creative.pixelId}
+                            onChange={(e) => updateGroupCreative(group.groupId, { pixelId: e.target.value })}
+                            placeholder="Meta pixel id"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+
+            {step === 'Preview' && (
+              <div className="space-y-4">
+                {includedGroups.length === 0 ? (
+                  <EmptyState
+                    icon="alert"
+                    title="No included groups"
+                    description="Go back and include at least one group."
+                  />
+                ) : (
+                  <div className="grid gap-4 lg:grid-cols-2">
+                    {includedGroups.map((group) => {
+                      const assetId = group.selectedAssetIds[0] ?? '';
+                      const asset = group.assets.find((item) => item.id === assetId) ?? group.assets[0];
+                      if (!asset) return null;
+
+                      const placements = placementsForAsset(asset);
+
+                      return (
+                        <div key={group.groupId} className="overflow-hidden rounded-2xl border border-border bg-background">
+                          <div className="border-b border-border px-4 py-4">
+                            <h3 className="text-sm font-semibold text-foreground">{group.label}</h3>
+                            <p className="mt-1 text-sm text-muted-foreground">
+                              {asset.assetType}
+                              {asset.resolution ? ` · ${asset.resolution}` : ''} · {placements.join(', ')}
+                            </p>
+                          </div>
+
+                          <div className="bg-muted/40">
+                            {asset.assetType === 'VIDEO' && asset.playbackUrl ? (
+                              // eslint-disable-next-line jsx-a11y/media-has-caption
+                              <video controls className="max-h-[420px] w-full object-contain bg-black" src={asset.playbackUrl} />
+                            ) : asset.thumbnailUrl ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img
+                                src={asset.thumbnailUrl}
+                                alt={asset.title}
+                                className="max-h-[420px] w-full object-contain bg-black"
+                              />
+                            ) : (
+                              <div className="flex h-[240px] items-center justify-center text-sm text-muted-foreground">
+                                No preview available
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="space-y-2 border-t border-border px-4 py-4">
+                            <p className="text-sm font-semibold text-foreground">{group.creative.headline || '—'}</p>
+                            <p className="text-sm text-muted-foreground">{group.creative.primaryText || '—'}</p>
+                            <p className="text-xs text-muted-foreground">{group.creative.landingUrl || '—'}</p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {step === 'Publish' && (
+              <div className="space-y-5">
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <div className="rounded-2xl border border-border bg-muted/20 p-4">
+                    <p className="text-xs font-medium text-muted-foreground">Campaign</p>
+                    <p className="mt-1 truncate text-sm font-semibold text-foreground">{selectedCampaign?.name ?? '—'}</p>
+                  </div>
+
+                  <div className="rounded-2xl border border-border bg-muted/20 p-4">
+                    <p className="text-xs font-medium text-muted-foreground">Ad Set</p>
+                    <p className="mt-1 truncate text-sm font-semibold text-foreground">{selectedAdSet?.name ?? '—'}</p>
+                  </div>
+
+                  <div className="rounded-2xl border border-border bg-muted/20 p-4">
+                    <p className="text-xs font-medium text-muted-foreground">Included groups</p>
+                    <p className="mt-1 truncate text-sm font-semibold text-foreground">{includedGroups.length}</p>
+                  </div>
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_220px]">
+                  <div>
+                    <Label htmlFor="scheduleAt" optional>
+                      Schedule
+                    </Label>
+                    <Input
+                      id="scheduleAt"
+                      type="datetime-local"
+                      value={scheduledAt}
+                      onChange={(e) => setScheduledAt(e.target.value)}
+                    />
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={publish}
+                    disabled={loading || includedGroups.length === 0}
+                    className="inline-flex h-10 items-center justify-center self-end rounded-xl bg-primary px-4 text-sm font-medium text-primary-foreground transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {loading ? 'Publishing…' : scheduledAt ? 'Schedule ads' : 'Publish now'}
+                  </button>
+                </div>
+
+                {jobIds.length > 0 && (
+                  <Card
+                    title="Job tracker"
+                    description="Live publish status for the jobs created in this session."
+                    action={<StatusPill className="border-border bg-muted text-foreground">{jobIds.length} jobs</StatusPill>}
+                  >
+                    {jobRows.length > 0 ? (
+                      <div className="space-y-2">
+                        {jobRows.map((job) => (
+                          <div
+                            key={job.id}
+                            className="flex flex-col gap-2 rounded-xl border border-border bg-background px-3 py-3 sm:flex-row sm:items-center sm:justify-between"
+                          >
+                            <div className="min-w-0">
+                              <p className="truncate font-mono text-xs text-muted-foreground">{job.id}</p>
+                              {job.lastError && (
+                                <p className="mt-1 truncate text-xs text-red-600 dark:text-red-400" title={job.lastError}>
+                                  {job.lastError}
+                                </p>
+                              )}
+                            </div>
+
+                            <StatusPill className={jobStatusStyle(job.status)}>{job.status}</StatusPill>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+                        </svg>
+                        Waiting for job updates…
+                      </div>
+                    )}
+                  </Card>
+                )}
+              </div>
+            )}
+          </Card>
+
+          <div className="flex flex-col gap-3 rounded-2xl border border-border bg-card p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-sm font-medium text-foreground">
+                Step {stepIndex + 1} of {STEPS.length}
+              </p>
+              <p className="text-sm text-muted-foreground">
+                {validationMessage ?? 'Everything required for this step is complete.'}
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={prev}
+                disabled={stepIndex === 0}
+                className="inline-flex h-10 items-center justify-center rounded-xl border border-input bg-background px-4 text-sm font-medium text-foreground transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Back
+              </button>
+
+              {step !== 'Publish' ? (
+                <button
+                  type="button"
+                  onClick={next}
+                  disabled={!canNext}
+                  className="inline-flex h-10 items-center justify-center rounded-xl bg-primary px-4 text-sm font-medium text-primary-foreground transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Continue
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={publish}
+                  disabled={loading || includedGroups.length === 0}
+                  className="inline-flex h-10 items-center justify-center rounded-xl bg-primary px-4 text-sm font-medium text-primary-foreground transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {scheduledAt ? 'Schedule' : 'Publish'}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <aside className="space-y-6 xl:sticky xl:top-6 xl:self-start">
+          <Card title="Selection summary" description="Current choices across the workflow.">
+            <div className="divide-y divide-border">
+              <SummaryRow label="Campaign" value={selectedCampaign?.name ?? 'Not selected'} />
+              <SummaryRow label="Ad set" value={selectedAdSet?.name ?? 'Not selected'} />
+              <SummaryRow label="Upload" value={activeBulkUpload?.name ?? 'Not selected'} />
+              <SummaryRow label="Detected groups" value={buckets.length} />
+              <SummaryRow label="Included groups" value={includedGroups.length} />
+              <SummaryRow label="Selected assets" value={totalSelectedAssets} />
+              <SummaryRow label="Schedule" value={scheduledAt || 'Publish immediately'} />
+            </div>
+          </Card>
+
+          <Card title="Readiness" description="Quick validation before you continue or publish.">
+            <div className="space-y-2">
+              <div className="flex items-center justify-between rounded-xl border border-border bg-muted/20 px-3 py-2">
+                <span className="text-sm text-foreground">Campaign selected</span>
+                <StatusPill className={selectedCampaignId ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' : 'border-border bg-muted text-muted-foreground'}>
+                  {selectedCampaignId ? 'Ready' : 'Pending'}
+                </StatusPill>
+              </div>
+
+              <div className="flex items-center justify-between rounded-xl border border-border bg-muted/20 px-3 py-2">
+                <span className="text-sm text-foreground">Ad set selected</span>
+                <StatusPill className={selectedAdSetId ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' : 'border-border bg-muted text-muted-foreground'}>
+                  {selectedAdSetId ? 'Ready' : 'Pending'}
+                </StatusPill>
+              </div>
+
+              <div className="flex items-center justify-between rounded-xl border border-border bg-muted/20 px-3 py-2">
+                <span className="text-sm text-foreground">Media selected</span>
+                <StatusPill
+                  className={
+                    activeBulkUploadId && includedGroups.length > 0 && includedGroups.every((group) => group.selectedAssetIds.length > 0)
+                      ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
+                      : 'border-border bg-muted text-muted-foreground'
+                  }
+                >
+                  {activeBulkUploadId && includedGroups.length > 0 && includedGroups.every((group) => group.selectedAssetIds.length > 0)
+                    ? 'Ready'
+                    : 'Pending'}
+                </StatusPill>
+              </div>
+
+              <div className="flex items-center justify-between rounded-xl border border-border bg-muted/20 px-3 py-2">
+                <span className="text-sm text-foreground">Creative completed</span>
+                <StatusPill
+                  className={
+                    includedGroups.length > 0 &&
+                    includedGroups.every((group) => group.creative.headline.trim() && group.creative.landingUrl.trim())
+                      ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
+                      : 'border-border bg-muted text-muted-foreground'
+                  }
+                >
+                  {includedGroups.length > 0 &&
+                  includedGroups.every((group) => group.creative.headline.trim() && group.creative.landingUrl.trim())
+                    ? 'Ready'
+                    : 'Pending'}
+                </StatusPill>
+              </div>
+            </div>
+          </Card>
+        </aside>
       </div>
     </div>
   );
 }
 
-/* ── helper: empty state ── */
-function EmptyState({ icon, message, sub }: { icon: 'folder' | 'alert' | 'image'; message: string; sub?: string }) {
-  const icons = {
-    folder: (
-      <svg className="h-8 w-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-        <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z" strokeLinecap="round"/>
-      </svg>
-    ),
-    alert: (
-      <svg className="h-8 w-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-        <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
-      </svg>
-    ),
-    image: (
-      <svg className="h-8 w-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-        <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/>
-        <polyline points="21 15 16 10 5 21"/>
-      </svg>
-    ),
-  };
-  return (
-    <div className="flex flex-col items-center gap-2 py-12 text-center text-muted-foreground">
-      <span className="opacity-30">{icons[icon]}</span>
-      <p className="text-sm font-medium text-foreground">{message}</p>
-      {sub && <p className="text-xs">{sub}</p>}
-    </div>
-  );
+/* ─────────────────────────────────────── helpers ── */
+function parseResolution(resolution?: string | null): { width: number; height: number } | null {
+  if (!resolution) return null;
+  const match = /^(\d+)\s*x\s*(\d+)$/i.exec(resolution.trim());
+  if (!match) return null;
+
+  const width = Number(match[1]);
+  const height = Number(match[2]);
+
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
+    return null;
+  }
+
+  return { width, height };
+}
+
+function aspectRatioKey(width: number, height: number): string {
+  const targets: Array<{ key: string; ratio: number }> = [
+    { key: '1:1', ratio: 1 },
+    { key: '4:5', ratio: 4 / 5 },
+    { key: '9:16', ratio: 9 / 16 },
+    { key: '16:9', ratio: 16 / 9 },
+    { key: '4:3', ratio: 4 / 3 },
+    { key: '3:4', ratio: 3 / 4 },
+  ];
+
+  const ratio = width / height;
+  let best = 'OTHER';
+  let bestDiff = Infinity;
+
+  for (const target of targets) {
+    const diff = Math.abs(ratio - target.ratio);
+    if (diff < bestDiff) {
+      bestDiff = diff;
+      best = target.key;
+    }
+  }
+
+  return bestDiff <= 0.04 ? best : 'OTHER';
+}
+
+function placementsForAsset(asset: { resolution?: string | null }): string[] {
+  const size = parseResolution(asset.resolution ?? null);
+  if (!size) return ['Feed (auto)'];
+
+  const key = aspectRatioKey(size.width, size.height);
+  if (key === '9:16') return ['Stories', 'Reels'];
+  if (key === '4:3' || key === '16:9') return ['Feed (Facebook)', 'Feed (Instagram)'];
+  if (key === '4:5' || key === '3:4') return ['Feed (Instagram)', 'Feed (Facebook)'];
+  if (key === '1:1') return ['Feed (Facebook)', 'Feed (Instagram)'];
+  return ['Feed (auto)'];
 }
