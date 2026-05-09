@@ -2,6 +2,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
 import { signSessionToken } from "@/lib/auth/jwt";
+import { getR2PublicObjectUrl } from "@/lib/cloudfare/r2";
 import { resolveCompanyByUserNamePassword } from "@/lib/mcp/auth";
 import { prisma } from "@/lib/prisma";
 import { syncCampaigns, syncAdSets, createAndStoreCampaignFromPreset, createAndStoreAdSetFromPreset } from "@/lib/meta/sync";
@@ -154,6 +155,106 @@ export function createServer(): McpServer {
       }
 
       return { content: [{ type: "text" as const, text: "Error: Unknown action." }] };
+    }) as any,
+  );
+
+  // ─── get_asset_public_r2_urls ─────────────────────────────────────────────
+  const getAssetPublicR2UrlsSchema = baseAuthSchema.extend({
+    bulkUploadId: z.string().optional().describe("Bulk upload session id (all assets in that session)"),
+    assetBucketId: z.string().optional().describe("Asset bucket / group id (assets in that bucket only)"),
+    limit: z.number().int().min(1).max(500).optional().default(200),
+  });
+
+  server.registerTool(
+    "get_asset_public_r2_urls",
+    {
+      title: "Public R2 URLs for bulk or bucket",
+      description:
+        "Returns stable public HTTPS URLs (R2_PUBLIC_BASE_URL + r2Key) for assets in a bulk upload session or a single asset bucket. Provide exactly one of bulkUploadId or assetBucketId.",
+      inputSchema: (getAssetPublicR2UrlsSchema as any).shape,
+    },
+    (async (input: unknown) => {
+      const parsed = getAssetPublicR2UrlsSchema.safeParse(input);
+      if (!parsed.success) {
+        return { content: [{ type: "text" as const, text: "Error: Invalid input." }] };
+      }
+      const { userName, password, bulkUploadId, assetBucketId, limit } = parsed.data;
+      const bulk = Boolean(bulkUploadId?.trim());
+      const bucket = Boolean(assetBucketId?.trim());
+      if (bulk === bucket) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: "Error: Provide exactly one of bulkUploadId or assetBucketId.",
+            },
+          ],
+        };
+      }
+
+      const company = await resolveCompanyByUserNamePassword({ userName, password });
+      const publicBaseConfigured = Boolean(process.env.R2_PUBLIC_BASE_URL?.trim());
+
+      let scope: { type: "bulk_upload"; id: string; name?: string } | { type: "asset_bucket"; id: string; label?: string };
+      let where: { companyId: string; bulkUploadId?: string; assetBucketId?: string };
+
+      if (bulk) {
+        const id = bulkUploadId!.trim();
+        const session = await prisma.bulkUpload.findFirst({
+          where: { id, companyId: company.id },
+          select: { id: true, name: true },
+        });
+        if (!session) {
+          return { content: [{ type: "text" as const, text: "Error: Bulk upload not found." }] };
+        }
+        scope = { type: "bulk_upload", id: session.id, name: session.name };
+        where = { companyId: company.id, bulkUploadId: session.id };
+      } else {
+        const id = assetBucketId!.trim();
+        const b = await prisma.assetBucket.findFirst({
+          where: { id, companyId: company.id },
+          select: { id: true, label: true },
+        });
+        if (!b) {
+          return { content: [{ type: "text" as const, text: "Error: Asset bucket not found." }] };
+        }
+        scope = { type: "asset_bucket", id: b.id, label: b.label };
+        where = { companyId: company.id, assetBucketId: b.id };
+      }
+
+      const rows = await prisma.asset.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        take: limit,
+        select: {
+          id: true,
+          title: true,
+          assetType: true,
+          status: true,
+          r2Key: true,
+          thumbnailUrl: true,
+          playbackUrl: true,
+        },
+      });
+
+      const assets = rows.map((a) => ({
+        ...a,
+        publicR2Url: getR2PublicObjectUrl(a.r2Key),
+      }));
+
+      const result = {
+        scope,
+        publicBaseConfigured,
+        notice: publicBaseConfigured
+          ? undefined
+          : "R2_PUBLIC_BASE_URL is not set; publicR2Url is null for each asset.",
+        assets,
+      };
+
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify(result) }],
+        structuredContent: result,
+      };
     }) as any,
   );
 
