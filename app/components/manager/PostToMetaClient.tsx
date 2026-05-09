@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useToast } from '@/app/components/UI/ToastProvider';
+import UploadStep from '@/app/components/createAd/steps/UploadStep';
 
 /* ─────────────────────────────────────────── types ── */
 type Campaign = { id: string; name: string; objective?: string; status?: string };
@@ -480,7 +481,7 @@ function StatusPill({ children, className }: { children: ReactNode; className?: 
 }
 
 /* ══════════════════════════════════ main component ══ */
-export default function PostToMetaClient() {
+export default function PostToMetaClient({ companyId }: { companyId: string }) {
   const toast = useToast();
 
   const [step, setStep] = useState<Step>('Campaign');
@@ -1129,6 +1130,22 @@ export default function PostToMetaClient() {
 
             {step === 'Media' && (
               <div className="space-y-5">
+                <div className="rounded-2xl border border-border bg-muted/20 p-4">
+                  <p className="text-sm font-medium text-foreground">Upload creatives</p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Upload a new batch here. Once processing finishes, we’ll group them automatically and show them below.
+                  </p>
+                  <div className="mt-4">
+                    <UploadStep
+                      companyId={companyId}
+                      onError={(m) => setError(m)}
+                      onUploaded={({ bulkUploadId }) => {
+                        setActiveBulkUploadId(bulkUploadId);
+                      }}
+                    />
+                  </div>
+                </div>
+
                 <div>
                   <Label htmlFor="bulk-upload">Bulk upload session</Label>
                   <Select

@@ -7,6 +7,6 @@ export default async function PostToMetaPage() {
   const session = await getSession();
   if (!session) redirect('/login');
 
-  return <PostToMetaClient />;
+  return <PostToMetaClient companyId={session.companyId} />;
 }
 
