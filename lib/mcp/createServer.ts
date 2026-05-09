@@ -8,7 +8,17 @@ import { prisma } from "@/lib/prisma";
 import { syncCampaigns, syncAdSets, createAndStoreCampaignFromPreset, createAndStoreAdSetFromPreset } from "@/lib/meta/sync";
 import { createAdCreative, getAdCreativePreviews, uploadAdImage, uploadAdVideo } from "@/lib/meta/client";
 
-export function createServer(): McpServer {
+export type CreateMcpServerOptions = {
+  /** Preferred public origin for MCP `publicR2Url` responses (bucket custom domain). Falls back to R2_PUBLIC_BASE_URL when omitted. */
+  r2PublicBaseUrl?: string;
+};
+
+export function createServer(options?: CreateMcpServerOptions): McpServer {
+  const mcpR2PublicBaseUrl =
+    typeof options?.r2PublicBaseUrl === "string" && options.r2PublicBaseUrl.trim()
+      ? options.r2PublicBaseUrl.trim().replace(/\/+$/, "")
+      : undefined;
+
   const server = new McpServer({
     name: "Robust MCP Server",
     version: "0.1.0",
@@ -170,7 +180,7 @@ export function createServer(): McpServer {
     {
       title: "Public R2 URLs for bulk or bucket",
       description:
-        "Returns stable public HTTPS URLs (R2_PUBLIC_BASE_URL + r2Key) for assets in a bulk upload session or a single asset bucket. Provide exactly one of bulkUploadId or assetBucketId.",
+        "Returns stable public HTTPS URLs (MCP/public base + r2Key) for assets in a bulk upload session or a single asset bucket. Provide exactly one of bulkUploadId or assetBucketId.",
       inputSchema: (getAssetPublicR2UrlsSchema as any).shape,
     },
     (async (input: unknown) => {
@@ -193,7 +203,9 @@ export function createServer(): McpServer {
       }
 
       const company = await resolveCompanyByUserNamePassword({ userName, password });
-      const publicBaseConfigured = Boolean(process.env.R2_PUBLIC_BASE_URL?.trim());
+      const publicBaseConfigured = Boolean(
+        mcpR2PublicBaseUrl || process.env.R2_PUBLIC_BASE_URL?.trim(),
+      );
 
       let scope: { type: "bulk_upload"; id: string; name?: string } | { type: "asset_bucket"; id: string; label?: string };
       let where: { companyId: string; bulkUploadId?: string; assetBucketId?: string };
@@ -239,7 +251,7 @@ export function createServer(): McpServer {
 
       const assets = rows.map((a) => ({
         ...a,
-        publicR2Url: getR2PublicObjectUrl(a.r2Key),
+        publicR2Url: getR2PublicObjectUrl(a.r2Key, mcpR2PublicBaseUrl),
       }));
 
       const result = {
@@ -247,7 +259,7 @@ export function createServer(): McpServer {
         publicBaseConfigured,
         notice: publicBaseConfigured
           ? undefined
-          : "R2_PUBLIC_BASE_URL is not set; publicR2Url is null for each asset.",
+          : "No MCP or R2 public base URL configured; publicR2Url is null for each asset.",
         assets,
       };
 

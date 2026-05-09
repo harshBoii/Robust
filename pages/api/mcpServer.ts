@@ -11,8 +11,15 @@ export const config = {
   },
 };
 
+/** Public origin for MCP asset URLs; override with MCP_R2_PUBLIC_BASE_URL if needed */
+const MCP_R2_PUBLIC_BASE_DEFAULT = "https://app.clipfox.studio";
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  const server = createServer();
+  const r2PublicBaseUrl = (
+    process.env.MCP_R2_PUBLIC_BASE_URL?.trim() || MCP_R2_PUBLIC_BASE_DEFAULT
+  ).replace(/\/+$/, "");
+
+  const server = createServer({ r2PublicBaseUrl });
   const transport = new StreamableHTTPServerTransport({
     sessionIdGenerator: undefined,
   });

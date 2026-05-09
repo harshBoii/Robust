@@ -3,11 +3,19 @@ import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 /**
  * Stable HTTPS URL for objects in a **public** R2 bucket (custom domain or `*.r2.dev`).
- * Set `R2_PUBLIC_BASE_URL` (no trailing slash), e.g. `https://pub-xxxx.r2.dev`.
+ * Set `R2_PUBLIC_BASE_URL` (no trailing slash), e.g. `https://pub-xxxx.r2.dev`, unless
+ * `publicBaseUrlOverride` is provided (non-empty), e.g. MCP using a bucket custom domain.
  * Key segments are URL-encoded; do not include a leading slash on `objectKey`.
  */
-export function getR2PublicObjectUrl(objectKey: string): string | null {
-  const base = process.env.R2_PUBLIC_BASE_URL?.trim();
+export function getR2PublicObjectUrl(
+  objectKey: string,
+  publicBaseUrlOverride?: string | null,
+): string | null {
+  const trimmedOverride =
+    typeof publicBaseUrlOverride === "string" && publicBaseUrlOverride.trim()
+      ? publicBaseUrlOverride.trim()
+      : null;
+  const base = trimmedOverride ?? process.env.R2_PUBLIC_BASE_URL?.trim();
   if (!base) return null;
   const normalizedBase = base.replace(/\/+$/, "");
   const normalizedKey = objectKey.replace(/^\/+/, "");
