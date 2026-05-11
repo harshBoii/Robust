@@ -10,6 +10,7 @@ import {
   Upload, FolderOpen, Image as ImageIcon,
   Play, PauseCircle, PlusCircle, CalendarClock,
   SlidersHorizontal, Megaphone, History,
+  ShieldCheck, ScrollText,
   X,
 } from 'lucide-react';
 import GalleryUploadZone from '@/app/(frontend)/(workspace)/gallery/GalleryUploadZone';
@@ -580,6 +581,34 @@ export default function AppSidebar({ companyId }: { companyId: string }) {
             </Link>
             <span className="font-ui text-[9px] leading-none mb-1 text-muted-foreground/40">
               Help
+            </span>
+          </div>
+
+          {/* Privacy Policy */}
+          <div className="flex w-full flex-col items-center select-none">
+            <Link
+              href="/privacy-policy"
+              title="Privacy Policy"
+              className="sidebar-icon w-10 h-10 rounded-xl flex items-center justify-center transition-colors text-muted-foreground/60 hover:text-foreground hover:bg-[var(--glass-hover)]"
+            >
+              <ShieldCheck className="w-[18px] h-[18px]" />
+            </Link>
+            <span className="font-ui text-[9px] leading-none mb-1 text-muted-foreground/40">
+              Privacy
+            </span>
+          </div>
+
+          {/* Terms of Service */}
+          <div className="flex w-full flex-col items-center select-none">
+            <Link
+              href="/terms-and-conditions"
+              title="Terms of Service"
+              className="sidebar-icon w-10 h-10 rounded-xl flex items-center justify-center transition-colors text-muted-foreground/60 hover:text-foreground hover:bg-[var(--glass-hover)]"
+            >
+              <ScrollText className="w-[18px] h-[18px]" />
+            </Link>
+            <span className="font-ui text-[9px] leading-none mb-1 text-muted-foreground/40">
+              Terms
             </span>
           </div>
 

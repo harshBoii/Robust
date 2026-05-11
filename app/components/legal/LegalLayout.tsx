@@ -1,8 +1,10 @@
 'use client';
 
+import { AnimatePresence, motion } from 'framer-motion';
 import {
   ArrowLeft,
   ArrowUp,
+  ChevronDown,
   ChevronRight,
   FileText,
   Mail,
@@ -53,6 +55,9 @@ const DOC_META = {
   },
 } as const;
 
+const PANEL_CLASS =
+  'border border-[var(--glass-border)] bg-[var(--glass-bg)] backdrop-blur-[var(--glass-blur)]';
+
 export default function LegalLayout({ doc }: { doc: LegalDocument }) {
   const meta = DOC_META[doc.kind];
   const Icon = meta.Icon;
@@ -60,8 +65,27 @@ export default function LegalLayout({ doc }: { doc: LegalDocument }) {
 
   const [activeId, setActiveId] = useState<string>(doc.sections[0]?.id ?? '');
   const [showTop, setShowTop] = useState(false);
+  const [expanded, setExpanded] = useState<Set<string>>(
+    () => new Set(doc.sections[0] ? [doc.sections[0].id] : []),
+  );
   const scrollRef = useRef<HTMLDivElement>(null);
 
+  const allExpanded = expanded.size === doc.sections.length;
+
+  const toggleSection = (id: string) =>
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
+  const toggleAll = () =>
+    setExpanded(
+      allExpanded ? new Set() : new Set(doc.sections.map((s) => s.id)),
+    );
+
+  // Track which section is in view → highlight in TOC.
   useEffect(() => {
     const root = scrollRef.current;
     if (!root) return;
@@ -84,6 +108,7 @@ export default function LegalLayout({ doc }: { doc: LegalDocument }) {
     return () => observer.disconnect();
   }, [doc.sections]);
 
+  // Back-to-top visibility.
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
@@ -93,19 +118,45 @@ export default function LegalLayout({ doc }: { doc: LegalDocument }) {
     return () => el.removeEventListener('scroll', onScroll);
   }, []);
 
-  const handleTocClick =
-    (id: string): React.MouseEventHandler<HTMLAnchorElement> =>
-    (e) => {
-      const target = document.getElementById(id);
+  // Open + scroll to the section referenced by URL hash on mount.
+  useEffect(() => {
+    const hash = window.location.hash.slice(1);
+    if (!hash) return;
+    if (!doc.sections.some((s) => s.id === hash)) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setExpanded((prev) => new Set(prev).add(hash));
+    const tick = requestAnimationFrame(() => {
+      const target = document.getElementById(hash);
       const container = scrollRef.current;
       if (!target || !container) return;
-      e.preventDefault();
       const offset =
         target.getBoundingClientRect().top -
         container.getBoundingClientRect().top +
         container.scrollTop -
         12;
-      container.scrollTo({ top: offset, behavior: 'smooth' });
+      container.scrollTo({ top: offset });
+    });
+    return () => cancelAnimationFrame(tick);
+  }, [doc.sections]);
+
+  const scrollToSection = (id: string) => {
+    const target = document.getElementById(id);
+    const container = scrollRef.current;
+    if (!target || !container) return;
+    const offset =
+      target.getBoundingClientRect().top -
+      container.getBoundingClientRect().top +
+      container.scrollTop -
+      12;
+    container.scrollTo({ top: offset, behavior: 'smooth' });
+  };
+
+  const handleTocClick =
+    (id: string): React.MouseEventHandler<HTMLAnchorElement> =>
+    (e) => {
+      e.preventDefault();
+      setExpanded((prev) => new Set(prev).add(id));
+      requestAnimationFrame(() => scrollToSection(id));
       if (history.replaceState) history.replaceState(null, '', `#${id}`);
     };
 
@@ -134,8 +185,11 @@ export default function LegalLayout({ doc }: { doc: LegalDocument }) {
         }}
       />
 
-      {/* Top navigation */}
-      <header className="glass-navbar relative z-40 shrink-0">
+      {/* Top navigation — flat (no shadow) */}
+      <header
+        className="relative z-40 shrink-0 border-b border-[var(--glass-border)] backdrop-blur-[var(--glass-blur)]"
+        style={{ background: 'var(--navbar-glass-bg)' }}
+      >
         <div className="mx-auto flex h-16 w-full max-w-7xl items-center justify-between px-5 sm:px-8">
           <Link
             href="/"
@@ -172,7 +226,7 @@ export default function LegalLayout({ doc }: { doc: LegalDocument }) {
             </Link>
             <Link
               href="/"
-              className="glass-button inline-flex items-center gap-1.5 rounded-lg px-3 py-2 font-ui text-[0.8rem] font-medium text-foreground"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--glass-border)] bg-[var(--glass-bg)] px-3 py-2 font-ui text-[0.8rem] font-medium text-foreground transition-colors hover:bg-[var(--glass-active)]"
             >
               <ArrowLeft className="h-3.5 w-3.5" />
               <span className="hidden sm:inline">Back to site</span>
@@ -186,7 +240,12 @@ export default function LegalLayout({ doc }: { doc: LegalDocument }) {
       <section className="relative z-10 shrink-0 border-b border-[var(--glass-border-subtle)]">
         <div className="mx-auto flex w-full max-w-7xl flex-col gap-3 px-5 py-6 sm:gap-4 sm:px-8 sm:py-8">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="glass-badge inline-flex items-center gap-1.5 !text-[0.7rem]">
+            <span
+              className={cn(
+                'inline-flex items-center gap-1.5 rounded-full border border-[var(--glass-border)] px-3 py-1 font-ui text-[0.7rem] font-semibold tracking-[0.04em] uppercase text-foreground/80',
+              )}
+              style={{ background: 'var(--glass-bg)' }}
+            >
               <Icon className="h-3.5 w-3.5" />
               {doc.eyebrow}
             </span>
@@ -221,7 +280,12 @@ export default function LegalLayout({ doc }: { doc: LegalDocument }) {
           {/* TOC */}
           <aside className="row-start-1 pt-4 sm:pt-6 lg:col-start-1 lg:row-start-1 lg:overflow-hidden lg:pt-6 lg:pb-6">
             {/* Mobile: collapsible */}
-            <details className="glass-card group rounded-xl p-1.5 lg:hidden">
+            <details
+              className={cn(
+                PANEL_CLASS,
+                'group rounded-xl p-1.5 lg:hidden',
+              )}
+            >
               <summary className="flex cursor-pointer list-none items-center justify-between rounded-lg px-3 py-2.5 font-ui text-[0.8rem] font-semibold tracking-wide text-foreground">
                 <span className="inline-flex items-center gap-2">
                   <FileText className="h-4 w-4 text-primary" />
@@ -232,7 +296,7 @@ export default function LegalLayout({ doc }: { doc: LegalDocument }) {
                 </span>
                 <ChevronRight className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-90" />
               </summary>
-              <nav className="max-h-[50vh] overflow-y-auto glass-scrollbar px-1 pt-1 pb-1.5">
+              <nav className="glass-scrollbar max-h-[50vh] overflow-y-auto px-1 pt-1 pb-1.5">
                 <TocList
                   sections={doc.sections}
                   activeId={activeId}
@@ -265,7 +329,7 @@ export default function LegalLayout({ doc }: { doc: LegalDocument }) {
           {/* Content (the only scrollable area) */}
           <div
             ref={scrollRef}
-            className="custom-scrollbar relative row-start-2 min-h-0 overflow-y-auto pt-2 pb-10 lg:col-start-2 lg:row-start-1 lg:pt-6"
+            className="custom-scrollbar relative row-start-2 min-h-0 overflow-y-auto pt-2 pb-10 lg:col-start-2 lg:row-start-1 lg:pt-6 w-280"
           >
             {/* Top fade */}
             <div
@@ -275,30 +339,39 @@ export default function LegalLayout({ doc }: { doc: LegalDocument }) {
 
             <article className="min-w-0 pb-4">
               {/* Intro */}
-              <div className="glass-card-elevated mb-6 rounded-2xl p-6 sm:p-7">
+              <div className={cn(PANEL_CLASS, 'mb-4 rounded-2xl p-6 sm:p-7')}>
                 <p className="font-body text-[0.9375rem] leading-relaxed text-foreground/90 sm:text-[1rem]">
                   {doc.intro}
                 </p>
               </div>
 
-              {/* Sections */}
-              <div className="space-y-5">
+              {/* Toolbar */}
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <button
+                  type="button"
+                  onClick={toggleAll}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--glass-border)] bg-[var(--glass-bg)] px-3 py-1.5 font-ui text-[0.75rem] font-medium text-foreground transition-colors hover:bg-[var(--glass-active)]"
+                >
+                  <ChevronDown
+                    className={cn(
+                      'h-3.5 w-3.5 text-muted-foreground transition-transform duration-200',
+                      allExpanded && '-rotate-180',
+                    )}
+                  />
+                  {allExpanded ? 'Collapse all' : 'Expand all'}
+                </button>
+              </div>
+
+              {/* Sections (dropdowns / accordions) */}
+              <div className="space-y-3">
                 {doc.sections.map((s, i) => (
-                  <section
+                  <SectionDropdown
                     key={s.id}
-                    id={s.id}
-                    className="glass-card scroll-mt-4 rounded-2xl p-6 sm:p-7"
-                  >
-                    <header className="mb-4 flex items-start gap-3 border-b border-[var(--glass-border-subtle)] pb-4">
-                      <span className="font-data inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-[0.8rem] font-semibold tabular-nums text-primary ring-1 ring-primary/15">
-                        {String(i + 1).padStart(2, '0')}
-                      </span>
-                      <h2 className="font-display !text-[1.15rem] !leading-tight !font-semibold !tracking-[-0.02em] text-foreground sm:!text-[1.375rem]">
-                        {s.title}
-                      </h2>
-                    </header>
-                    <MarkdownBody body={s.body} />
-                  </section>
+                    index={i}
+                    section={s}
+                    isOpen={expanded.has(s.id)}
+                    onToggle={() => toggleSection(s.id)}
+                  />
                 ))}
               </div>
 
@@ -326,7 +399,11 @@ export default function LegalLayout({ doc }: { doc: LegalDocument }) {
                   </div>
                   <a
                     href={`mailto:${doc.contactEmail}`}
-                    className="glass-button-primary inline-flex shrink-0 items-center gap-2 rounded-xl px-5 py-2.5 font-ui text-[0.875rem] font-semibold text-primary-foreground [text-shadow:0_1px_2px_rgba(0,0,0,0.14)]"
+                    className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-white/20 px-5 py-2.5 font-ui text-[0.875rem] font-semibold text-primary-foreground transition-[filter] hover:brightness-105"
+                    style={{
+                      background:
+                        'linear-gradient(135deg, var(--clipfox-primary-light) 0%, var(--clipfox-primary) 50%, var(--clipfox-primary-dark) 100%)',
+                    }}
                   >
                     <Mail className="h-4 w-4" />
                     {doc.contactEmail}
@@ -335,7 +412,12 @@ export default function LegalLayout({ doc }: { doc: LegalDocument }) {
               </div>
 
               {/* Cross-link */}
-              <div className="mt-5 flex items-center justify-between gap-3 rounded-2xl border border-[var(--glass-border)] bg-[var(--glass-bg)] p-5 backdrop-blur-[var(--glass-blur)] sm:p-6">
+              <div
+                className={cn(
+                  PANEL_CLASS,
+                  'mt-4 flex items-center justify-between gap-3 rounded-2xl p-5 sm:p-6',
+                )}
+              >
                 <div className="flex min-w-0 items-center gap-4">
                   <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[var(--glass-hover)]">
                     <CrossIcon className="h-4 w-4 text-foreground" />
@@ -418,7 +500,7 @@ export default function LegalLayout({ doc }: { doc: LegalDocument }) {
                 scrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' })
               }
               className={cn(
-                'glass-button sticky bottom-4 z-20 ml-auto -mt-12 mr-1 inline-flex h-10 w-10 items-center justify-center rounded-full transition-all duration-200',
+                'sticky bottom-4 z-20 ml-auto -mt-12 mr-1 inline-flex h-10 w-10 items-center justify-center rounded-full border border-[var(--glass-border)] bg-[var(--glass-bg)] backdrop-blur-[var(--glass-blur)] transition-all duration-200 hover:bg-[var(--glass-active)]',
                 showTop
                   ? 'opacity-100 translate-y-0'
                   : 'pointer-events-none opacity-0 translate-y-2',
@@ -430,6 +512,70 @@ export default function LegalLayout({ doc }: { doc: LegalDocument }) {
         </div>
       </section>
     </div>
+  );
+}
+
+function SectionDropdown({
+  index,
+  section,
+  isOpen,
+  onToggle,
+}: {
+  index: number;
+  section: LegalSection;
+  isOpen: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <section
+      id={section.id}
+      className={cn(
+        PANEL_CLASS,
+        'scroll-mt-4 overflow-hidden rounded-2xl transition-colors',
+      )}
+    >
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={isOpen}
+        aria-controls={`${section.id}-body`}
+        className="flex w-full items-center gap-3 px-5 py-4 text-left transition-colors hover:bg-[var(--glass-hover)] sm:px-7 sm:py-5"
+      >
+        <span className="font-data inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-[0.8rem] font-semibold tabular-nums text-primary ring-1 ring-primary/15">
+          {String(index + 1).padStart(2, '0')}
+        </span>
+        <h2 className="flex-1 font-display !text-[1.0625rem] !leading-tight !font-semibold !tracking-[-0.02em] text-foreground sm:!text-[1.25rem]">
+          {section.title}
+        </h2>
+        <ChevronDown
+          className={cn(
+            'h-5 w-5 shrink-0 text-muted-foreground transition-transform duration-300',
+            isOpen && 'rotate-180 text-primary',
+          )}
+        />
+      </button>
+
+      <AnimatePresence initial={false}>
+        {isOpen && (
+          <motion.div
+            key="content"
+            id={`${section.id}-body`}
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{
+              height: { duration: 0.28, ease: [0.22, 0.61, 0.36, 1] },
+              opacity: { duration: 0.18, ease: 'easeOut' },
+            }}
+            className="overflow-hidden"
+          >
+            <div className="border-t border-[var(--glass-border-subtle)] px-5 py-5 sm:px-7 sm:py-6">
+              <MarkdownBody body={section.body} />
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </section>
   );
 }
 

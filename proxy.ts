@@ -6,6 +6,8 @@ import { verifySessionToken } from "@/lib/auth/jwt";
 const PUBLIC_PATH_PREFIXES = [
   "/login",
   "/signup",
+  "/privacy-policy",
+  "/terms-and-conditions",
   "/api/login",
   "/api/signup",
   "/api/logout",
