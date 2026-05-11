@@ -219,7 +219,7 @@ export default function LegalLayout({ doc }: { doc: LegalDocument }) {
       <section className="relative z-10 flex min-h-0 flex-1">
         <div className="mx-auto grid w-full max-w-7xl grid-cols-1 grid-rows-[auto_minmax(0,1fr)] gap-x-8 gap-y-3 px-5 pb-0 sm:px-8 lg:grid-cols-[260px_minmax(0,1fr)] lg:grid-rows-none lg:gap-x-10">
           {/* TOC */}
-          <aside className="row-start-1 pt-4 sm:pt-6 lg:row-span-1 lg:overflow-hidden lg:pt-6 lg:pb-6">
+          <aside className="row-start-1 pt-4 sm:pt-6 lg:col-start-1 lg:row-start-1 lg:overflow-hidden lg:pt-6 lg:pb-6">
             {/* Mobile: collapsible */}
             <details className="glass-card group rounded-xl p-1.5 lg:hidden">
               <summary className="flex cursor-pointer list-none items-center justify-between rounded-lg px-3 py-2.5 font-ui text-[0.8rem] font-semibold tracking-wide text-foreground">
@@ -265,7 +265,7 @@ export default function LegalLayout({ doc }: { doc: LegalDocument }) {
           {/* Content (the only scrollable area) */}
           <div
             ref={scrollRef}
-            className="custom-scrollbar relative row-start-2 min-h-0 overflow-y-auto pt-2 pb-10 lg:row-start-1 lg:pt-6"
+            className="custom-scrollbar relative row-start-2 min-h-0 overflow-y-auto pt-2 pb-10 lg:col-start-2 lg:row-start-1 lg:pt-6"
           >
             {/* Top fade */}
             <div
