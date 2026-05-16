@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 
 import { getAdsWithInsights } from '@/lib/meta/client';
 import { getSession } from '@/lib/auth/session';
+import { requireMetaAdAccountId } from '@/lib/meta/integration-token';
 import { prisma } from '@/lib/prisma';
 
 export const dynamic = 'force-dynamic';
@@ -142,6 +143,16 @@ export async function POST() {
     );
   }
 
+  let adAccountId: string;
+  try {
+    adAccountId = requireMetaAdAccountId(metaIntegration.adAccountId);
+  } catch {
+    return NextResponse.json(
+      { error: 'Configure ad account in workspace settings' },
+      { status: 400 },
+    );
+  }
+
   const rules = (await prisma.adAutomationRule.findMany({
     where: { companyId: session.companyId },
     select: {
@@ -154,19 +165,19 @@ export async function POST() {
   })) as RuleRow[];
 
   const todayAds = await getAdsWithInsights({
-    adAccountId: metaIntegration.adAccountId,
+    adAccountId,
     datePreset: 'today',
   });
 
   const maximumAds = await getAdsWithInsights({
-    adAccountId: metaIntegration.adAccountId,
+    adAccountId,
     datePreset: 'maximum',
   });
 
   const now = new Date();
   const since = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 7));
   const last7dAds = await getAdsWithInsights({
-    adAccountId: metaIntegration.adAccountId,
+    adAccountId,
     datePreset: 'last_7d',
     timeIncrement: 1,
     timeRange: { since: ymd(since), until: ymd(now) },

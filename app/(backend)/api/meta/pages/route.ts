@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 
 import { getSession } from '@/lib/auth/session';
 import { getMyPages } from '@/lib/meta/client';
+import { resolveMetaGraphAccessToken } from '@/lib/meta/integration-token';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,7 +13,8 @@ export async function GET() {
   }
 
   try {
-    const pages = await getMyPages();
+    const token = await resolveMetaGraphAccessToken(session.companyId);
+    const pages = await getMyPages({ accessToken: token });
     return NextResponse.json({ pages });
   } catch (e) {
     return NextResponse.json(

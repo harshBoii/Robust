@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { isMetaOAuthConfigured } from '@/lib/auth/meta-oauth-state';
 import { getSession } from '@/lib/auth/session';
+import {
+  isUserMetaOAuthToken,
+  META_INTEGRATION_PLACEHOLDER_TOKEN,
+} from '@/lib/meta/integration-token';
 import { prisma } from '@/lib/prisma';
 
 export const dynamic = 'force-dynamic';
@@ -26,7 +30,7 @@ export async function GET() {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const metaIntegration = await prisma.metaIntegration.findUnique({
+  const row = await prisma.metaIntegration.findUnique({
     where: { companyId: session.companyId },
     select: {
       id: true,
@@ -36,13 +40,28 @@ export async function GET() {
       contextBuiltAt: true,
       createdAt: true,
       updatedAt: true,
+      accessToken: true,
     },
   });
+
+  const metaIntegration = row
+    ? {
+        id: row.id,
+        companyId: row.companyId,
+        adAccountId: row.adAccountId,
+        fbPageId: row.fbPageId,
+        contextBuiltAt: row.contextBuiltAt,
+        createdAt: row.createdAt,
+        updatedAt: row.updatedAt,
+      }
+    : null;
 
   return NextResponse.json({
     metaIntegration,
     hasSystemToken: Boolean(process.env.META_SYSTEM_ACCESS_TOKEN),
     hasMetaOAuth: isMetaOAuthConfigured(),
+    hasUserOAuthToken: isUserMetaOAuthToken(row?.accessToken),
+    hasAdAccountAndPage: Boolean(row?.adAccountId && row?.fbPageId),
   });
 }
 
@@ -72,12 +91,11 @@ export async function PUT(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid fbPageId (expected numeric id)' }, { status: 400 });
   }
 
-  // Schema requires `accessToken` even though we use system token for API calls.
   const metaIntegration = await prisma.metaIntegration.upsert({
     where: { companyId: session.companyId },
     create: {
       companyId: session.companyId,
-      accessToken: 'SYSTEM_TOKEN',
+      accessToken: META_INTEGRATION_PLACEHOLDER_TOKEN,
       adAccountId,
       fbPageId,
     },

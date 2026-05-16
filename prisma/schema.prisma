@@ -214,9 +214,10 @@ model MetaIntegration {
   companyId     String   @unique
   /// AES-256 encrypted
   accessToken   String   @db.Text
-  /// Format: act_XXXXXXXXX
-  adAccountId   String   @db.VarChar(100)
-  fbPageId      String   @db.VarChar(100)
+  /// Format: act_XXXXXXXXX (null until saved in workspace settings)
+  adAccountId   String?  @db.VarChar(100)
+  /// Numeric Facebook page id (null until saved in workspace settings)
+  fbPageId      String?  @db.VarChar(100)
   createdAt     DateTime @default(now()) @db.Timestamptz(3)
   updatedAt     DateTime @updatedAt @db.Timestamptz(3)
 

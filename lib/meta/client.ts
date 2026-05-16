@@ -139,9 +139,9 @@ function requireSystemAccessToken() {
 
 async function metaFetch<T>(
   path: string,
-  init?: RequestInit & { searchParams?: Record<string, string> },
+  init?: RequestInit & { searchParams?: Record<string, string>; accessToken?: string },
 ): Promise<T> {
-  const token = requireSystemAccessToken();
+  const token = init?.accessToken ?? requireSystemAccessToken();
   const url = new URL(`${META_GRAPH_BASE}${path}`);
   url.searchParams.set('access_token', token);
   if (init?.searchParams) {
@@ -259,9 +259,10 @@ export async function updateAdStatus(input: {
 export type MetaAdAccount = { id: string; name?: string };
 export type MetaPage = { id: string; name?: string };
 
-export async function getMyAdAccounts(): Promise<MetaAdAccount[]> {
+export async function getMyAdAccounts(opts?: { accessToken?: string }): Promise<MetaAdAccount[]> {
   const resp = await metaFetch<{ data: MetaAdAccount[] }>('/me/adaccounts', {
     method: 'GET',
+    accessToken: opts?.accessToken,
     searchParams: {
       fields: 'id,name',
       limit: '200',
@@ -270,9 +271,10 @@ export async function getMyAdAccounts(): Promise<MetaAdAccount[]> {
   return resp.data ?? [];
 }
 
-export async function getMyPages(): Promise<MetaPage[]> {
+export async function getMyPages(opts?: { accessToken?: string }): Promise<MetaPage[]> {
   const resp = await metaFetch<{ data: MetaPage[] }>('/me/accounts', {
     method: 'GET',
+    accessToken: opts?.accessToken,
     searchParams: {
       fields: 'id,name',
       limit: '200',

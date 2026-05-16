@@ -13,6 +13,7 @@ import {
   buildCreateAdSetInputFromPreset,
   resolveOptimizationGoalForCreate,
 } from '@/lib/meta/adset-preset-meta';
+import { requireMetaAdAccountId } from '@/lib/meta/integration-token';
 import { resolvePromotedObjectForMeta } from '@/lib/meta/promoted-object';
 
 function asMetaCampaignStatus(v: unknown): MetaCampaignStatus | undefined {
@@ -26,7 +27,8 @@ export async function syncCampaigns(metaIntegrationId: string) {
   });
   if (!integration) throw new Error('Meta integration not found');
 
-  const rows = await getCampaignsForAccount({ adAccountId: integration.adAccountId });
+  const adAccountId = requireMetaAdAccountId(integration.adAccountId);
+  const rows = await getCampaignsForAccount({ adAccountId });
 
   for (const c of rows) {
     if (!c.id) continue;
@@ -182,13 +184,15 @@ export async function createAndStoreCampaignFromPreset(input: {
   });
   if (!integration) throw new Error('Meta integration not found');
 
+  const adAccountId = requireMetaAdAccountId(integration.adAccountId);
+
   const preset = await prisma.campaignPreset.findUnique({
     where: { id: input.presetId },
   });
   if (!preset) throw new Error('Campaign preset not found');
 
   const created = await createCampaign({
-    adAccountId: integration.adAccountId,
+    adAccountId,
     name: input.name ?? preset.name,
     objective: preset.objective ?? 'OUTCOME_TRAFFIC',
     status: asMetaCampaignStatus(preset.status) ?? 'PAUSED',
@@ -232,6 +236,8 @@ export async function createAndStoreAdSetFromPreset(input: {
   });
   if (!integration) throw new Error('Meta integration not found');
 
+  const adAccountId = requireMetaAdAccountId(integration.adAccountId);
+
   const campaign = await prisma.metaCampaign.findUnique({
     where: { id: input.campaignDbId },
     select: { id: true, metaCampaignId: true, objective: true },
@@ -248,11 +254,11 @@ export async function createAndStoreAdSetFromPreset(input: {
   const promotedObject = await resolvePromotedObjectForMeta({
     optimizationGoal,
     promotedObject: preset.promotedObject,
-    adAccountId: integration.adAccountId,
+    adAccountId,
   });
 
   const adSetParams = buildCreateAdSetInputFromPreset(preset, {
-    adAccountId: integration.adAccountId,
+    adAccountId,
     name: input.name ?? preset.name,
     campaignId: campaign.metaCampaignId,
     status: 'PAUSED',

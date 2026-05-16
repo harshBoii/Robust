@@ -6,7 +6,6 @@ import {
   signMetaOAuthState,
 } from "@/lib/auth/meta-oauth-state";
 import { getSession } from "@/lib/auth/session";
-import { prisma } from "@/lib/prisma";
 
 const META_OAUTH_DIALOG = "https://www.facebook.com/v21.0/dialog/oauth";
 
@@ -20,17 +19,6 @@ export async function GET(req: NextRequest) {
   const session = await getSession();
   if (!session) {
     return NextResponse.redirect(new URL("/login?meta_oauth=session", req.url));
-  }
-
-  const existing = await prisma.metaIntegration.findUnique({
-    where: { companyId: session.companyId },
-    select: { id: true },
-  });
-
-  if (!existing) {
-    return NextResponse.redirect(
-      new URL("/workspace/settings?meta_oauth=needs_integration", req.url),
-    );
   }
 
   const clientId = process.env.META_APP_ID!.trim();

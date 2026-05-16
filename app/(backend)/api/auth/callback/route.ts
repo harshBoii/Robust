@@ -72,15 +72,6 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  const existing = await prisma.metaIntegration.findUnique({
-    where: { companyId: session.companyId },
-    select: { id: true },
-  });
-
-  if (!existing) {
-    return redirect(req, "/workspace/settings", { meta_oauth: "needs_integration" });
-  }
-
   const shortParams = new URLSearchParams({
     client_id: env.clientId,
     client_secret: env.clientSecret,
@@ -109,9 +100,15 @@ export async function GET(req: NextRequest) {
     return redirect(req, "/workspace/settings", { meta_oauth: "token_exchange" });
   }
 
-  await prisma.metaIntegration.update({
+  await prisma.metaIntegration.upsert({
     where: { companyId: session.companyId },
-    data: { accessToken: longData.access_token },
+    create: {
+      companyId: session.companyId,
+      accessToken: longData.access_token,
+    },
+    update: {
+      accessToken: longData.access_token,
+    },
   });
 
   return redirect(req, "/workspace/settings", { meta_oauth: "connected" });

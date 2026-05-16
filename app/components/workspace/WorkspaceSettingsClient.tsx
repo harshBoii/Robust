@@ -7,8 +7,8 @@ import AutomationControls, {
 } from '@/app/components/dashboard/AutomationControls';
 
 const META_OAUTH_MESSAGES: Record<string, string> = {
-  connected: 'Facebook connected. Your access token was updated.',
-  needs_integration: 'Save your ad account and page first, then connect with Facebook.',
+  connected:
+    'Facebook connected. Choose your ad account and page below, then save.',
   session: 'Sign in to connect Facebook.',
   config: 'Meta OAuth is not configured on the server (META_APP_ID, META_APP_SECRET, META_REDIRECT_URI).',
   token_exchange: 'Could not exchange the Facebook authorization code. Try again.',
@@ -38,8 +38,8 @@ function FacebookIcon({ className }: { className?: string }) {
 type MetaIntegration = {
   id: string;
   companyId: string;
-  adAccountId: string;
-  fbPageId: string;
+  adAccountId: string | null;
+  fbPageId: string | null;
   contextBuiltAt: string | null;
   createdAt: string;
   updatedAt: string;
@@ -58,6 +58,8 @@ export default function WorkspaceSettingsClient() {
   const [metaIntegration, setMetaIntegration] = useState<MetaIntegration | null>(null);
   const [hasSystemToken, setHasSystemToken] = useState(false);
   const [hasMetaOAuth, setHasMetaOAuth] = useState(false);
+  const [hasUserOAuthToken, setHasUserOAuthToken] = useState(false);
+  const [hasAdAccountAndPage, setHasAdAccountAndPage] = useState(false);
   const [rules, setRules] = useState<AutomationRule[]>([]);
 
   const [adAccounts, setAdAccounts] = useState<Array<{ id: string; name?: string }>>([]);
@@ -80,10 +82,14 @@ export default function WorkspaceSettingsClient() {
         metaIntegration: MetaIntegration | null;
         hasSystemToken: boolean;
         hasMetaOAuth: boolean;
+        hasUserOAuthToken: boolean;
+        hasAdAccountAndPage: boolean;
       }>(await fetch('/api/meta/integration'));
       setMetaIntegration(meta.metaIntegration);
       setHasSystemToken(meta.hasSystemToken);
       setHasMetaOAuth(meta.hasMetaOAuth);
+      setHasUserOAuthToken(meta.hasUserOAuthToken);
+      setHasAdAccountAndPage(meta.hasAdAccountAndPage);
       setAdAccountId(meta.metaIntegration?.adAccountId ?? '');
       setFbPageId(meta.metaIntegration?.fbPageId ?? '');
 
@@ -92,7 +98,7 @@ export default function WorkspaceSettingsClient() {
       );
       setRules(seeded.rules);
 
-      if (meta.hasSystemToken) {
+      if (meta.hasSystemToken || meta.hasUserOAuthToken) {
         const [aa, pp] = await Promise.all([
           json<{ adAccounts: Array<{ id: string; name?: string }> }>(
             await fetch('/api/meta/ad-accounts'),
@@ -225,9 +231,14 @@ export default function WorkspaceSettingsClient() {
             >
               {hasSystemToken ? 'System token: OK' : 'System token: missing'}
             </span>
-            {metaIntegration ? (
+            {hasUserOAuthToken ? (
               <span className="glass-badge text-emerald-600 dark:text-emerald-300">
-                Integration saved
+                Facebook connected
+              </span>
+            ) : null}
+            {hasAdAccountAndPage ? (
+              <span className="glass-badge text-emerald-600 dark:text-emerald-300">
+                Ad account &amp; page saved
               </span>
             ) : null}
           </div>
@@ -237,21 +248,19 @@ export default function WorkspaceSettingsClient() {
           <p className="text-xs text-muted-foreground">
             {!hasMetaOAuth
               ? 'OAuth is not configured (META_APP_ID, META_APP_SECRET, META_REDIRECT_URI).'
-              : !metaIntegration
-                ? 'Save ad account and page below before connecting Facebook.'
-                : 'Authorize Robust to update your workspace access token.'}
+              : hasUserOAuthToken
+                ? 'Reconnect to refresh your access token, or save ad account and page below.'
+                : 'Connect with Facebook first, or save ad account and page using the system token.'}
           </p>
           <a
             href="/api/auth/meta/start"
             className={`glass-button inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium ${
-              !hasMetaOAuth || !metaIntegration
-                ? 'pointer-events-none opacity-50'
-                : ''
+              !hasMetaOAuth ? 'pointer-events-none opacity-50' : ''
             }`}
-            aria-disabled={!hasMetaOAuth || !metaIntegration}
-            tabIndex={!hasMetaOAuth || !metaIntegration ? -1 : 0}
+            aria-disabled={!hasMetaOAuth}
+            tabIndex={!hasMetaOAuth ? -1 : 0}
             onClick={(e) => {
-              if (!hasMetaOAuth || !metaIntegration) {
+              if (!hasMetaOAuth) {
                 e.preventDefault();
               }
             }}
@@ -264,7 +273,7 @@ export default function WorkspaceSettingsClient() {
         <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
           <div>
             <div className="text-xs font-semibold text-muted-foreground">Ad account id</div>
-            {hasSystemToken && adAccounts.length ? (
+            {(hasSystemToken || hasUserOAuthToken) && adAccounts.length ? (
               <select
                 className="glass-input mt-1 w-full px-3 py-2 text-sm"
                 value={adAccountId}
@@ -288,7 +297,7 @@ export default function WorkspaceSettingsClient() {
           </div>
           <div>
             <div className="text-xs font-semibold text-muted-foreground">Facebook page id</div>
-            {hasSystemToken && pages.length ? (
+            {(hasSystemToken || hasUserOAuthToken) && pages.length ? (
               <select
                 className="glass-input mt-1 w-full px-3 py-2 text-sm"
                 value={fbPageId}

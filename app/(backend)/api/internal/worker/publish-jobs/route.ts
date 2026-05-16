@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { prisma } from '@/lib/prisma';
 import { createAd } from '@/lib/meta/client';
+import { requireMetaAdAccountId } from '@/lib/meta/integration-token';
 import { storeAdCreativeForAsset } from '@/lib/meta/store-ad-creative';
 
 export const dynamic = 'force-dynamic';
@@ -131,6 +132,7 @@ export async function POST(req: NextRequest) {
       ]);
 
       if (!integration) throw new Error('Meta integration missing');
+      const adAccountId = requireMetaAdAccountId(integration.adAccountId);
       if (!campaign) throw new Error('Campaign missing');
       if (!adSet) throw new Error('Ad set missing');
       if (!asset) throw new Error('Asset missing');
@@ -183,7 +185,7 @@ export async function POST(req: NextRequest) {
       }
 
       const ad = await createAd({
-        adAccountId: integration.adAccountId,
+        adAccountId,
         adSetId: adSet.metaAdSetId,
         creativeId: metaCreativeId,
         name: `${headline}`.slice(0, 200),

@@ -2,6 +2,7 @@ import 'server-only';
 
 import { GetObjectCommand } from '@aws-sdk/client-s3';
 
+import { requireMetaAdAccountId, requireMetaFbPageId } from '@/lib/meta/integration-token';
 import { prisma } from '@/lib/prisma';
 import { r2 } from '@/lib/cloudfare/r2';
 import { createAdCreative, uploadAdImage, uploadAdVideo } from '@/lib/meta/client';
@@ -45,9 +46,12 @@ export async function storeAdCreativeForAsset(
     where: { companyId: input.companyId },
     select: { id: true, adAccountId: true, fbPageId: true },
   });
-  if (!integration?.fbPageId) {
-    throw new Error('Meta not connected or Facebook page not selected');
+  if (!integration) {
+    throw new Error('Meta not connected');
   }
+
+  const adAccountId = requireMetaAdAccountId(integration.adAccountId);
+  const fbPageId = requireMetaFbPageId(integration.fbPageId);
 
   const asset = await prisma.asset.findFirst({
     where: { id: input.assetId, companyId: input.companyId },
@@ -79,7 +83,7 @@ export async function storeAdCreativeForAsset(
 
   if (asset.assetType === 'IMAGE') {
     const up = await uploadAdImage({
-      adAccountId: integration.adAccountId,
+      adAccountId,
       bytes,
       filename: asset.filename,
     });
@@ -113,7 +117,7 @@ export async function storeAdCreativeForAsset(
     });
   } else if (asset.assetType === 'VIDEO') {
     const up = await uploadAdVideo({
-      adAccountId: integration.adAccountId,
+      adAccountId,
       bytes,
       filename: asset.filename,
       name: asset.title ?? asset.filename,
@@ -154,8 +158,8 @@ export async function storeAdCreativeForAsset(
   const pixelIds = input.pixelId?.trim() ? [input.pixelId.trim()] : [];
 
   const creative = await createAdCreative({
-    adAccountId: integration.adAccountId,
-    fbPageId: integration.fbPageId,
+    adAccountId,
+    fbPageId,
     headline: input.headline,
     primaryText: input.primaryText,
     description: input.description,

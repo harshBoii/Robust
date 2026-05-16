@@ -7,6 +7,7 @@ import { resolveCompanyByUserNamePassword } from "@/lib/mcp/auth";
 import { prisma } from "@/lib/prisma";
 import { syncCampaigns, syncAdSets, createAndStoreCampaignFromPreset, createAndStoreAdSetFromPreset } from "@/lib/meta/sync";
 import { createAdCreative, getAdCreativePreviews, uploadAdImage, uploadAdVideo } from "@/lib/meta/client";
+import { requireMetaAdAccountId, requireMetaFbPageId } from "@/lib/meta/integration-token";
 
 export type CreateMcpServerOptions = {
   /** Preferred public origin for MCP `publicR2Url` responses (bucket custom domain). Falls back to R2_PUBLIC_BASE_URL when omitted. */
@@ -457,6 +458,22 @@ export function createServer(options?: CreateMcpServerOptions): McpServer {
       });
       if (!integration) return { content: [{ type: "text" as const, text: "Error: Meta not connected." }] };
 
+      let adAccountId: string;
+      let fbPageId: string;
+      try {
+        adAccountId = requireMetaAdAccountId(integration.adAccountId);
+        fbPageId = requireMetaFbPageId(integration.fbPageId);
+      } catch {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: "Error: Configure ad account and page in workspace settings.",
+            },
+          ],
+        };
+      }
+
       const bucket = await prisma.assetBucket.findFirst({
         where: { id: groupId, companyId: company.id },
         select: { id: true },
@@ -499,7 +516,7 @@ export function createServer(options?: CreateMcpServerOptions): McpServer {
 
         if (asset.assetType === "VIDEO") {
           const up = await uploadAdVideo({
-            adAccountId: integration.adAccountId,
+            adAccountId,
             bytes,
             filename: `${asset.title}`.slice(0, 120) || "video.mp4",
             name: asset.title.slice(0, 120) || "Robust Video",
@@ -521,7 +538,7 @@ export function createServer(options?: CreateMcpServerOptions): McpServer {
           });
         } else {
           const up = await uploadAdImage({
-            adAccountId: integration.adAccountId,
+            adAccountId,
             bytes,
             filename: `${asset.title}`.slice(0, 120) || "image.jpg",
           });
@@ -544,8 +561,8 @@ export function createServer(options?: CreateMcpServerOptions): McpServer {
       }
 
       const created = await createAdCreative({
-        adAccountId: integration.adAccountId,
-        fbPageId: integration.fbPageId,
+        adAccountId,
+        fbPageId,
         headline: creative.headline,
         primaryText: creative.primaryText ?? "",
         description: creative.description ?? null,
