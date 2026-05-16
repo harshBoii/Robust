@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 import { prisma } from '@/lib/prisma';
-import { r2 } from '@/lib/cloudfare/r2';
-import { GetObjectCommand } from '@aws-sdk/client-s3';
-import { createAd, createAdCreative, uploadAdImage, uploadAdVideo } from '@/lib/meta/client';
+import { createAd } from '@/lib/meta/client';
+import { storeAdCreativeForAsset } from '@/lib/meta/store-ad-creative';
 
 export const dynamic = 'force-dynamic';
 
@@ -24,12 +23,6 @@ function requireWorkerSecret(req: NextRequest) {
   if (got !== expected) {
     throw new WorkerAuthError('Unauthorized', 401);
   }
-}
-
-async function readAssetBytes(input: { r2Bucket: string; r2Key: string }): Promise<Uint8Array> {
-  const res = await r2.send(new GetObjectCommand({ Bucket: input.r2Bucket, Key: input.r2Key }));
-  if (!res.Body) throw new Error('Missing R2 body');
-  return new Uint8Array(await res.Body.transformToByteArray());
 }
 
 function notificationForJob(input: { ok: boolean; title: string; message: string }) {
@@ -89,6 +82,7 @@ export async function POST(req: NextRequest) {
           landingUrlOverride: true,
           ctaTypeOverride: true,
           pixelIdOverride: true,
+          metaCreativeDbId: true,
         },
       });
     });
@@ -156,126 +150,42 @@ export async function POST(req: NextRequest) {
           ? [job.pixelIdOverride]
           : (adPreset?.pixelIds ?? []);
 
-      const bytes = await readAssetBytes({ r2Bucket: asset.r2Bucket, r2Key: asset.r2Key });
+      let creativeDbId: string;
+      let metaCreativeId: string;
 
-      let imageHash: string | null = null;
-      let videoId: string | null = null;
-
-      if (asset.assetType === 'IMAGE') {
-        const up = await uploadAdImage({
-          adAccountId: integration.adAccountId,
-          bytes,
-          filename: asset.filename,
-        });
-        imageHash = up.imageHash;
-        await prisma.metaMedia.upsert({
+      if (job.metaCreativeDbId) {
+        const existing = await prisma.metaCreative.findFirst({
           where: {
-            metaIntegrationId_imageHash: {
-              metaIntegrationId: integration.id,
-              imageHash,
-            },
-          },
-          create: {
+            id: job.metaCreativeDbId,
             metaIntegrationId: integration.id,
-            kind: 'image',
-            imageHash,
-            assetId: asset.id,
-            imageUrl: asset.thumbnailUrl,
-            r2Key: asset.r2Key,
-            filename: asset.filename,
-            mimeType: null,
-            bytes: bytes.byteLength,
-            status: 'ready',
           },
-          update: {
-            assetId: asset.id,
-            imageUrl: asset.thumbnailUrl,
-            r2Key: asset.r2Key,
-            filename: asset.filename,
-            bytes: bytes.byteLength,
-            status: 'ready',
-          },
+          select: { id: true, metaCreativeId: true },
         });
-      } else if (asset.assetType === 'VIDEO') {
-        const up = await uploadAdVideo({
-          adAccountId: integration.adAccountId,
-          bytes,
-          filename: asset.filename,
-          name: asset.title ?? asset.filename,
-        });
-        videoId = up.videoId;
-        await prisma.metaMedia.upsert({
-          where: {
-            metaIntegrationId_videoId: {
-              metaIntegrationId: integration.id,
-              videoId,
-            },
-          },
-          create: {
-            metaIntegrationId: integration.id,
-            kind: 'video',
-            videoId,
-            assetId: asset.id,
-            videoUrl: asset.playbackUrl,
-            thumbnailUrl: asset.thumbnailUrl,
-            r2Key: asset.r2Key,
-            filename: asset.filename,
-            mimeType: null,
-            bytes: bytes.byteLength,
-            status: 'ready',
-          },
-          update: {
-            assetId: asset.id,
-            videoUrl: asset.playbackUrl,
-            thumbnailUrl: asset.thumbnailUrl,
-            r2Key: asset.r2Key,
-            filename: asset.filename,
-            bytes: bytes.byteLength,
-            status: 'ready',
-          },
-        });
+        if (!existing?.metaCreativeId) {
+          throw new Error('Pre-created ad creative not found or missing Meta id');
+        }
+        creativeDbId = existing.id;
+        metaCreativeId = existing.metaCreativeId;
       } else {
-        throw new Error(`Unsupported assetType: ${asset.assetType}`);
-      }
-
-      const creative = await createAdCreative({
-        adAccountId: integration.adAccountId,
-        fbPageId: integration.fbPageId,
-        headline,
-        primaryText,
-        description,
-        ctaType,
-        landingUrl,
-        imageHash,
-        videoId,
-        pixelIds,
-      });
-
-      const creativeDb = await prisma.metaCreative.create({
-        data: {
-          metaIntegrationId: integration.id,
-          metaCampaignId: campaign.id,
-          metaCreativeId: creative.id,
-          imageHash,
-          videoId,
+        const stored = await storeAdCreativeForAsset({
+          companyId: job.companyId,
+          assetId: asset.id,
           headline,
           primaryText,
-          description: null,
-          ctaType: 'LEARN_MORE',
+          description,
           landingUrl,
-          thumbnailUrl: asset.thumbnailUrl,
-          aiGenerated: false,
-          compliancePassed: false,
-          approvedByUser: true,
-          approvedAt: new Date(),
-        },
-        select: { id: true },
-      });
+          ctaType,
+          pixelId: pixelIds[0] ?? null,
+          metaCampaignId: campaign.id,
+        });
+        creativeDbId = stored.id;
+        metaCreativeId = stored.metaCreativeId;
+      }
 
       const ad = await createAd({
         adAccountId: integration.adAccountId,
         adSetId: adSet.metaAdSetId,
-        creativeId: creative.id,
+        creativeId: metaCreativeId,
         name: `${headline}`.slice(0, 200),
         status: 'ACTIVE',
       });
@@ -284,7 +194,7 @@ export async function POST(req: NextRequest) {
         data: {
           metaIntegrationId: integration.id,
           adSetId: adSet.id,
-          metaCreativeDbId: creativeDb.id,
+          metaCreativeDbId: creativeDbId,
           metaAdId: ad.id,
           name: headline,
           status: 'ACTIVE',
@@ -300,7 +210,7 @@ export async function POST(req: NextRequest) {
         data: {
           status: 'PUBLISHED',
           completedAt: new Date(),
-          metaCreativeDbId: creativeDb.id,
+          metaCreativeDbId: creativeDbId,
           metaAdDbId: metaAdDb.id,
           lastError: null,
         },

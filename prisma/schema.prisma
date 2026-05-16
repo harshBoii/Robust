@@ -126,8 +126,9 @@ model Asset {
   bulkUpload  BulkUpload?  @relation(fields: [bulkUploadId], references: [id], onDelete: SetNull)
   assetBucket AssetBucket? @relation(fields: [assetBucketId], references: [id], onDelete: SetNull)
   warnings    AssetWarning[]
-  metaMedia   MetaMedia?
-  streamQueue StreamQueue[]
+  metaMedia     MetaMedia?
+  metaCreatives MetaCreative[]
+  streamQueue   StreamQueue[]
   adPublishJobs AdPublishJob[]
 
 
@@ -302,7 +303,7 @@ model MetaCampaign {
 
   metaIntegration MetaIntegration @relation(fields: [metaIntegrationId], references: [id], onDelete: Cascade)
   campaignPreset  CampaignPreset? @relation(fields: [campaignPresetId], references: [id], onDelete: SetNull)
-  creative        MetaCreative?
+  creatives       MetaCreative[]
   adSets          MetaAdSet[]
   adsetPresets    AdsetPreset[]
   publishJobs     AdPublishJob[]
@@ -318,8 +319,10 @@ model MetaCampaign {
 model MetaCreative {
   id                  String    @id @default(cuid())
   metaIntegrationId   String
-  /// One creative per campaign
-  metaCampaignId      String?   @unique
+  /// Optional link when creative was created for a campaign-level flow
+  metaCampaignId      String?
+  /// Gallery asset used for image_hash / video_id
+  assetId             String?
   /// Returned by Meta after adcreatives POST
   metaCreativeId      String?   @db.VarChar(100)
   imageHash           String?   @db.VarChar(200)
@@ -346,11 +349,14 @@ model MetaCreative {
 
   metaIntegration MetaIntegration @relation(fields: [metaIntegrationId], references: [id], onDelete: Cascade)
   campaign        MetaCampaign?   @relation(fields: [metaCampaignId], references: [id], onDelete: SetNull)
+  asset           Asset?          @relation(fields: [assetId], references: [id], onDelete: SetNull)
   ads             MetaAd[]
 
   @@unique([metaIntegrationId, metaCreativeId])
   @@index([metaIntegrationId])
   @@index([metaCreativeId])
+  @@index([metaCampaignId])
+  @@index([assetId])
   @@map("meta_creatives")
 }
 

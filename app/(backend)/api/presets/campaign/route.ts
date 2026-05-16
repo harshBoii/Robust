@@ -1,21 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 import { getSession } from '@/lib/auth/session';
+import { jsonSafe } from '@/lib/json-safe';
 import { prisma } from '@/lib/prisma';
 
 export const dynamic = 'force-dynamic';
-
-function jsonSafe<T>(v: T): T {
-  if (v === null) return v;
-  if (typeof v === 'bigint') return String(v) as unknown as T;
-  if (Array.isArray(v)) return v.map((x) => jsonSafe(x)) as unknown as T;
-  if (typeof v === 'object') {
-    const out: Record<string, unknown> = {};
-    for (const [k, val] of Object.entries(v as Record<string, unknown>)) out[k] = jsonSafe(val);
-    return out as unknown as T;
-  }
-  return v;
-}
 
 export async function GET() {
   const session = await getSession();

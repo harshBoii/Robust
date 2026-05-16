@@ -1,11 +1,21 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { readApiJson } from '@/lib/api/read-json';
 import { useToast } from '@/app/components/UI/ToastProvider';
 import UploadStep from '@/app/components/createAd/steps/UploadStep';
+import {
+  GroupAdCreativesPanel,
+  type AssetCreativeState,
+  type SavedAdCreative,
+} from '@/app/components/manager/GroupAdCreativesPanel';
+import { PostPresetFieldsPanel } from '@/app/components/manager/presets/PostPresetFieldsPanel';
+import { normalizeAdsetPreset, normalizeCampaignPreset } from '@/app/components/manager/presets/normalize';
+import { persistAdsetPresetDraft, persistCampaignPresetDraft } from '@/app/components/manager/presets/save-preset';
+import type { AdsetPreset, CampaignPreset } from '@/app/components/manager/presets/types';
 
 /* ─────────────────────────────────────────── types ── */
-type Campaign = { id: string; name: string; objective?: string; status?: string };
+type Campaign = { id: string; name: string; objective?: string; status?: string; bidStrategy?: string | null };
 type AdSet = { id: string; name: string; status?: string };
 type Preset = { id: string; name: string };
 type AssetBucket = { id: string; label: string };
@@ -47,12 +57,26 @@ type GroupModel = {
   assets: Asset[];
   selectedAssetIds: string[];
   creative: CreativeFields;
+  assetCreatives: Record<string, AssetCreativeState>;
 };
 
+function defaultAssetCreatives(assetIds: string[]): Record<string, AssetCreativeState> {
+  return Object.fromEntries(assetIds.map((id) => [id, { status: 'none' as const }]));
+}
+
+function mergeAssetCreatives(
+  prev: Record<string, AssetCreativeState>,
+  assetIds: string[],
+): Record<string, AssetCreativeState> {
+  const next: Record<string, AssetCreativeState> = {};
+  for (const id of assetIds) {
+    next[id] = prev[id] ?? { status: 'none' };
+  }
+  return next;
+}
+
 async function json<T>(res: Response): Promise<T> {
-  const data = (await res.json()) as T;
-  if (!res.ok) throw new Error((data as { error?: string }).error ?? 'Request failed');
-  return data;
+  return readApiJson<T>(res);
 }
 
 /* ─────────────────────────────────────── step config ── */
@@ -491,6 +515,12 @@ export default function PostToMetaClient({ companyId }: { companyId: string }) {
   const [adSets, setAdSets] = useState<AdSet[]>([]);
   const [campaignPresets, setCampaignPresets] = useState<Preset[]>([]);
   const [adsetPresets, setAdsetPresets] = useState<Preset[]>([]);
+  const [campaignPresetRecords, setCampaignPresetRecords] = useState<CampaignPreset[]>([]);
+  const [adsetPresetRecords, setAdsetPresetRecords] = useState<AdsetPreset[]>([]);
+  const [draftCampaignPreset, setDraftCampaignPreset] = useState<CampaignPreset | null>(null);
+  const [draftAdsetPreset, setDraftAdsetPreset] = useState<AdsetPreset | null>(null);
+  const [advancedTargetingJson, setAdvancedTargetingJson] = useState('');
+  const [presetSaveError, setPresetSaveError] = useState<string | null>(null);
 
   const [selectedCampaignId, setSelectedCampaignId] = useState('');
   const [selectedAdSetId, setSelectedAdSetId] = useState('');
@@ -513,6 +543,8 @@ export default function PostToMetaClient({ companyId }: { companyId: string }) {
   const [adsetPresetId, setAdsetPresetId] = useState('');
   const [creatingCampaign, setCreatingCampaign] = useState(false);
   const [creatingAdSet, setCreatingAdSet] = useState(false);
+  const [savedAdCreatives, setSavedAdCreatives] = useState<SavedAdCreative[]>([]);
+  const [loadingAdCreatives, setLoadingAdCreatives] = useState(false);
 
   const selectedCampaign = useMemo(
     () => campaigns.find((c) => c.id === selectedCampaignId),
@@ -551,7 +583,12 @@ export default function PostToMetaClient({ companyId }: { companyId: string }) {
         const next = new Set(group.selectedAssetIds);
         if (next.has(assetId)) next.delete(assetId);
         else next.add(assetId);
-        return { ...group, selectedAssetIds: [...next] };
+        const selectedAssetIds = [...next];
+        return {
+          ...group,
+          selectedAssetIds,
+          assetCreatives: mergeAssetCreatives(group.assetCreatives, selectedAssetIds),
+        };
       }),
     );
   }, []);
@@ -627,8 +664,12 @@ export default function PostToMetaClient({ companyId }: { companyId: string }) {
         ]);
 
         setCampaigns(campaignResp.campaigns ?? []);
-        setCampaignPresets(campaignPresetResp.presets ?? []);
-        setAdsetPresets(adsetPresetResp.presets ?? []);
+        const campaignRecords = (campaignPresetResp.presets ?? []).map((p) => normalizeCampaignPreset(p));
+        const adsetRecords = (adsetPresetResp.presets ?? []).map((p) => normalizeAdsetPreset(p));
+        setCampaignPresetRecords(campaignRecords);
+        setAdsetPresetRecords(adsetRecords);
+        setCampaignPresets(campaignRecords.map((p) => ({ id: p.id, name: p.name })));
+        setAdsetPresets(adsetRecords.map((p) => ({ id: p.id, name: p.name })));
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Failed to load');
       } finally {
@@ -745,6 +786,11 @@ export default function PostToMetaClient({ companyId }: { companyId: string }) {
               assets,
               selectedAssetIds: old?.selectedAssetIds?.filter((id) => assets.some((asset) => asset.id === id)) ?? [],
               creative: old?.creative ?? defaultCreative(),
+              assetCreatives: mergeAssetCreatives(
+                old?.assetCreatives ?? {},
+                (old?.selectedAssetIds?.filter((id) => assets.some((a) => a.id === id)) ??
+                  assets.map((a) => a.id)),
+              ),
             } satisfies GroupModel;
           });
         });
@@ -755,6 +801,158 @@ export default function PostToMetaClient({ companyId }: { companyId: string }) {
       }
     })();
   }, [activeBulkUploadId, selectedAdSetId]);
+
+  const refreshSavedAdCreatives = useCallback(async () => {
+    setLoadingAdCreatives(true);
+    try {
+      const data = await json<{ creatives: SavedAdCreative[] }>(
+        await fetch('/api/meta/ad-creatives', { credentials: 'include' }),
+      );
+      setSavedAdCreatives(data.creatives ?? []);
+    } catch {
+      /* non-blocking */
+    } finally {
+      setLoadingAdCreatives(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (step !== 'Creative Fields') return;
+    void refreshSavedAdCreatives();
+  }, [step, refreshSavedAdCreatives]);
+
+  const createAdCreativeForAsset = useCallback(
+    async (groupId: string, assetId: string) => {
+      const group = groups.find((g) => g.groupId === groupId);
+      if (!group) return;
+
+      const { headline, primaryText, description, landingUrl, ctaType, pixelId } = group.creative;
+      if (!headline.trim() || !landingUrl.trim()) {
+        toast.push({
+          kind: 'error',
+          title: 'Missing copy',
+          message: 'Headline and landing URL are required before creating an ad creative.',
+        });
+        return;
+      }
+
+      setGroups((prev) =>
+        prev.map((g) =>
+          g.groupId !== groupId
+            ? g
+            : {
+                ...g,
+                assetCreatives: {
+                  ...g.assetCreatives,
+                  [assetId]: { status: 'creating' },
+                },
+              },
+        ),
+      );
+
+      try {
+        const data = await json<{ creative: SavedAdCreative & { metaCreativeId: string } }>(
+          await fetch('/api/meta/ad-creatives', {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              assetId,
+              campaignId: selectedCampaignId || undefined,
+              headline,
+              primaryText: primaryText || headline,
+              description: description || undefined,
+              landingUrl,
+              ctaType,
+              pixelId: pixelId || undefined,
+            }),
+          }),
+        );
+
+        const creative = data.creative;
+        setGroups((prev) =>
+          prev.map((g) =>
+            g.groupId !== groupId
+              ? g
+              : {
+                  ...g,
+                  assetCreatives: {
+                    ...g.assetCreatives,
+                    [assetId]: {
+                      status: 'ready',
+                      metaCreativeDbId: creative.id,
+                      metaCreativeId: creative.metaCreativeId ?? undefined,
+                    },
+                  },
+                },
+          ),
+        );
+        await refreshSavedAdCreatives();
+        toast.push({
+          kind: 'success',
+          title: 'Ad creative created',
+          message: creative.metaCreativeId
+            ? `Meta creative ${creative.metaCreativeId}`
+            : 'Saved for publish',
+        });
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : 'Failed to create ad creative';
+        setGroups((prev) =>
+          prev.map((g) =>
+            g.groupId !== groupId
+              ? g
+              : {
+                  ...g,
+                  assetCreatives: {
+                    ...g.assetCreatives,
+                    [assetId]: { status: 'error', error: msg },
+                  },
+                },
+          ),
+        );
+        toast.push({ kind: 'error', title: 'Ad creative failed', message: msg });
+      }
+    },
+    [groups, refreshSavedAdCreatives, selectedCampaignId, toast],
+  );
+
+  const createAllAdCreativesForGroup = useCallback(
+    async (groupId: string) => {
+      const group = groups.find((g) => g.groupId === groupId);
+      if (!group) return;
+      for (const assetId of group.selectedAssetIds) {
+        const state = group.assetCreatives[assetId];
+        if (state?.status === 'ready') continue;
+        await createAdCreativeForAsset(groupId, assetId);
+      }
+    },
+    [groups, createAdCreativeForAsset],
+  );
+
+  const applySavedCreativeToAsset = useCallback(
+    (groupId: string, assetId: string, creativeDbId: string) => {
+      const saved = savedAdCreatives.find((c) => c.id === creativeDbId);
+      if (!saved) return;
+      setGroups((prev) =>
+        prev.map((g) =>
+          g.groupId !== groupId
+            ? g
+            : {
+                ...g,
+                assetCreatives: {
+                  ...g.assetCreatives,
+                  [assetId]: {
+                    status: 'ready',
+                    metaCreativeDbId: saved.id,
+                    metaCreativeId: saved.metaCreativeId ?? undefined,
+                  },
+                },
+              },
+        ),
+      );
+    },
+    [savedAdCreatives],
+  );
 
   /* ── publish ── */
   const publish = useCallback(async () => {
@@ -770,17 +968,25 @@ export default function PostToMetaClient({ companyId }: { companyId: string }) {
           body: JSON.stringify({
             campaignId: selectedCampaignId,
             scheduledAt: scheduledAt || undefined,
-            groups: includedGroups.map((group) => ({
-              bucketId: group.groupId,
-              assetIds: group.selectedAssetIds,
-              adSetId: useAdSetPerGroup ? group.adSetId : selectedAdSetId,
-              headline: group.creative.headline,
-              primaryText: group.creative.primaryText,
-              description: group.creative.description || undefined,
-              landingUrl: group.creative.landingUrl,
-              ctaType: group.creative.ctaType,
-              pixelId: group.creative.pixelId || undefined,
-            })),
+            groups: includedGroups.map((group) => {
+              const assetCreatives: Record<string, string> = {};
+              for (const assetId of group.selectedAssetIds) {
+                const dbId = group.assetCreatives[assetId]?.metaCreativeDbId;
+                if (dbId) assetCreatives[assetId] = dbId;
+              }
+              return {
+                bucketId: group.groupId,
+                assetIds: group.selectedAssetIds,
+                adSetId: useAdSetPerGroup ? group.adSetId : selectedAdSetId,
+                headline: group.creative.headline,
+                primaryText: group.creative.primaryText,
+                description: group.creative.description || undefined,
+                landingUrl: group.creative.landingUrl,
+                ctaType: group.creative.ctaType,
+                pixelId: group.creative.pixelId || undefined,
+                assetCreatives,
+              };
+            }),
           }),
         }),
       );
@@ -850,13 +1056,59 @@ export default function PostToMetaClient({ companyId }: { companyId: string }) {
     };
   }, [jobIds]);
 
+  useEffect(() => {
+    if (!campaignPresetId) {
+      setDraftCampaignPreset(null);
+      return;
+    }
+    const preset = campaignPresetRecords.find((p) => p.id === campaignPresetId);
+    setDraftCampaignPreset(preset ? { ...preset } : null);
+    setPresetSaveError(null);
+  }, [campaignPresetId, campaignPresetRecords]);
+
+  useEffect(() => {
+    if (!adsetPresetId) {
+      setDraftAdsetPreset(null);
+      setAdvancedTargetingJson('');
+      return;
+    }
+    const preset = adsetPresetRecords.find((p) => p.id === adsetPresetId);
+    if (!preset) {
+      setDraftAdsetPreset(null);
+      setAdvancedTargetingJson('');
+      return;
+    }
+    setDraftAdsetPreset({ ...preset });
+    setAdvancedTargetingJson(JSON.stringify(preset.targeting ?? {}, null, 2));
+    setPresetSaveError(null);
+  }, [adsetPresetId, adsetPresetRecords]);
+
+  const metaCampaignOptions = useMemo(
+    () =>
+      campaigns.map((c) => ({
+        id: c.id,
+        name: c.name,
+        objective: c.objective ?? null,
+        bidStrategy: c.bidStrategy ?? null,
+      })),
+    [campaigns],
+  );
+
   const createCampaign = useCallback(async () => {
-    if (!campaignPresetId) return;
+    if (!campaignPresetId || !draftCampaignPreset) return;
 
     setCreatingCampaign(true);
     setError(null);
+    setPresetSaveError(null);
 
     try {
+      const saved = await persistCampaignPresetDraft(campaignPresetId, draftCampaignPreset);
+      if (!saved.ok) {
+        setPresetSaveError(saved.error);
+        toast.push({ kind: 'error', title: 'Invalid preset', message: saved.error });
+        return;
+      }
+
       const data = await json<{ campaign: Campaign }>(
         await fetch('/api/meta/campaigns', {
           method: 'POST',
@@ -869,6 +1121,7 @@ export default function PostToMetaClient({ companyId }: { companyId: string }) {
       setCampaigns((prev) => [data.campaign, ...prev]);
       setSelectedCampaignId(data.campaign.id);
       setCampaignPresetId('');
+      setDraftCampaignPreset(null);
       toast.push({ kind: 'success', title: 'Campaign created', message: data.campaign.name });
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Failed to create campaign';
@@ -877,15 +1130,26 @@ export default function PostToMetaClient({ companyId }: { companyId: string }) {
     } finally {
       setCreatingCampaign(false);
     }
-  }, [campaignPresetId, toast]);
+  }, [campaignPresetId, draftCampaignPreset, toast]);
 
   const createAdSet = useCallback(async () => {
-    if (!adsetPresetId || !selectedCampaignId) return;
+    if (!adsetPresetId || !selectedCampaignId || !draftAdsetPreset) return;
 
     setCreatingAdSet(true);
     setError(null);
+    setPresetSaveError(null);
 
     try {
+      const saved = await persistAdsetPresetDraft(adsetPresetId, draftAdsetPreset, {
+        advancedTargetingJson,
+        metaCampaigns: metaCampaignOptions,
+      });
+      if (!saved.ok) {
+        setPresetSaveError(saved.error);
+        toast.push({ kind: 'error', title: 'Invalid preset', message: saved.error });
+        return;
+      }
+
       const data = await json<{ adSet: AdSet }>(
         await fetch('/api/meta/adsets', {
           method: 'POST',
@@ -898,6 +1162,8 @@ export default function PostToMetaClient({ companyId }: { companyId: string }) {
       setAdSets((prev) => [data.adSet, ...prev]);
       setSelectedAdSetId(data.adSet.id);
       setAdsetPresetId('');
+      setDraftAdsetPreset(null);
+      setAdvancedTargetingJson('');
       toast.push({ kind: 'success', title: 'Ad set created', message: data.adSet.name });
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Failed to create ad set';
@@ -906,7 +1172,7 @@ export default function PostToMetaClient({ companyId }: { companyId: string }) {
     } finally {
       setCreatingAdSet(false);
     }
-  }, [adsetPresetId, selectedCampaignId, toast]);
+  }, [adsetPresetId, advancedTargetingJson, draftAdsetPreset, metaCampaignOptions, selectedCampaignId, toast]);
 
   const copyCreativeFromPrevious = useCallback(
     (groupId: string) => {
@@ -1033,6 +1299,28 @@ export default function PostToMetaClient({ companyId }: { companyId: string }) {
                   buttonLabel="Create campaign"
                   loading={creatingCampaign}
                 />
+
+                {campaignPresetId && draftCampaignPreset ? (
+                  <PostPresetFieldsPanel
+                    kind="campaign"
+                    presetName={draftCampaignPreset.name}
+                    draft={draftCampaignPreset}
+                    onDraftChange={(next) =>
+                      setDraftCampaignPreset((prev) => {
+                        if (!prev) return prev;
+                        return typeof next === 'function' ? next(prev) : next;
+                      })
+                    }
+                    saveError={presetSaveError}
+                    onSaveError={setPresetSaveError}
+                    onSaved={(next) => {
+                      setCampaignPresetRecords((prev) =>
+                        prev.map((p) => (p.id === next.id ? { ...next } : p)),
+                      );
+                      toast.push({ kind: 'success', title: 'Preset saved' });
+                    }}
+                  />
+                ) : null}
               </div>
             )}
 
@@ -1123,6 +1411,31 @@ export default function PostToMetaClient({ companyId }: { companyId: string }) {
                       buttonLabel="Create ad set"
                       loading={creatingAdSet}
                     />
+
+                    {adsetPresetId && draftAdsetPreset ? (
+                      <PostPresetFieldsPanel
+                        kind="adset"
+                        presetName={draftAdsetPreset.name}
+                        draft={draftAdsetPreset}
+                        onDraftChange={(next) =>
+                          setDraftAdsetPreset((prev) => {
+                            if (!prev) return prev;
+                            return typeof next === 'function' ? next(prev) : next;
+                          })
+                        }
+                        metaCampaigns={metaCampaignOptions}
+                        advancedTargetingJson={advancedTargetingJson}
+                        onAdvancedTargetingJsonChange={setAdvancedTargetingJson}
+                        saveError={presetSaveError}
+                        onSaveError={setPresetSaveError}
+                        onSaved={(next) => {
+                          setAdsetPresetRecords((prev) =>
+                            prev.map((p) => (p.id === next.id ? { ...next } : p)),
+                          );
+                          toast.push({ kind: 'success', title: 'Preset saved' });
+                        }}
+                      />
+                    ) : null}
                   </>
                 )}
               </div>
@@ -1302,15 +1615,37 @@ export default function PostToMetaClient({ companyId }: { companyId: string }) {
                           </p>
                         </div>
 
-                        <button
-                          type="button"
-                          onClick={() => copyCreativeFromPrevious(group.groupId)}
-                          disabled={index === 0}
-                          className="inline-flex h-9 items-center justify-center rounded-xl border border-input bg-background px-3 text-sm font-medium text-foreground transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                          Copy from previous
-                        </button>
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            onClick={() => copyCreativeFromPrevious(group.groupId)}
+                            disabled={index === 0}
+                            className="inline-flex h-9 items-center justify-center rounded-xl border border-input bg-background px-3 text-sm font-medium text-foreground transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            Copy from previous
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void createAllAdCreativesForGroup(group.groupId)}
+                            className="inline-flex h-9 items-center justify-center rounded-xl bg-primary px-3 text-sm font-medium text-primary-foreground transition hover:opacity-95"
+                          >
+                            Create all ad creatives
+                          </button>
+                        </div>
                       </div>
+
+                      <GroupAdCreativesPanel
+                        assets={group.assets}
+                        selectedAssetIds={group.selectedAssetIds}
+                        assetCreatives={group.assetCreatives}
+                        savedAdCreatives={savedAdCreatives}
+                        loadingAdCreatives={loadingAdCreatives}
+                        onRefreshLibrary={() => void refreshSavedAdCreatives()}
+                        onCreate={(assetId) => void createAdCreativeForAsset(group.groupId, assetId)}
+                        onApplySaved={(assetId, creativeDbId) =>
+                          applySavedCreativeToAsset(group.groupId, assetId, creativeDbId)
+                        }
+                      />
 
                       <div className="grid gap-4 p-4 sm:grid-cols-2">
                         <div>

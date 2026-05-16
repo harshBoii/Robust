@@ -15,6 +15,8 @@ type GroupInput = {
   landingUrl?: unknown;
   ctaType?: unknown;
   pixelId?: unknown;
+  /** assetId → metaCreative DB id (pre-created on Meta) */
+  assetCreatives?: unknown;
 };
 
 type Body = {
@@ -62,6 +64,7 @@ export async function POST(req: NextRequest) {
     landingUrl: string;
     ctaType: string;
     pixelId: string | null;
+    assetCreatives: Record<string, string>;
   }[] = [];
 
   for (let i = 0; i < rawGroups.length; i++) {
@@ -80,6 +83,15 @@ export async function POST(req: NextRequest) {
     if (!landingUrl) return NextResponse.json({ error: `Group ${i}: missing landingUrl` }, { status: 400 });
     if (assetIds.length === 0) return NextResponse.json({ error: `Group ${i}: missing assetIds` }, { status: 400 });
 
+    const assetCreatives: Record<string, string> = {};
+    if (g.assetCreatives && typeof g.assetCreatives === 'object' && !Array.isArray(g.assetCreatives)) {
+      for (const [assetId, creativeDbId] of Object.entries(g.assetCreatives)) {
+        if (typeof creativeDbId === 'string' && creativeDbId.trim()) {
+          assetCreatives[assetId] = creativeDbId.trim();
+        }
+      }
+    }
+
     groups.push({
       bucketId: typeof g.bucketId === 'string' ? g.bucketId : null,
       assetIds,
@@ -90,6 +102,7 @@ export async function POST(req: NextRequest) {
       landingUrl,
       ctaType,
       pixelId: typeof g.pixelId === 'string' && g.pixelId.trim() ? g.pixelId.trim() : null,
+      assetCreatives,
     });
   }
 
@@ -142,6 +155,26 @@ export async function POST(req: NextRequest) {
     : null;
 
   // Create all jobs in a single transaction
+  const creativeDbIds = [
+    ...new Set(groups.flatMap((g) => Object.values(g.assetCreatives))),
+  ];
+  if (creativeDbIds.length > 0) {
+    const found = await prisma.metaCreative.findMany({
+      where: {
+        id: { in: creativeDbIds },
+        metaIntegrationId: integration.id,
+        metaCreativeId: { not: null },
+      },
+      select: { id: true },
+    });
+    const foundIds = new Set(found.map((c) => c.id));
+    for (const id of creativeDbIds) {
+      if (!foundIds.has(id)) {
+        return NextResponse.json({ error: `Ad creative not found: ${id}` }, { status: 404 });
+      }
+    }
+  }
+
   const allJobData = groups.flatMap((g) =>
     g.assetIds.map((assetId) => ({
       companyId: session.companyId,
@@ -149,6 +182,7 @@ export async function POST(req: NextRequest) {
       campaignId: campaign.id,
       adSetId: g.adSetId,
       assetId,
+      metaCreativeDbId: g.assetCreatives[assetId] ?? null,
       scheduleId: schedule?.id ?? null,
       scheduledAt,
       status: 'QUEUED' as const,

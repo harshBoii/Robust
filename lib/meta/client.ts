@@ -1,5 +1,8 @@
 import 'server-only';
 
+import { toMetaPacingTypeParam } from '@/lib/meta/adset-preset-meta';
+import { metaErrorFromGraph } from '@/lib/meta/errors';
+
 type MetaGraphResponse<T> = {
   data?: T;
   error?: {
@@ -62,6 +65,70 @@ export type MetaAdRow = {
 
 const META_GRAPH_BASE = 'https://graph.facebook.com/v21.0';
 
+const META_CREATE_LOG_PATHS = ['/campaigns', '/adsets', '/adcreatives'] as const;
+
+function redactMetaUrl(url: URL): string {
+  const copy = new URL(url);
+  if (copy.searchParams.has('access_token')) {
+    copy.searchParams.set('access_token', '[REDACTED]');
+  }
+  return copy.toString();
+}
+
+function metaCreateLogLabel(path: string): string | null {
+  for (const suffix of META_CREATE_LOG_PATHS) {
+    if (path.endsWith(suffix)) {
+      return suffix.slice(1);
+    }
+  }
+  return null;
+}
+
+function parseLoggedParamValue(key: string, value: string): unknown {
+  if (
+    key === 'targeting' ||
+    key === 'object_story_spec' ||
+    key === 'creative' ||
+    key === 'special_ad_categories' ||
+    key === 'promoted_object' ||
+    key === 'pacing_type'
+  ) {
+    try {
+      return JSON.parse(value) as unknown;
+    } catch {
+      return value;
+    }
+  }
+  return value;
+}
+
+function buildMetaCreateLogPayload(
+  url: URL,
+  params?: Record<string, string>,
+): Record<string, unknown> {
+  const body = params
+    ? Object.fromEntries(
+        Object.entries(params).map(([k, v]) => [k, parseLoggedParamValue(k, v)]),
+      )
+    : {};
+  return {
+    method: 'POST',
+    url: redactMetaUrl(url),
+    body,
+  };
+}
+
+function logMetaCreateRequest(label: string, url: URL, params?: Record<string, string>) {
+  const payload = buildMetaCreateLogPayload(url, params);
+  console.log(`[meta api] create ${label} request\n${JSON.stringify(payload, null, 2)}`);
+}
+
+function logMetaCreateResponse(label: string, status: number, body: unknown) {
+  console.log(
+    `[meta api] create ${label} response\n${JSON.stringify({ status, body }, null, 2)}`,
+  );
+}
+
 function requireSystemAccessToken() {
   const token = process.env.META_SYSTEM_ACCESS_TOKEN;
   if (!token) {
@@ -83,6 +150,12 @@ async function metaFetch<T>(
     }
   }
 
+  const method = (init?.method ?? 'GET').toUpperCase();
+  const createLabel = method === 'POST' ? metaCreateLogLabel(path) : null;
+  if (createLabel) {
+    logMetaCreateRequest(createLabel, url, init?.searchParams);
+  }
+
   const res = await fetch(url, {
     ...init,
     headers: {
@@ -93,9 +166,11 @@ async function metaFetch<T>(
   });
 
   const json = (await res.json()) as MetaGraphResponse<T>;
+  if (createLabel) {
+    logMetaCreateResponse(createLabel, res.status, json);
+  }
   if (!res.ok || json.error) {
-    const message = json.error?.message ?? `Meta API error (${res.status})`;
-    throw new Error(message);
+    throw metaErrorFromGraph(json.error, res.status);
   }
   return json as unknown as T;
 }
@@ -204,6 +279,25 @@ export async function getMyPages(): Promise<MetaPage[]> {
     },
   });
   return resp.data ?? [];
+}
+
+export type MetaAdPixel = {
+  id: string;
+  name?: string;
+  is_unavailable?: boolean;
+};
+
+/** Pixels owned by or shared with the ad account. */
+export async function getAdAccountPixels(adAccountId: string): Promise<MetaAdPixel[]> {
+  const resp = await metaFetch<{ data: MetaAdPixel[] }>(`/${adAccountId}/adspixels`, {
+    method: 'GET',
+    searchParams: {
+      fields: 'id,name,is_unavailable',
+      limit: '50',
+    },
+  });
+  const rows = resp.data ?? [];
+  return rows.filter((p) => p.id);
 }
 
 export type MetaCampaignRow = {
@@ -324,27 +418,45 @@ export async function createAdSet(input: {
   lifetimeBudget?: number | null;
   bidStrategy?: string | null;
   bidAmount?: number | null;
+  bidConstraints?: Record<string, unknown> | null;
   optimizationGoal?: string | null;
   billingEvent?: string | null;
   targeting?: Record<string, unknown> | null;
+  /** Meta expects Unix seconds as a string. */
   startTime?: string | null;
   endTime?: string | null;
+  promotedObject?: Record<string, string> | null;
+  destinationType?: string | null;
+  pacingType?: string | null;
 }): Promise<{ id: string }> {
+  const billingEvent = input.billingEvent?.trim() || 'IMPRESSIONS';
+  const optimizationGoal = input.optimizationGoal?.trim() || 'OFFSITE_CONVERSIONS';
+
   const resp = await metaFetch<{ id: string }>(`/${input.adAccountId}/adsets`, {
     method: 'POST',
     searchParams: {
       name: input.name,
       campaign_id: input.campaignId,
       status: input.status ?? 'PAUSED',
+      billing_event: billingEvent,
+      optimization_goal: optimizationGoal,
       ...(input.dailyBudget != null ? { daily_budget: String(Math.floor(input.dailyBudget)) } : {}),
       ...(input.lifetimeBudget != null ? { lifetime_budget: String(Math.floor(input.lifetimeBudget)) } : {}),
       ...(input.bidStrategy ? { bid_strategy: input.bidStrategy } : {}),
-      ...(input.bidAmount != null ? { bid_amount: String(Math.floor(input.bidAmount)) } : {}),
-      ...(input.optimizationGoal ? { optimization_goal: input.optimizationGoal } : {}),
-      ...(input.billingEvent ? { billing_event: input.billingEvent } : {}),
+      ...(input.bidConstraints && Object.keys(input.bidConstraints).length > 0
+        ? { bid_constraints: JSON.stringify(input.bidConstraints) }
+        : {}),
+      ...(input.bidAmount != null && !input.bidConstraints?.roas_average_floor
+        ? { bid_amount: String(Math.floor(input.bidAmount)) }
+        : {}),
       ...(input.targeting ? { targeting: JSON.stringify(input.targeting) } : {}),
       ...(input.startTime ? { start_time: input.startTime } : {}),
       ...(input.endTime ? { end_time: input.endTime } : {}),
+      ...(input.promotedObject && Object.keys(input.promotedObject).length > 0
+        ? { promoted_object: JSON.stringify(input.promotedObject) }
+        : {}),
+      ...(input.destinationType ? { destination_type: input.destinationType } : {}),
+      pacing_type: toMetaPacingTypeParam(input.pacingType),
     },
   });
   return assertOk(resp);

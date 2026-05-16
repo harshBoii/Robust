@@ -2,12 +2,12 @@
 
 import { useState } from 'react';
 
+import { readApiJson } from '@/lib/api/read-json';
+
 import type { Preset } from './types';
 
 export async function json<T>(res: Response): Promise<T> {
-  const data = (await res.json()) as T;
-  if (!res.ok) throw new Error((data as { error?: string }).error ?? 'Request failed');
-  return data;
+  return readApiJson<T>(res);
 }
 
 export function SelectCard({

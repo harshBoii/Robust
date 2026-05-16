@@ -3,7 +3,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { Prisma } from '@/app/generated/prisma/client';
 
 import { getSession } from '@/lib/auth/session';
+import { jsonSafe } from '@/lib/json-safe';
 import { parseScheduleDuration } from '@/lib/meta/adset-schedule';
+import { sanitizeMetaTargeting } from '@/lib/meta/targeting';
+import { validateAdsetPresetRequest } from '@/lib/meta/validate-adset-preset-request';
 import { prisma } from '@/lib/prisma';
 
 export const dynamic = 'force-dynamic';
@@ -17,11 +20,11 @@ export async function GET() {
     orderBy: [{ isDefault: 'desc' }, { updatedAt: 'desc' }],
     take: 200,
     include: {
-      pinnedCampaign: { select: { id: true, name: true } },
+      pinnedCampaign: { select: { id: true, name: true, objective: true } },
     },
   });
 
-  return NextResponse.json({ presets });
+  return NextResponse.json({ presets: jsonSafe(presets) });
 }
 
 type PostBody = {
@@ -76,6 +79,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'scheduleCustomEnd is only valid with custom duration' }, { status: 400 });
   }
 
+  const metaValidation = await validateAdsetPresetRequest(session.companyId, body);
+  if (!metaValidation.ok) {
+    return NextResponse.json({ error: metaValidation.error }, { status: 400 });
+  }
+
   const pinnedCampaignId =
     typeof body.pinnedCampaignId === 'string' ? body.pinnedCampaignId : null;
   if (pinnedCampaignId) {
@@ -102,21 +110,21 @@ export async function POST(req: NextRequest) {
       endTime: scheduleDuration ? null : parseIso(body.endTime),
       scheduleDuration,
       scheduleCustomEnd: scheduleDuration === 'custom' ? scheduleCustomEnd : null,
-      billingEvent: typeof body.billingEvent === 'string' ? body.billingEvent : null,
-      optimizationGoal: typeof body.optimizationGoal === 'string' ? body.optimizationGoal : null,
+      billingEvent: metaValidation.fields.billingEvent,
+      optimizationGoal: metaValidation.fields.optimizationGoal,
       destinationType: typeof body.destinationType === 'string' ? body.destinationType : null,
       bidStrategy: typeof body.bidStrategy === 'string' ? body.bidStrategy : null,
       bidAmount: typeof body.bidAmount === 'number' ? BigInt(Math.floor(body.bidAmount)) : null,
       isDefaultCreative: Boolean(body.isDefaultCreative),
       pacingType: typeof body.pacingType === 'string' ? body.pacingType : null,
-      promotedObject: typeof body.promotedObject === 'object' && body.promotedObject ? (body.promotedObject as Prisma.InputJsonValue) : {},
+      promotedObject: metaValidation.fields.promotedObject as Prisma.InputJsonValue,
       attributionSpec: Array.isArray(body.attributionSpec) ? (body.attributionSpec as Prisma.InputJsonValue) : [],
       pinnedCampaignId,
       bidConstraints: typeof body.bidConstraints === 'object' && body.bidConstraints ? (body.bidConstraints as Prisma.InputJsonValue) : {},
-      targeting: typeof body.targeting === 'object' && body.targeting ? (body.targeting as Prisma.InputJsonValue) : {},
+      targeting: (sanitizeMetaTargeting(body.targeting) ?? {}) as Prisma.InputJsonValue,
     },
   });
 
-  return NextResponse.json({ preset });
+  return NextResponse.json({ preset: jsonSafe(preset) });
 }
 

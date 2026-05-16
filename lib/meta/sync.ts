@@ -9,7 +9,11 @@ import {
   getCampaignsForAccount,
 } from '@/lib/meta/client';
 import type { MetaCampaignStatus } from '@/lib/meta/client';
-import { resolveAdsetScheduleTimes } from '@/lib/meta/adset-schedule';
+import {
+  buildCreateAdSetInputFromPreset,
+  resolveOptimizationGoalForCreate,
+} from '@/lib/meta/adset-preset-meta';
+import { resolvePromotedObjectForMeta } from '@/lib/meta/promoted-object';
 
 function asMetaCampaignStatus(v: unknown): MetaCampaignStatus | undefined {
   return v === 'ACTIVE' || v === 'PAUSED' || v === 'ARCHIVED' ? v : undefined;
@@ -230,30 +234,40 @@ export async function createAndStoreAdSetFromPreset(input: {
 
   const campaign = await prisma.metaCampaign.findUnique({
     where: { id: input.campaignDbId },
-    select: { id: true, metaCampaignId: true },
+    select: { id: true, metaCampaignId: true, objective: true },
   });
   if (!campaign) throw new Error('Campaign not found');
 
   const preset = await prisma.adsetPreset.findUnique({ where: { id: input.presetId } });
   if (!preset) throw new Error('Adset preset not found');
 
-  const schedule = resolveAdsetScheduleTimes(preset);
+  const optimizationGoal = resolveOptimizationGoalForCreate(
+    preset.optimizationGoal,
+    campaign.objective,
+  );
+  const promotedObject = await resolvePromotedObjectForMeta({
+    optimizationGoal,
+    promotedObject: preset.promotedObject,
+    adAccountId: integration.adAccountId,
+  });
 
-  const created = await createAdSet({
+  const adSetParams = buildCreateAdSetInputFromPreset(preset, {
     adAccountId: integration.adAccountId,
     name: input.name ?? preset.name,
     campaignId: campaign.metaCampaignId,
     status: 'PAUSED',
-    dailyBudget: preset.dailyBudget ? Number(preset.dailyBudget) : null,
-    lifetimeBudget: preset.lifetimeBudget ? Number(preset.lifetimeBudget) : null,
-    bidStrategy: preset.bidStrategy,
-    bidAmount: preset.bidAmount ? Number(preset.bidAmount) : null,
-    optimizationGoal: null,
-    billingEvent: null,
-    targeting: (preset.targeting as Record<string, unknown>) ?? null,
-    startTime: schedule.startTime?.toISOString() ?? null,
-    endTime: schedule.endTime?.toISOString() ?? null,
+    campaignObjective: campaign.objective,
+    promotedObject,
   });
+
+  const created = await createAdSet(adSetParams);
+
+  const scheduleStart = adSetParams.startTime
+    ? new Date(Number(adSetParams.startTime) * 1000)
+    : null;
+  const scheduleEnd = adSetParams.endTime
+    ? new Date(Number(adSetParams.endTime) * 1000)
+    : null;
 
   return prisma.metaAdSet.create({
     data: {
@@ -268,11 +282,11 @@ export async function createAndStoreAdSetFromPreset(input: {
       bidStrategy: preset.bidStrategy,
       bidAmount: preset.bidAmount ? Number(preset.bidAmount) : null,
       bidConstraints: (preset.bidConstraints ?? {}) as Prisma.InputJsonValue,
-      optimizationGoal: null,
-      billingEvent: null,
+      optimizationGoal: adSetParams.optimizationGoal,
+      billingEvent: adSetParams.billingEvent,
       targeting: preset.targeting ? (preset.targeting as Prisma.InputJsonValue) : Prisma.DbNull,
-      startTime: schedule.startTime,
-      endTime: schedule.endTime,
+      startTime: scheduleStart,
+      endTime: scheduleEnd,
     },
     select: { id: true, metaAdSetId: true, name: true, status: true },
   });

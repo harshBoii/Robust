@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 import { getSession } from '@/lib/auth/session';
+import { jsonSafe } from '@/lib/json-safe';
 import { parseScheduleDuration } from '@/lib/meta/adset-schedule';
+import { sanitizeMetaTargeting } from '@/lib/meta/targeting';
+import { validateAdsetPresetRequest } from '@/lib/meta/validate-adset-preset-request';
 import { prisma } from '@/lib/prisma';
 import { Prisma } from '@/app/generated/prisma/client';
 
@@ -55,9 +58,36 @@ export async function PATCH(
 
   const existing = await prisma.adsetPreset.findFirst({
     where: { id, companyId: session.companyId },
-    select: { id: true },
+    select: {
+      id: true,
+      billingEvent: true,
+      optimizationGoal: true,
+      promotedObject: true,
+      bidStrategy: true,
+      bidAmount: true,
+      bidConstraints: true,
+      pinnedCampaignId: true,
+    },
   });
   if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+
+  const mergedMetaBody = {
+    billingEvent: body.billingEvent !== undefined ? body.billingEvent : existing.billingEvent,
+    optimizationGoal:
+      body.optimizationGoal !== undefined ? body.optimizationGoal : existing.optimizationGoal,
+    promotedObject:
+      body.promotedObject !== undefined ? body.promotedObject : existing.promotedObject,
+    bidStrategy: body.bidStrategy !== undefined ? body.bidStrategy : existing.bidStrategy,
+    bidAmount: body.bidAmount !== undefined ? body.bidAmount : existing.bidAmount,
+    bidConstraints:
+      body.bidConstraints !== undefined ? body.bidConstraints : existing.bidConstraints,
+    pinnedCampaignId:
+      body.pinnedCampaignId !== undefined ? body.pinnedCampaignId : existing.pinnedCampaignId,
+  };
+  const metaValidation = await validateAdsetPresetRequest(session.companyId, mergedMetaBody);
+  if (!metaValidation.ok) {
+    return NextResponse.json({ error: metaValidation.error }, { status: 400 });
+  }
 
   const scheduleDuration =
     body.scheduleDuration !== undefined ? parseScheduleDuration(body.scheduleDuration) : undefined;
@@ -119,8 +149,9 @@ export async function PATCH(
       ...(body.scheduleDuration === undefined && body.scheduleCustomEnd !== undefined
         ? { scheduleCustomEnd }
         : {}),
-      ...(typeof body.billingEvent === 'string' || body.billingEvent === null ? { billingEvent: body.billingEvent as string | null } : {}),
-      ...(typeof body.optimizationGoal === 'string' || body.optimizationGoal === null ? { optimizationGoal: body.optimizationGoal as string | null } : {}),
+      billingEvent: metaValidation.fields.billingEvent,
+      optimizationGoal: metaValidation.fields.optimizationGoal,
+      promotedObject: metaValidation.fields.promotedObject as Prisma.InputJsonValue,
       ...(typeof body.destinationType === 'string' || body.destinationType === null ? { destinationType: body.destinationType as string | null } : {}),
       ...(typeof body.bidStrategy === 'string' || body.bidStrategy === null ? { bidStrategy: body.bidStrategy as string | null } : {}),
       ...(typeof body.bidAmount === 'number' || body.bidAmount === null
@@ -128,9 +159,6 @@ export async function PATCH(
         : {}),
       ...(typeof body.isDefaultCreative === 'boolean' ? { isDefaultCreative: body.isDefaultCreative } : {}),
       ...(typeof body.pacingType === 'string' || body.pacingType === null ? { pacingType: body.pacingType as string | null } : {}),
-      ...(typeof body.promotedObject === 'object' && body.promotedObject
-        ? { promotedObject: body.promotedObject as Prisma.InputJsonValue }
-        : {}),
       ...(Array.isArray(body.attributionSpec)
         ? { attributionSpec: body.attributionSpec as Prisma.InputJsonValue }
         : {}),
@@ -143,12 +171,12 @@ export async function PATCH(
         ? { bidConstraints: body.bidConstraints as Prisma.InputJsonValue }
         : {}),
       ...(typeof body.targeting === 'object' && body.targeting
-        ? { targeting: body.targeting as Prisma.InputJsonValue }
+        ? { targeting: (sanitizeMetaTargeting(body.targeting) ?? {}) as Prisma.InputJsonValue }
         : {}),
     },
   });
 
-  return NextResponse.json({ preset });
+  return NextResponse.json({ preset: jsonSafe(preset) });
 }
 
 export async function DELETE(

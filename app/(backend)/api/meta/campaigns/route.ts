@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+import { apiErrorFromUnknown } from '@/lib/meta/errors';
 import { getSession } from '@/lib/auth/session';
 import { prisma } from '@/lib/prisma';
 import { syncCampaigns, createAndStoreCampaignFromPreset } from '@/lib/meta/sync';
@@ -49,12 +50,17 @@ export async function POST(req: NextRequest) {
   });
   if (!preset) return NextResponse.json({ error: 'Preset not found' }, { status: 404 });
 
-  const campaign = await createAndStoreCampaignFromPreset({
-    metaIntegrationId: integration.id,
-    presetId,
-    name,
-  });
+  try {
+    const campaign = await createAndStoreCampaignFromPreset({
+      metaIntegrationId: integration.id,
+      presetId,
+      name,
+    });
 
-  return NextResponse.json({ campaign });
+    return NextResponse.json({ campaign });
+  } catch (err) {
+    const { status, error, metaError } = apiErrorFromUnknown(err);
+    return NextResponse.json({ error, ...(metaError ? { metaError } : {}) }, { status });
+  }
 }
 

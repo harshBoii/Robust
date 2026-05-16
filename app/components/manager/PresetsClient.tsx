@@ -3,9 +3,31 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useToast } from '@/app/components/UI/ToastProvider';
 import { SCHEDULE_DURATION_OPTIONS, type ScheduleDuration } from '@/lib/meta/adset-schedule';
+import {
+  AUDIENCE_NETWORK_POSITION_OPTIONS,
+  FACEBOOK_POSITION_OPTIONS,
+  getTargetingExcludedAudiencesForEditor,
+  getTargetingInterestsForEditor,
+  INSTAGRAM_POSITION_OPTIONS,
+  MESSENGER_POSITION_OPTIONS,
+  sanitizeMetaTargeting,
+} from '@/lib/meta/targeting';
+import { AdsetPresetEditor } from '@/app/components/manager/presets/adset-preset-editor';
+import {
+  BILLING_EVENT_OPTIONS,
+  CUSTOM_EVENT_TYPE_OPTIONS,
+  DEFAULT_BILLING_EVENT,
+  DEFAULT_OPTIMIZATION_GOAL,
+  OPTIMIZATION_GOAL_OPTIONS,
+  billingEventsForCampaign,
+  optimizationGoalRequiresPixel,
+  optimizationGoalsForCampaign,
+  validateAdsetPresetMeta,
+  normalizePromotedObject,
+} from '@/lib/meta/adset-preset-meta';
 
 /* ─────────────────────────────────────────── types ── */
-type MetaCampaign = { id: string; name: string };
+type MetaCampaign = { id: string; name: string; objective?: string | null; bidStrategy?: string | null };
 
 type AdsetPreset = {
   id: string; name: string; isDefault: boolean;
@@ -33,17 +55,12 @@ type Tab = 'adset' | 'campaign';
 type AnyObj = Record<string, unknown>;
 
 /* ─────────────────────────────────── option constants ── */
-const BILLING_EVENT_OPTIONS = ['IMPRESSIONS','LINK_CLICKS','APP_INSTALLS','THRUPLAY','PAGE_LIKES','POST_ENGAGEMENT'] as const;
-const OPTIMIZATION_GOAL_OPTIONS = ['PURCHASE','LINK_CLICKS','REACH','IMPRESSIONS','LEAD_GENERATION','OFFSITE_CONVERSIONS','APP_INSTALLS','THRUPLAY','LANDING_PAGE_VIEWS','CONVERSATIONS','QUALITY_CALL','PAGE_LIKES'] as const;
 const BID_STRATEGY_OPTIONS = ['LOWEST_COST_WITHOUT_CAP','LOWEST_COST_WITH_BID_CAP','COST_CAP','LOWEST_COST_WITH_MIN_ROAS'] as const;
 const DESTINATION_TYPE_OPTIONS = ['WEBSITE','APP','MESSENGER','WHATSAPP','ON_AD','INSTAGRAM_PROFILE'] as const;
-const CUSTOM_EVENT_TYPE_OPTIONS = ['PURCHASE','ADD_TO_CART','LEAD','COMPLETE_REGISTRATION','VIEW_CONTENT','SEARCH','ADD_TO_WISHLIST','INITIATED_CHECKOUT','ADD_PAYMENT_INFO','SUBSCRIBE','START_TRIAL'] as const;
 const ATTRIBUTION_EVENT_TYPE_OPTIONS = ['CLICK_THROUGH','VIEW_THROUGH'] as const;
 const COMMON_COUNTRY_CODES = ['IN','US','GB','AU','CA','DE','FR','AE','SG','PH','NG','BR','JP','ID','MY','ZA','PK','BD','SA','EG','KE'] as const;
 const DEVICE_PLATFORM_OPTIONS = ['mobile','desktop'] as const;
 const PUBLISHER_PLATFORM_OPTIONS = ['facebook','instagram','messenger','audience_network'] as const;
-const FACEBOOK_POSITION_OPTIONS = ['feed','right_hand_column','story','reels','video_feeds','marketplace','search','instream_video','profile_feed','groups_feed'] as const;
-const INSTAGRAM_POSITION_OPTIONS = ['stream','story','reels','explore','explore_home','ig_search','profile_feed','profile_reels'] as const;
 const SPECIAL_AD_CATEGORY_OPTIONS = ['NONE','CREDIT','EMPLOYMENT','HOUSING','ISSUES_ELECTIONS_POLITICS','FINANCIAL_PRODUCTS_SERVICES'] as const;
 const CAMPAIGN_OBJECTIVE_OPTIONS = ['OUTCOME_SALES','OUTCOME_LEADS','OUTCOME_TRAFFIC','OUTCOME_ENGAGEMENT','OUTCOME_APP_PROMOTION','OUTCOME_AWARENESS'] as const;
 const CAMPAIGN_STATUS_OPTIONS = ['ACTIVE','PAUSED'] as const;
@@ -316,8 +333,8 @@ export default function PresetsClient() {
   const blankAdsetPreset = useMemo<AdsetPreset>(() => ({
     id: '', name: '', isDefault: false, pinnedCampaignId: null, pinnedCampaign: null,
     dailyBudget: null, lifetimeBudget: null, scheduleDuration: '1_week', scheduleCustomEnd: null,
-    billingEvent: null, optimizationGoal: null, destinationType: null,
-    bidStrategy: null, bidAmount: null, isDefaultCreative: false, pacingType: null,
+    billingEvent: DEFAULT_BILLING_EVENT, optimizationGoal: DEFAULT_OPTIMIZATION_GOAL, destinationType: null,
+    bidStrategy: null, bidAmount: null, isDefaultCreative: false, pacingType: 'standard',
     promotedObject: { pixel_id: '', custom_event_type: 'PURCHASE' },
     attributionSpec: [{ event_type: 'CLICK_THROUGH', window_days: 7 }],
     targeting: {
@@ -325,10 +342,9 @@ export default function PresetsClient() {
       geo_locations: { countries: ['IN'] },
       device_platforms: ['mobile'],
       publisher_platforms: ['facebook', 'instagram'],
-      facebook_positions: ['feed', 'reels'],
+      facebook_positions: ['feed', 'story'],
       instagram_positions: ['stream', 'reels'],
-      detailed_targeting: { interests: [] },
-      custom_audiences: [], excluded_custom_audiences: [],
+      targeting_automation: { advantage_audience: 1 },
     },
     bidConstraints: {},
   }), []);
@@ -365,14 +381,29 @@ export default function PresetsClient() {
         if (typeof v === 'string') return v;
         return String(v);
       };
-      setCampaigns(meta.campaigns ?? []);
+      setCampaigns((meta.campaigns ?? []).map((c) => ({
+        id: String(get(c, 'id') ?? ''),
+        name: String(get(c, 'name') ?? ''),
+        objective: typeof get(c, 'objective') === 'string' ? (get(c, 'objective') as string) : null,
+        bidStrategy: typeof get(c, 'bidStrategy') === 'string' ? (get(c, 'bidStrategy') as string) : null,
+      })));
       setAdsetPresets((adset.presets ?? []).map((p) => {
         const pinned = get(p, 'pinnedCampaign');
         return {
           id: String(get(p,'id') ?? ''), name: String(get(p,'name') ?? ''),
           isDefault: Boolean(get(p,'isDefault')),
           pinnedCampaignId: typeof get(p,'pinnedCampaignId') === 'string' ? (get(p,'pinnedCampaignId') as string) : null,
-          pinnedCampaign: pinned && typeof pinned === 'object' ? { id: String(get(pinned,'id') ?? ''), name: String(get(pinned,'name') ?? '') } : null,
+          pinnedCampaign: pinned && typeof pinned === 'object' ? {
+            id: String(get(pinned,'id') ?? ''),
+            name: String(get(pinned,'name') ?? ''),
+            objective: typeof get(pinned,'objective') === 'string' ? (get(pinned,'objective') as string) : null,
+          } : null,
+          billingEvent: typeof get(p,'billingEvent') === 'string' && get(p,'billingEvent')
+            ? (get(p,'billingEvent') as string)
+            : DEFAULT_BILLING_EVENT,
+          optimizationGoal: typeof get(p,'optimizationGoal') === 'string' && get(p,'optimizationGoal')
+            ? (get(p,'optimizationGoal') as string)
+            : DEFAULT_OPTIMIZATION_GOAL,
           dailyBudget: normBigint(get(p,'dailyBudget')), lifetimeBudget: normBigint(get(p,'lifetimeBudget')),
           scheduleDuration: (() => {
             const d = get(p, 'scheduleDuration');
@@ -388,8 +419,6 @@ export default function PresetsClient() {
             if (typeof legacyEnd === 'string' && legacyEnd) return legacyEnd;
             return null;
           })(),
-          billingEvent: typeof get(p,'billingEvent') === 'string' ? (get(p,'billingEvent') as string) : null,
-          optimizationGoal: typeof get(p,'optimizationGoal') === 'string' ? (get(p,'optimizationGoal') as string) : null,
           destinationType: typeof get(p,'destinationType') === 'string' ? (get(p,'destinationType') as string) : null,
           bidStrategy: typeof get(p,'bidStrategy') === 'string' ? (get(p,'bidStrategy') as string) : null,
           bidAmount: normBigint(get(p,'bidAmount')),
@@ -436,11 +465,31 @@ export default function PresetsClient() {
       toast.push({ kind: 'error', title: 'Missing end date', message: 'Pick a custom end date for the schedule.' });
       return;
     }
+    const pinnedMeta = campaigns.find((c) => c.id === draftAdset.pinnedCampaignId);
+    const campaignObjective =
+      draftAdset.pinnedCampaign?.objective ?? pinnedMeta?.objective ?? 'OUTCOME_SALES';
+    const promotedForValidate = normalizePromotedObject(draftAdset.promotedObject);
+    const metaCheck = validateAdsetPresetMeta({
+      billingEvent: draftAdset.billingEvent ?? DEFAULT_BILLING_EVENT,
+      optimizationGoal: draftAdset.optimizationGoal ?? DEFAULT_OPTIMIZATION_GOAL,
+      promotedObject: promotedForValidate,
+      bidStrategy: draftAdset.bidStrategy,
+      bidAmount: draftAdset.bidAmount,
+      bidConstraints: draftAdset.bidConstraints,
+      campaignObjective,
+    });
+    if (!metaCheck.ok) {
+      toast.push({ kind: 'error', title: 'Invalid Meta settings', message: metaCheck.error });
+      return;
+    }
     let targeting: AnyObj = draftAdset.targeting ?? {};
     if (advancedTargetingJson.trim()) {
       try { targeting = JSON.parse(advancedTargetingJson) as AnyObj; }
       catch { toast.push({ kind: 'error', title: 'Invalid JSON', message: 'Fix the Advanced targeting JSON.' }); return; }
     }
+    const sanitizedTargeting = sanitizeMetaTargeting(targeting) ?? {
+      targeting_automation: { advantage_audience: 1 },
+    };
     const payload = {
       name: draftAdset.name, isDefault: draftAdset.isDefault, pinnedCampaignId: draftAdset.pinnedCampaignId,
       dailyBudget: draftAdset.dailyBudget ? Number(draftAdset.dailyBudget) : null,
@@ -452,7 +501,7 @@ export default function PresetsClient() {
       bidAmount: draftAdset.bidAmount ? Number(draftAdset.bidAmount) : null,
       isDefaultCreative: draftAdset.isDefaultCreative, pacingType: draftAdset.pacingType,
       promotedObject: draftAdset.promotedObject, attributionSpec: draftAdset.attributionSpec,
-      targeting, bidConstraints: draftAdset.bidConstraints ?? {},
+      targeting: sanitizedTargeting, bidConstraints: draftAdset.bidConstraints ?? {},
     };
     setLoading(true); setError(null);
     try {
@@ -468,7 +517,7 @@ export default function PresetsClient() {
       const msg = e instanceof Error ? e.message : 'Save failed';
       setError(msg); toast.push({ kind: 'error', title: 'Save failed', message: msg });
     } finally { setLoading(false); }
-  }, [draftAdset, advancedTargetingJson, toast, refresh]);
+  }, [draftAdset, advancedTargetingJson, toast, refresh, campaigns]);
 
   const deleteAdset = useCallback(async () => {
     if (!draftAdset.id) return;
@@ -524,13 +573,26 @@ export default function PresetsClient() {
   /* ── derived targeting state ── */
   const tgt = (draftAdset.targeting ?? {}) as AnyObj;
   const promoted = (draftAdset.promotedObject ?? {}) as AnyObj;
+  const pinnedMetaCampaign = campaigns.find((c) => c.id === draftAdset.pinnedCampaignId);
+  const adsetCampaignObjective =
+    draftAdset.pinnedCampaign?.objective ?? pinnedMetaCampaign?.objective ?? 'OUTCOME_SALES';
+  const billingOptions = billingEventsForCampaign(adsetCampaignObjective);
+  const optimizationOptions = optimizationGoalsForCampaign(adsetCampaignObjective);
+  const needsPixel = optimizationGoalRequiresPixel(draftAdset.optimizationGoal);
   const geo = (tgt.geo_locations && typeof tgt.geo_locations === 'object') ? (tgt.geo_locations as AnyObj) : {};
-  const detailed = (tgt.detailed_targeting && typeof tgt.detailed_targeting === 'object') ? (tgt.detailed_targeting as AnyObj) : {};
+  const flexibleInterests = getTargetingInterestsForEditor(tgt);
+  const excludedAudiences = getTargetingExcludedAudiencesForEditor(tgt);
   const countries = Array.isArray(geo.countries) ? (geo.countries as unknown[]).filter((x) => typeof x === 'string') as string[] : [];
   const devicePlatforms = Array.isArray(tgt.device_platforms) ? (tgt.device_platforms as unknown[]).filter((x) => typeof x === 'string') as string[] : [];
   const publisherPlatforms = Array.isArray(tgt.publisher_platforms) ? (tgt.publisher_platforms as unknown[]).filter((x) => typeof x === 'string') as string[] : [];
   const fbPositions = Array.isArray(tgt.facebook_positions) ? (tgt.facebook_positions as unknown[]).filter((x) => typeof x === 'string') as string[] : [];
   const igPositions = Array.isArray(tgt.instagram_positions) ? (tgt.instagram_positions as unknown[]).filter((x) => typeof x === 'string') as string[] : [];
+  const anPositions = Array.isArray(tgt.audience_network_positions)
+    ? (tgt.audience_network_positions as unknown[]).filter((x) => typeof x === 'string') as string[]
+    : [];
+  const messengerPositions = Array.isArray(tgt.messenger_positions)
+    ? (tgt.messenger_positions as unknown[]).filter((x) => typeof x === 'string') as string[]
+    : [];
 
   /* ════════════════════════════════════════════════════ render ══ */
   return (
@@ -622,273 +684,13 @@ export default function PresetsClient() {
 
             {/* ══ AD SET EDITOR ══ */}
             {tab === 'adset' && (
-              <>
-                <SectionBox title="Identity">
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <div>
-                      <FieldLabel>Name</FieldLabel>
-                      <input className="glass-input mt-1.5 w-full px-3 py-2 text-sm"
-                        placeholder="e.g. Mobile — IN — Purchase"
-                        value={draftAdset.name}
-                        onChange={(e) => setDraftAdset((p) => ({ ...p, name: e.target.value }))} />
-                    </div>
-                    <div>
-                      <FieldLabel>Pin to campaign</FieldLabel>
-                      <select className="glass-input mt-1.5 w-full px-3 py-2 text-sm"
-                        value={draftAdset.pinnedCampaignId ?? ''}
-                        onChange={(e) => setDraftAdset((p) => ({ ...p, pinnedCampaignId: e.target.value || null }))}>
-                        <option value="">Not pinned</option>
-                        {campaigns.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                      </select>
-                    </div>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-4 pt-1">
-                    {([['isDefault', 'Set as default'], ['isDefaultCreative', 'Dynamic creative']] as const).map(([key, label]) => (
-                      <label key={key} className="flex cursor-pointer items-center gap-2.5 select-none">
-                        <span className={['flex h-4 w-4 items-center justify-center rounded border transition-all', draftAdset[key] ? 'border-primary bg-primary' : 'border-border'].join(' ')}>
-                          {draftAdset[key] && <svg className="h-2.5 w-2.5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5"><polyline points="20 6 9 17 4 12"/></svg>}
-                        </span>
-                        <input type="checkbox" className="sr-only" checked={draftAdset[key] as boolean}
-                          onChange={(e) => setDraftAdset((p) => ({ ...p, [key]: e.target.checked }))} />
-                        <span className="text-sm text-muted-foreground">{label}</span>
-                      </label>
-                    ))}
-                  </div>
-                </SectionBox>
-
-                <SectionBox title="Budget & Schedule">
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <div>
-                      <FieldLabel>Daily budget <span className="text-[10px] normal-case tracking-normal font-normal opacity-60">int64 smallest unit</span></FieldLabel>
-                      <input type="number" className="glass-input mt-1.5 w-full px-3 py-2 text-sm" value={draftAdset.dailyBudget ?? ''}
-                        onChange={(e) => setDraftAdset((p) => ({ ...p, dailyBudget: e.target.value || null, lifetimeBudget: e.target.value ? null : p.lifetimeBudget }))} />
-                    </div>
-                    <div>
-                      <FieldLabel>Lifetime budget <span className="text-[10px] normal-case tracking-normal font-normal opacity-60">requires end_time</span></FieldLabel>
-                      <input type="number" className="glass-input mt-1.5 w-full px-3 py-2 text-sm" value={draftAdset.lifetimeBudget ?? ''}
-                        onChange={(e) => setDraftAdset((p) => ({ ...p, lifetimeBudget: e.target.value || null, dailyBudget: e.target.value ? null : p.dailyBudget }))} />
-                    </div>
-                    <div className="md:col-span-2">
-                      <FieldLabel>Duration</FieldLabel>
-                      <select
-                        className="glass-input mt-1.5 w-full px-3 py-2 text-sm"
-                        value={draftAdset.scheduleDuration ?? ''}
-                        onChange={(e) => {
-                          const next = (e.target.value || null) as ScheduleDuration | null;
-                          setDraftAdset((p) => ({
-                            ...p,
-                            scheduleDuration: next,
-                            scheduleCustomEnd: next === 'custom' ? p.scheduleCustomEnd : null,
-                          }));
-                        }}
-                      >
-                        <option value="">— not set —</option>
-                        {SCHEDULE_DURATION_OPTIONS.map((opt) => (
-                          <option key={opt.value} value={opt.value}>{opt.label}</option>
-                        ))}
-                      </select>
-                      <p className="mt-1.5 text-xs text-muted-foreground">
-                        When you create an ad set, the schedule starts immediately and runs for this
-                        duration.
-                      </p>
-                    </div>
-                    {draftAdset.scheduleDuration === 'custom' ? (
-                      <div className="md:col-span-2">
-                        <FieldLabel>Custom end date</FieldLabel>
-                        <input
-                          type="datetime-local"
-                          className="glass-input mt-1.5 w-full px-3 py-2 text-sm"
-                          value={asIsoLocalInput(draftAdset.scheduleCustomEnd)}
-                          onChange={(e) =>
-                            setDraftAdset((p) => ({
-                              ...p,
-                              scheduleCustomEnd: toIsoFromLocalInput(e.target.value),
-                            }))
-                          }
-                        />
-                      </div>
-                    ) : null}
-                  </div>
-                </SectionBox>
-
-                <SectionBox title="Billing & Optimization">
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <div>
-                      <FieldLabel>billing_event</FieldLabel>
-                      <select className="glass-input mt-1.5 w-full px-3 py-2 text-sm" value={draftAdset.billingEvent ?? ''}
-                        onChange={(e) => setDraftAdset((p) => ({ ...p, billingEvent: e.target.value || null }))}>
-                        <option value="">— not set —</option>
-                        {BILLING_EVENT_OPTIONS.map((x) => <option key={x} value={x}>{x}</option>)}
-                      </select>
-                    </div>
-                    <div>
-                      <FieldLabel>optimization_goal</FieldLabel>
-                      <select className="glass-input mt-1.5 w-full px-3 py-2 text-sm" value={draftAdset.optimizationGoal ?? ''}
-                        onChange={(e) => setDraftAdset((p) => ({ ...p, optimizationGoal: e.target.value || null }))}>
-                        <option value="">— not set —</option>
-                        {OPTIMIZATION_GOAL_OPTIONS.map((x) => <option key={x} value={x}>{x}</option>)}
-                      </select>
-                    </div>
-                    <div>
-                      <FieldLabel>bid_strategy</FieldLabel>
-                      <select className="glass-input mt-1.5 w-full px-3 py-2 text-sm" value={draftAdset.bidStrategy ?? ''}
-                        onChange={(e) => setDraftAdset((p) => ({ ...p, bidStrategy: e.target.value || null }))}>
-                        <option value="">— not set —</option>
-                        {BID_STRATEGY_OPTIONS.map((x) => <option key={x} value={x}>{x}</option>)}
-                      </select>
-                    </div>
-                    <div>
-                      <FieldLabel>bid_amount <span className="text-[10px] normal-case tracking-normal font-normal opacity-60">only for BID_CAP</span></FieldLabel>
-                      <input type="number" className="glass-input mt-1.5 w-full px-3 py-2 text-sm"
-                        value={draftAdset.bidAmount ?? ''}
-                        disabled={draftAdset.bidStrategy !== 'LOWEST_COST_WITH_BID_CAP'}
-                        onChange={(e) => setDraftAdset((p) => ({ ...p, bidAmount: e.target.value || null }))} />
-                    </div>
-                    <div>
-                      <FieldLabel>destination_type</FieldLabel>
-                      <select className="glass-input mt-1.5 w-full px-3 py-2 text-sm" value={draftAdset.destinationType ?? ''}
-                        onChange={(e) => setDraftAdset((p) => ({ ...p, destinationType: e.target.value || null }))}>
-                        <option value="">— not set —</option>
-                        {DESTINATION_TYPE_OPTIONS.map((x) => <option key={x} value={x}>{x}</option>)}
-                      </select>
-                    </div>
-                    <div>
-                      <FieldLabel>pacing_type</FieldLabel>
-                      <select className="glass-input mt-1.5 w-full px-3 py-2 text-sm" value={draftAdset.pacingType ?? ''}
-                        onChange={(e) => setDraftAdset((p) => ({ ...p, pacingType: e.target.value || null }))}>
-                        <option value="">standard (default)</option>
-                        <option value="standard">standard</option>
-                        <option value="no_pacing">no_pacing</option>
-                      </select>
-                    </div>
-                  </div>
-                </SectionBox>
-
-                <SectionBox title="Conversion Tracking">
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <div className="rounded-xl border border-border/40 bg-background/20 p-4 space-y-3">
-                      <FieldLabel>promoted_object</FieldLabel>
-                      <input className="glass-input w-full px-3 py-2 text-sm" placeholder="pixel_id"
-                        value={String(promoted.pixel_id ?? '')}
-                        onChange={(e) => setDraftAdset((p) => ({ ...p, promotedObject: { ...(p.promotedObject ?? {}), pixel_id: e.target.value } }))} />
-                      <select className="glass-input w-full px-3 py-2 text-sm"
-                        value={String(promoted.custom_event_type ?? 'PURCHASE')}
-                        onChange={(e) => setDraftAdset((p) => ({ ...p, promotedObject: { ...(p.promotedObject ?? {}), custom_event_type: e.target.value } }))}>
-                        {CUSTOM_EVENT_TYPE_OPTIONS.map((x) => <option key={x} value={x}>{x}</option>)}
-                      </select>
-                    </div>
-                    <div className="rounded-xl border border-border/40 bg-background/20 p-4 space-y-2">
-                      <FieldLabel>attribution_spec</FieldLabel>
-                      <p className="font-ui text-[10px] text-muted-foreground">Allowed event_type: {ATTRIBUTION_EVENT_TYPE_OPTIONS.join(', ')}</p>
-                      <textarea rows={5} className="glass-input w-full resize-y px-3 py-2 font-mono text-xs"
-                        value={JSON.stringify(draftAdset.attributionSpec ?? [], null, 2)}
-                        onChange={(e) => { try { setDraftAdset((p) => ({ ...p, attributionSpec: JSON.parse(e.target.value) as unknown[] })); } catch { /* keep typing */ } }} />
-                    </div>
-                  </div>
-                </SectionBox>
-
-                {/* Targeting collapsible */}
-                <details className="group rounded-2xl border border-border/40 bg-background/10 overflow-hidden">
-                  <summary className="flex cursor-pointer list-none items-center justify-between border-b border-border/30 px-4 py-3 transition-colors hover:bg-[var(--glass-hover)]">
-                    <span className="font-ui text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Targeting</span>
-                    <svg className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <polyline points="6 9 12 15 18 9"/>
-                    </svg>
-                  </summary>
-                  <div className="p-4 space-y-5">
-
-                    {/* Age / Gender / Locales */}
-                    <div className="grid gap-4 md:grid-cols-4">
-                      <div>
-                        <FieldLabel>age_min</FieldLabel>
-                        <input type="number" min={13} max={65} className="glass-input mt-1.5 w-full px-3 py-2 text-sm"
-                          value={String(tgt.age_min ?? '')}
-                          onChange={(e) => setTargeting((t) => ({ ...t, age_min: Number(e.target.value) }))} />
-                      </div>
-                      <div>
-                        <FieldLabel>age_max</FieldLabel>
-                        <input type="number" min={13} max={65} className="glass-input mt-1.5 w-full px-3 py-2 text-sm"
-                          value={String(tgt.age_max ?? '')}
-                          onChange={(e) => setTargeting((t) => ({ ...t, age_max: Number(e.target.value) }))} />
-                      </div>
-                      <div>
-                        <FieldLabel>genders <span className="text-[10px] normal-case tracking-normal font-normal opacity-60">1=M 2=F</span></FieldLabel>
-                        <input className="glass-input mt-1.5 w-full px-3 py-2 text-sm"
-                          value={Array.isArray(tgt.genders) ? (tgt.genders as number[]).join(',') : ''}
-                          onChange={(e) => {
-                            const nums = e.target.value.split(',').map((x) => Number(x.trim())).filter((n) => n === 1 || n === 2);
-                            setTargeting((t) => ({ ...t, genders: nums }));
-                          }} />
-                      </div>
-                      <div>
-                        <FieldLabel>locales <span className="text-[10px] normal-case tracking-normal font-normal opacity-60">comma-sep IDs</span></FieldLabel>
-                        <input className="glass-input mt-1.5 w-full px-3 py-2 text-sm"
-                          value={Array.isArray(tgt.locales) ? (tgt.locales as number[]).join(',') : ''}
-                          onChange={(e) => {
-                            const nums = e.target.value.split(',').map((x) => Number(x.trim())).filter((n) => Number.isFinite(n) && n > 0);
-                            setTargeting((t) => ({ ...t, locales: nums }));
-                          }} />
-                      </div>
-                    </div>
-
-                    <CountryPicker value={countries}
-                      onChange={(next) => setTargeting((t) => ({ ...t, geo_locations: { ...(typeof t.geo_locations === 'object' && t.geo_locations ? (t.geo_locations as AnyObj) : {}), countries: next } }))} />
-
-                    <div className="grid gap-4 md:grid-cols-2">
-                      <CheckboxGroup label="device_platforms" options={DEVICE_PLATFORM_OPTIONS} value={devicePlatforms}
-                        onChange={(next) => setTargeting((t) => ({ ...t, device_platforms: next }))} />
-                      <CheckboxGroup label="publisher_platforms" options={PUBLISHER_PLATFORM_OPTIONS} value={publisherPlatforms}
-                        onChange={(next) => setTargeting((t) => ({ ...t, publisher_platforms: next }))} />
-                      <CheckboxGroup label="facebook_positions" options={FACEBOOK_POSITION_OPTIONS} value={fbPositions}
-                        onChange={(next) => setTargeting((t) => ({ ...t, facebook_positions: next }))} />
-                      <CheckboxGroup label="instagram_positions" options={INSTAGRAM_POSITION_OPTIONS} value={igPositions}
-                        onChange={(next) => setTargeting((t) => ({ ...t, instagram_positions: next }))} />
-                    </div>
-
-                    <div className="grid gap-4 md:grid-cols-3">
-                      <JsonTextarea label="detailed_targeting.interests"
-                        value={Array.isArray(detailed.interests) ? detailed.interests : []}
-                        rows={6} placeholder={'[\n  { "id": "6003139266461", "name": "Online shopping" }\n]'}
-                        onChange={(raw) => {
-                          const parsed = parseJsonArray<{ id: string; name?: string }>(raw);
-                          if (!parsed) return;
-                          const interests = parsed.filter((x) => x && typeof x.id === 'string').map((x) => ({ id: x.id, ...(typeof x.name === 'string' ? { name: x.name } : {}) }));
-                          setTargeting((t) => ({ ...t, detailed_targeting: { ...(typeof t.detailed_targeting === 'object' && t.detailed_targeting ? (t.detailed_targeting as AnyObj) : {}), interests } }));
-                        }} />
-                      <JsonTextarea label="custom_audiences"
-                        value={Array.isArray(tgt.custom_audiences) ? tgt.custom_audiences : []}
-                        rows={6} placeholder={'[\n  { "id": "<AUDIENCE_ID>" }\n]'}
-                        onChange={(raw) => {
-                          const parsed = parseJsonArray<{ id: string }>(raw);
-                          if (!parsed) return;
-                          setTargeting((t) => ({ ...t, custom_audiences: parsed.filter((x) => x && typeof x.id === 'string').map((x) => ({ id: x.id })) }));
-                        }} />
-                      <JsonTextarea label="excluded_custom_audiences"
-                        value={Array.isArray(tgt.excluded_custom_audiences) ? tgt.excluded_custom_audiences : []}
-                        rows={6} placeholder={'[\n  { "id": "<AUDIENCE_ID>" }\n]'}
-                        onChange={(raw) => {
-                          const parsed = parseJsonArray<{ id: string }>(raw);
-                          if (!parsed) return;
-                          setTargeting((t) => ({ ...t, excluded_custom_audiences: parsed.filter((x) => x && typeof x.id === 'string').map((x) => ({ id: x.id })) }));
-                        }} />
-                    </div>
-
-                    {/* Advanced JSON override */}
-                    <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4 space-y-2">
-                      <div className="flex items-center gap-2">
-                        <svg className="h-3.5 w-3.5 text-amber-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
-                          <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
-                        </svg>
-                        <span className="font-ui text-[11px] font-semibold uppercase tracking-widest text-amber-600 dark:text-amber-400">Advanced — full targeting override</span>
-                      </div>
-                      <p className="font-ui text-xs text-muted-foreground">When non-empty, this JSON completely replaces the structured targeting above on save.</p>
-                      <textarea rows={8} className="glass-input w-full resize-y px-3 py-2 font-mono text-xs"
-                        value={advancedTargetingJson} onChange={(e) => setAdvancedTargetingJson(e.target.value)} />
-                    </div>
-                  </div>
-                </details>
-              </>
+              <AdsetPresetEditor
+                value={draftAdset}
+                onChange={setDraftAdset}
+                metaCampaigns={campaigns}
+                advancedTargetingJson={advancedTargetingJson}
+                onAdvancedTargetingJsonChange={setAdvancedTargetingJson}
+              />
             )}
 
             {/* ══ CAMPAIGN EDITOR ══ */}
