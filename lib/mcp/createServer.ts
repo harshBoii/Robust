@@ -516,6 +516,7 @@ export function createServer(options?: CreateMcpServerOptions): McpServer {
 
         if (asset.assetType === "VIDEO") {
           const up = await uploadAdVideo({
+            companyId: company.id,
             adAccountId,
             bytes,
             filename: `${asset.title}`.slice(0, 120) || "video.mp4",
@@ -538,6 +539,7 @@ export function createServer(options?: CreateMcpServerOptions): McpServer {
           });
         } else {
           const up = await uploadAdImage({
+            companyId: company.id,
             adAccountId,
             bytes,
             filename: `${asset.title}`.slice(0, 120) || "image.jpg",
@@ -561,6 +563,7 @@ export function createServer(options?: CreateMcpServerOptions): McpServer {
       }
 
       const created = await createAdCreative({
+        companyId: company.id,
         adAccountId,
         fbPageId,
         headline: creative.headline,
@@ -574,6 +577,7 @@ export function createServer(options?: CreateMcpServerOptions): McpServer {
       });
 
       const previews = await getAdCreativePreviews({
+        companyId: company.id,
         creativeId: created.id,
         adFormat: adFormat ?? undefined,
       });

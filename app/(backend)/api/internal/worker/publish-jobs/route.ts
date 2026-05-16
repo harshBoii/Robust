@@ -185,6 +185,7 @@ export async function POST(req: NextRequest) {
       }
 
       const ad = await createAd({
+        companyId: job.companyId,
         adAccountId,
         adSetId: adSet.metaAdSetId,
         creativeId: metaCreativeId,

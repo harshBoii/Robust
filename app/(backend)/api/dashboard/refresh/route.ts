@@ -165,11 +165,13 @@ export async function POST() {
   })) as RuleRow[];
 
   const todayAds = await getAdsWithInsights({
+    companyId: session.companyId,
     adAccountId,
     datePreset: 'today',
   });
 
   const maximumAds = await getAdsWithInsights({
+    companyId: session.companyId,
     adAccountId,
     datePreset: 'maximum',
   });
@@ -177,6 +179,7 @@ export async function POST() {
   const now = new Date();
   const since = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 7));
   const last7dAds = await getAdsWithInsights({
+    companyId: session.companyId,
     adAccountId,
     datePreset: 'last_7d',
     timeIncrement: 1,

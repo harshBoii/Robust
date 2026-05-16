@@ -2,6 +2,7 @@ import 'server-only';
 
 import { toMetaPacingTypeParam } from '@/lib/meta/adset-preset-meta';
 import { metaErrorFromGraph } from '@/lib/meta/errors';
+import { resolveMetaGraphAccessToken } from '@/lib/meta/integration-token';
 
 type MetaGraphResponse<T> = {
   data?: T;
@@ -137,29 +138,44 @@ function requireSystemAccessToken() {
   return token;
 }
 
-async function metaFetch<T>(
-  path: string,
-  init?: RequestInit & { searchParams?: Record<string, string>; accessToken?: string },
-): Promise<T> {
-  const token = init?.accessToken ?? requireSystemAccessToken();
+/** Pass `companyId` to prefer the workspace OAuth token over the system token. */
+export type MetaGraphAuth = {
+  companyId?: string;
+  accessToken?: string;
+};
+
+async function resolveMetaFetchToken(auth?: MetaGraphAuth): Promise<string> {
+  if (auth?.accessToken) return auth.accessToken;
+  if (auth?.companyId) return resolveMetaGraphAccessToken(auth.companyId);
+  return requireSystemAccessToken();
+}
+
+type MetaFetchInit = RequestInit &
+  MetaGraphAuth & {
+    searchParams?: Record<string, string>;
+  };
+
+async function metaFetch<T>(path: string, init?: MetaFetchInit): Promise<T> {
+  const { searchParams, companyId, accessToken, ...fetchInit } = init ?? {};
+  const token = await resolveMetaFetchToken({ companyId, accessToken });
   const url = new URL(`${META_GRAPH_BASE}${path}`);
   url.searchParams.set('access_token', token);
-  if (init?.searchParams) {
-    for (const [k, v] of Object.entries(init.searchParams)) {
+  if (searchParams) {
+    for (const [k, v] of Object.entries(searchParams)) {
       url.searchParams.set(k, v);
     }
   }
 
-  const method = (init?.method ?? 'GET').toUpperCase();
+  const method = (fetchInit.method ?? 'GET').toUpperCase();
   const createLabel = method === 'POST' ? metaCreateLogLabel(path) : null;
   if (createLabel) {
-    logMetaCreateRequest(createLabel, url, init?.searchParams);
+    logMetaCreateRequest(createLabel, url, searchParams);
   }
 
   const res = await fetch(url, {
-    ...init,
+    ...fetchInit,
     headers: {
-      ...(init?.headers ?? {}),
+      ...(fetchInit.headers ?? {}),
       'Content-Type': 'application/json',
     },
     cache: 'no-store',
@@ -186,25 +202,32 @@ export type MetaCreativePreviewRow = {
   [key: string]: unknown;
 };
 
-export async function getAdCreativePreviews(input: {
-  creativeId: string;
-  adFormat?: string;
-}): Promise<MetaCreativePreviewRow[]> {
-  const resp = await metaFetch<{ data?: MetaCreativePreviewRow[] }>(`/${input.creativeId}/previews`, {
+export async function getAdCreativePreviews(
+  input: {
+    creativeId: string;
+    adFormat?: string;
+  } & MetaGraphAuth,
+): Promise<MetaCreativePreviewRow[]> {
+  const { creativeId, adFormat, companyId, accessToken } = input;
+  const resp = await metaFetch<{ data?: MetaCreativePreviewRow[] }>(`/${creativeId}/previews`, {
     method: 'GET',
+    companyId,
+    accessToken,
     searchParams: {
-      ad_format: input.adFormat ?? 'DESKTOP_FEED_STANDARD',
+      ad_format: adFormat ?? 'DESKTOP_FEED_STANDARD',
     },
   });
   return resp.data ?? [];
 }
 
-export async function getAdsWithInsights(input: {
-  adAccountId: string;
-  datePreset: 'today' | 'maximum' | 'last_7d' | 'last_30d';
-  timeIncrement?: number;
-  timeRange?: { since: string; until: string };
-}): Promise<MetaAdRow[]> {
+export async function getAdsWithInsights(
+  input: {
+    adAccountId: string;
+    datePreset: 'today' | 'maximum' | 'last_7d' | 'last_30d';
+    timeIncrement?: number;
+    timeRange?: { since: string; until: string };
+  } & MetaGraphAuth,
+): Promise<MetaAdRow[]> {
   const { adAccountId, datePreset, timeIncrement, timeRange } = input;
 
   const insightsParts: string[] = [
@@ -234,6 +257,8 @@ export async function getAdsWithInsights(input: {
 
   const resp = await metaFetch<{ data: MetaAdRow[] }>(`/${adAccountId}/ads`, {
     method: 'GET',
+    companyId: input.companyId,
+    accessToken: input.accessToken,
     searchParams: {
       fields,
       limit: '100',
@@ -243,13 +268,17 @@ export async function getAdsWithInsights(input: {
   return resp.data ?? [];
 }
 
-export async function updateAdStatus(input: {
-  adId: string;
-  status: MetaAdStatus;
-}): Promise<void> {
-  const { adId, status } = input;
+export async function updateAdStatus(
+  input: {
+    adId: string;
+    status: MetaAdStatus;
+  } & MetaGraphAuth,
+): Promise<void> {
+  const { adId, status, companyId, accessToken } = input;
   await metaFetch<Record<string, unknown>>(`/${adId}`, {
     method: 'POST',
+    companyId,
+    accessToken,
     searchParams: {
       status,
     },
@@ -259,9 +288,10 @@ export async function updateAdStatus(input: {
 export type MetaAdAccount = { id: string; name?: string };
 export type MetaPage = { id: string; name?: string };
 
-export async function getMyAdAccounts(opts?: { accessToken?: string }): Promise<MetaAdAccount[]> {
+export async function getMyAdAccounts(opts?: MetaGraphAuth): Promise<MetaAdAccount[]> {
   const resp = await metaFetch<{ data: MetaAdAccount[] }>('/me/adaccounts', {
     method: 'GET',
+    companyId: opts?.companyId,
     accessToken: opts?.accessToken,
     searchParams: {
       fields: 'id,name',
@@ -271,9 +301,10 @@ export async function getMyAdAccounts(opts?: { accessToken?: string }): Promise<
   return resp.data ?? [];
 }
 
-export async function getMyPages(opts?: { accessToken?: string }): Promise<MetaPage[]> {
+export async function getMyPages(opts?: MetaGraphAuth): Promise<MetaPage[]> {
   const resp = await metaFetch<{ data: MetaPage[] }>('/me/accounts', {
     method: 'GET',
+    companyId: opts?.companyId,
     accessToken: opts?.accessToken,
     searchParams: {
       fields: 'id,name',
@@ -290,9 +321,14 @@ export type MetaAdPixel = {
 };
 
 /** Pixels owned by or shared with the ad account. */
-export async function getAdAccountPixels(adAccountId: string): Promise<MetaAdPixel[]> {
+export async function getAdAccountPixels(
+  adAccountId: string,
+  auth?: MetaGraphAuth,
+): Promise<MetaAdPixel[]> {
   const resp = await metaFetch<{ data: MetaAdPixel[] }>(`/${adAccountId}/adspixels`, {
     method: 'GET',
+    companyId: auth?.companyId,
+    accessToken: auth?.accessToken,
     searchParams: {
       fields: 'id,name,is_unavailable',
       limit: '50',
@@ -315,11 +351,13 @@ export type MetaCampaignRow = {
   created_time?: string;
 };
 
-export async function getCampaignsForAccount(input: {
-  adAccountId: string;
-}): Promise<MetaCampaignRow[]> {
+export async function getCampaignsForAccount(
+  input: { adAccountId: string } & MetaGraphAuth,
+): Promise<MetaCampaignRow[]> {
   const resp = await metaFetch<{ data: MetaCampaignRow[] }>(`/${input.adAccountId}/campaigns`, {
     method: 'GET',
+    companyId: input.companyId,
+    accessToken: input.accessToken,
     searchParams: {
       fields: [
         'id',
@@ -355,11 +393,13 @@ export type MetaAdSetRow = {
   created_time?: string;
 };
 
-export async function getAdSetsForCampaign(input: {
-  metaCampaignId: string;
-}): Promise<MetaAdSetRow[]> {
+export async function getAdSetsForCampaign(
+  input: { metaCampaignId: string } & MetaGraphAuth,
+): Promise<MetaAdSetRow[]> {
   const resp = await metaFetch<{ data: MetaAdSetRow[] }>(`/${input.metaCampaignId}/adsets`, {
     method: 'GET',
+    companyId: input.companyId,
+    accessToken: input.accessToken,
     searchParams: {
       fields: [
         'id',
@@ -382,19 +422,23 @@ export async function getAdSetsForCampaign(input: {
   return resp.data ?? [];
 }
 
-export async function createCampaign(input: {
-  adAccountId: string;
-  name: string;
-  objective: string;
-  status?: MetaCampaignStatus;
-  specialAdCategories?: string[];
-  dailyBudget?: number | null;
-  lifetimeBudget?: number | null;
-  bidStrategy?: string | null;
-  spendCap?: number | null;
-}): Promise<{ id: string }> {
+export async function createCampaign(
+  input: {
+    adAccountId: string;
+    name: string;
+    objective: string;
+    status?: MetaCampaignStatus;
+    specialAdCategories?: string[];
+    dailyBudget?: number | null;
+    lifetimeBudget?: number | null;
+    bidStrategy?: string | null;
+    spendCap?: number | null;
+  } & MetaGraphAuth,
+): Promise<{ id: string }> {
   const resp = await metaFetch<{ id: string }>(`/${input.adAccountId}/campaigns`, {
     method: 'POST',
+    companyId: input.companyId,
+    accessToken: input.accessToken,
     searchParams: {
       name: input.name,
       objective: input.objective,
@@ -411,31 +455,35 @@ export async function createCampaign(input: {
   return assertOk(resp);
 }
 
-export async function createAdSet(input: {
-  adAccountId: string;
-  name: string;
-  campaignId: string; // meta campaign id
-  status?: MetaAdSetStatus;
-  dailyBudget?: number | null;
-  lifetimeBudget?: number | null;
-  bidStrategy?: string | null;
-  bidAmount?: number | null;
-  bidConstraints?: Record<string, unknown> | null;
-  optimizationGoal?: string | null;
-  billingEvent?: string | null;
-  targeting?: Record<string, unknown> | null;
-  /** Meta expects Unix seconds as a string. */
-  startTime?: string | null;
-  endTime?: string | null;
-  promotedObject?: Record<string, string> | null;
-  destinationType?: string | null;
-  pacingType?: string | null;
-}): Promise<{ id: string }> {
+export async function createAdSet(
+  input: {
+    adAccountId: string;
+    name: string;
+    campaignId: string; // meta campaign id
+    status?: MetaAdSetStatus;
+    dailyBudget?: number | null;
+    lifetimeBudget?: number | null;
+    bidStrategy?: string | null;
+    bidAmount?: number | null;
+    bidConstraints?: Record<string, unknown> | null;
+    optimizationGoal?: string | null;
+    billingEvent?: string | null;
+    targeting?: Record<string, unknown> | null;
+    /** Meta expects Unix seconds as a string. */
+    startTime?: string | null;
+    endTime?: string | null;
+    promotedObject?: Record<string, string> | null;
+    destinationType?: string | null;
+    pacingType?: string | null;
+  } & MetaGraphAuth,
+): Promise<{ id: string }> {
   const billingEvent = input.billingEvent?.trim() || 'IMPRESSIONS';
   const optimizationGoal = input.optimizationGoal?.trim() || 'OFFSITE_CONVERSIONS';
 
   const resp = await metaFetch<{ id: string }>(`/${input.adAccountId}/adsets`, {
     method: 'POST',
+    companyId: input.companyId,
+    accessToken: input.accessToken,
     searchParams: {
       name: input.name,
       campaign_id: input.campaignId,
@@ -464,12 +512,17 @@ export async function createAdSet(input: {
   return assertOk(resp);
 }
 
-export async function uploadAdImage(input: {
-  adAccountId: string;
-  bytes: Uint8Array;
-  filename: string;
-}): Promise<{ imageHash: string }> {
-  const token = requireSystemAccessToken();
+export async function uploadAdImage(
+  input: {
+    adAccountId: string;
+    bytes: Uint8Array;
+    filename: string;
+  } & MetaGraphAuth,
+): Promise<{ imageHash: string }> {
+  const token = await resolveMetaFetchToken({
+    companyId: input.companyId,
+    accessToken: input.accessToken,
+  });
   const url = new URL(`${META_GRAPH_BASE}/${input.adAccountId}/adimages`);
   url.searchParams.set('access_token', token);
 
@@ -498,15 +551,20 @@ export async function uploadAdImage(input: {
   return { imageHash: hash };
 }
 
-export async function uploadAdVideo(input: {
-  adAccountId: string;
-  bytes: Uint8Array;
-  filename: string;
-  name: string;
-}): Promise<{ videoId: string }> {
+export async function uploadAdVideo(
+  input: {
+    adAccountId: string;
+    bytes: Uint8Array;
+    filename: string;
+    name: string;
+  } & MetaGraphAuth,
+): Promise<{ videoId: string }> {
   // Simple (non-resumable) upload path; Meta may require resumable for large files.
   // This is sufficient for MVP + typical small creatives; worker retries on failure.
-  const token = requireSystemAccessToken();
+  const token = await resolveMetaFetchToken({
+    companyId: input.companyId,
+    accessToken: input.accessToken,
+  });
   const url = new URL(`${META_GRAPH_BASE}/${input.adAccountId}/advideos`);
   url.searchParams.set('access_token', token);
 
@@ -525,18 +583,20 @@ export async function uploadAdVideo(input: {
   return { videoId: json.id };
 }
 
-export async function createAdCreative(input: {
-  adAccountId: string;
-  fbPageId: string;
-  headline: string;
-  primaryText: string;
-  description?: string | null;
-  ctaType: string;
-  landingUrl: string;
-  imageHash?: string | null;
-  videoId?: string | null;
-  pixelIds?: string[] | null;
-}): Promise<{ id: string }> {
+export async function createAdCreative(
+  input: {
+    adAccountId: string;
+    fbPageId: string;
+    headline: string;
+    primaryText: string;
+    description?: string | null;
+    ctaType: string;
+    landingUrl: string;
+    imageHash?: string | null;
+    videoId?: string | null;
+    pixelIds?: string[] | null;
+  } & MetaGraphAuth,
+): Promise<{ id: string }> {
   // For simplicity, use object_story_spec with link_data (image) or video_data (video).
   const objectStorySpec: Record<string, unknown> = {
     page_id: input.fbPageId,
@@ -564,6 +624,8 @@ export async function createAdCreative(input: {
 
   const resp = await metaFetch<{ id: string }>(`/${input.adAccountId}/adcreatives`, {
     method: 'POST',
+    companyId: input.companyId,
+    accessToken: input.accessToken,
     searchParams: {
       name: `Robust Creative — ${input.headline.slice(0, 48)}`,
       object_story_spec: JSON.stringify(objectStorySpec),
@@ -573,15 +635,19 @@ export async function createAdCreative(input: {
   return assertOk(resp);
 }
 
-export async function createAd(input: {
-  adAccountId: string;
-  adSetId: string; // meta adset id
-  creativeId: string; // meta creative id
-  name: string;
-  status: MetaAdStatus;
-}): Promise<{ id: string }> {
+export async function createAd(
+  input: {
+    adAccountId: string;
+    adSetId: string; // meta adset id
+    creativeId: string; // meta creative id
+    name: string;
+    status: MetaAdStatus;
+  } & MetaGraphAuth,
+): Promise<{ id: string }> {
   const resp = await metaFetch<{ id: string }>(`/${input.adAccountId}/ads`, {
     method: 'POST',
+    companyId: input.companyId,
+    accessToken: input.accessToken,
     searchParams: {
       name: input.name,
       adset_id: input.adSetId,

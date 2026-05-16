@@ -14,6 +14,7 @@ export async function resolvePromotedObjectForMeta(input: {
   optimizationGoal: string;
   promotedObject: unknown;
   adAccountId: string;
+  companyId: string;
 }): Promise<Record<string, string> | null> {
   const normalized = normalizePromotedObject(input.promotedObject);
 
@@ -24,7 +25,9 @@ export async function resolvePromotedObjectForMeta(input: {
   let pixelId = normalized.pixel_id;
   if (!pixelId) {
     try {
-      const pixels = await getAdAccountPixels(input.adAccountId);
+      const pixels = await getAdAccountPixels(input.adAccountId, {
+        companyId: input.companyId,
+      });
       const available = pixels.find((p) => p.is_unavailable !== true) ?? pixels[0];
       pixelId = available?.id;
     } catch (err) {

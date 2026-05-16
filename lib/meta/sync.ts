@@ -23,12 +23,12 @@ function asMetaCampaignStatus(v: unknown): MetaCampaignStatus | undefined {
 export async function syncCampaigns(metaIntegrationId: string) {
   const integration = await prisma.metaIntegration.findUnique({
     where: { id: metaIntegrationId },
-    select: { id: true, adAccountId: true },
+    select: { id: true, adAccountId: true, companyId: true },
   });
   if (!integration) throw new Error('Meta integration not found');
 
   const adAccountId = requireMetaAdAccountId(integration.adAccountId);
-  const rows = await getCampaignsForAccount({ adAccountId });
+  const rows = await getCampaignsForAccount({ adAccountId, companyId: integration.companyId });
 
   for (const c of rows) {
     if (!c.id) continue;
@@ -92,7 +92,7 @@ export async function syncAdSets(input: {
 }) {
   const integration = await prisma.metaIntegration.findUnique({
     where: { id: input.metaIntegrationId },
-    select: { id: true, adAccountId: true },
+    select: { id: true, adAccountId: true, companyId: true },
   });
   if (!integration) throw new Error('Meta integration not found');
 
@@ -102,7 +102,10 @@ export async function syncAdSets(input: {
   });
   if (!campaign) throw new Error('Campaign not found');
 
-  const rows = await getAdSetsForCampaign({ metaCampaignId: campaign.metaCampaignId });
+  const rows = await getAdSetsForCampaign({
+    metaCampaignId: campaign.metaCampaignId,
+    companyId: integration.companyId,
+  });
 
   for (const a of rows) {
     if (!a.id) continue;
@@ -180,7 +183,7 @@ export async function createAndStoreCampaignFromPreset(input: {
 }) {
   const integration = await prisma.metaIntegration.findUnique({
     where: { id: input.metaIntegrationId },
-    select: { id: true, adAccountId: true },
+    select: { id: true, adAccountId: true, companyId: true },
   });
   if (!integration) throw new Error('Meta integration not found');
 
@@ -192,6 +195,7 @@ export async function createAndStoreCampaignFromPreset(input: {
   if (!preset) throw new Error('Campaign preset not found');
 
   const created = await createCampaign({
+    companyId: integration.companyId,
     adAccountId,
     name: input.name ?? preset.name,
     objective: preset.objective ?? 'OUTCOME_TRAFFIC',
@@ -232,7 +236,7 @@ export async function createAndStoreAdSetFromPreset(input: {
 }) {
   const integration = await prisma.metaIntegration.findUnique({
     where: { id: input.metaIntegrationId },
-    select: { id: true, adAccountId: true },
+    select: { id: true, adAccountId: true, companyId: true },
   });
   if (!integration) throw new Error('Meta integration not found');
 
@@ -255,6 +259,7 @@ export async function createAndStoreAdSetFromPreset(input: {
     optimizationGoal,
     promotedObject: preset.promotedObject,
     adAccountId,
+    companyId: integration.companyId,
   });
 
   const adSetParams = buildCreateAdSetInputFromPreset(preset, {
@@ -266,7 +271,7 @@ export async function createAndStoreAdSetFromPreset(input: {
     promotedObject,
   });
 
-  const created = await createAdSet(adSetParams);
+  const created = await createAdSet({ ...adSetParams, companyId: integration.companyId });
 
   const scheduleStart = adSetParams.startTime
     ? new Date(Number(adSetParams.startTime) * 1000)

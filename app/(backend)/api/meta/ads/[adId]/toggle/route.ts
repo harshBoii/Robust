@@ -35,7 +35,7 @@ export async function POST(
     return NextResponse.json({ error: 'Invalid status' }, { status: 400 });
   }
 
-  await updateAdStatus({ adId, status });
+  await updateAdStatus({ adId, status, companyId: session.companyId });
 
   return NextResponse.json({ ok: true });
 }

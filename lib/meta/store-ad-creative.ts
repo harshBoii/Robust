@@ -83,6 +83,7 @@ export async function storeAdCreativeForAsset(
 
   if (asset.assetType === 'IMAGE') {
     const up = await uploadAdImage({
+      companyId: input.companyId,
       adAccountId,
       bytes,
       filename: asset.filename,
@@ -117,6 +118,7 @@ export async function storeAdCreativeForAsset(
     });
   } else if (asset.assetType === 'VIDEO') {
     const up = await uploadAdVideo({
+      companyId: input.companyId,
       adAccountId,
       bytes,
       filename: asset.filename,
@@ -158,6 +160,7 @@ export async function storeAdCreativeForAsset(
   const pixelIds = input.pixelId?.trim() ? [input.pixelId.trim()] : [];
 
   const creative = await createAdCreative({
+    companyId: input.companyId,
     adAccountId,
     fbPageId,
     headline: input.headline,
