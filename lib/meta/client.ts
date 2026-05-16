@@ -2,7 +2,9 @@ import 'server-only';
 
 import { toMetaPacingTypeParam } from '@/lib/meta/adset-preset-meta';
 import { metaErrorFromGraph } from '@/lib/meta/errors';
+import { normalizeMetaAdAccountId } from '@/lib/meta/ad-account-id';
 import { resolveMetaGraphAccessToken } from '@/lib/meta/integration-token';
+import { isCloudflareStreamUrl } from '@/lib/meta/r2-thumbnail-url';
 
 type MetaGraphResponse<T> = {
   data?: T;
@@ -66,7 +68,7 @@ export type MetaAdRow = {
 
 const META_GRAPH_BASE = 'https://graph.facebook.com/v21.0';
 
-const META_CREATE_LOG_PATHS = ['/campaigns', '/adsets', '/adcreatives'] as const;
+const META_CREATE_LOG_PATHS = ['/campaigns', '/adsets', '/adcreatives', '/advideos', '/adimages'] as const;
 
 function redactMetaUrl(url: URL): string {
   const copy = new URL(url);
@@ -194,6 +196,37 @@ async function metaFetch<T>(path: string, init?: MetaFetchInit): Promise<T> {
 function assertOk<T>(res: T): T {
   if (res == null) throw new Error('Meta API error');
   return res;
+}
+
+/** Verify the resolved token can access this ad account (avoids silent cross-account video uploads). */
+export async function assertMetaAdAccountAccess(
+  adAccountId: string,
+  auth: MetaGraphAuth,
+): Promise<void> {
+  const normalized = normalizeMetaAdAccountId(adAccountId);
+  if (!normalized.startsWith('act_')) {
+    throw new Error(`Invalid ad account id: ${adAccountId}`);
+  }
+  await metaFetch<{ id?: string }>(`/${normalized}`, {
+    method: 'GET',
+    companyId: auth.companyId,
+    accessToken: auth.accessToken,
+    searchParams: { fields: 'id,account_id,name' },
+  });
+}
+
+function logMetaUploadRequest(label: string, url: URL) {
+  console.log(
+    `[meta api] upload ${label} request\n${JSON.stringify(
+      { method: 'POST', url: redactMetaUrl(url), adAccountId: url.pathname.split('/').slice(-2, -1)[0] },
+      null,
+      2,
+    )}`,
+  );
+}
+
+function logMetaUploadResponse(label: string, status: number, body: unknown) {
+  console.log(`[meta api] upload ${label} response\n${JSON.stringify({ status, body }, null, 2)}`);
 }
 
 export type MetaCreativePreviewRow = {
@@ -519,11 +552,16 @@ export async function uploadAdImage(
     filename: string;
   } & MetaGraphAuth,
 ): Promise<{ imageHash: string }> {
+  const adAccountId = normalizeMetaAdAccountId(input.adAccountId);
+  await assertMetaAdAccountAccess(adAccountId, {
+    companyId: input.companyId,
+    accessToken: input.accessToken,
+  });
   const token = await resolveMetaFetchToken({
     companyId: input.companyId,
     accessToken: input.accessToken,
   });
-  const url = new URL(`${META_GRAPH_BASE}/${input.adAccountId}/adimages`);
+  const url = new URL(`${META_GRAPH_BASE}/${adAccountId}/adimages`);
   url.searchParams.set('access_token', token);
 
   const form = new FormData();
@@ -538,11 +576,13 @@ export async function uploadAdImage(
     new Blob([bytesForBlob], { type: 'application/octet-stream' }),
   );
 
+  logMetaUploadRequest('adimages', url);
   const res = await fetch(url, { method: 'POST', body: form, cache: 'no-store' });
   const json = (await res.json()) as {
     images?: Record<string, { hash?: string }>;
     error?: { message?: string };
   };
+  logMetaUploadResponse('adimages', res.status, json);
   if (!res.ok || json.error) throw new Error(json.error?.message ?? `Meta API error (${res.status})`);
 
   const first = json.images ? Object.values(json.images)[0] : null;
@@ -561,11 +601,16 @@ export async function uploadAdVideo(
 ): Promise<{ videoId: string }> {
   // Simple (non-resumable) upload path; Meta may require resumable for large files.
   // This is sufficient for MVP + typical small creatives; worker retries on failure.
+  const adAccountId = normalizeMetaAdAccountId(input.adAccountId);
+  await assertMetaAdAccountAccess(adAccountId, {
+    companyId: input.companyId,
+    accessToken: input.accessToken,
+  });
   const token = await resolveMetaFetchToken({
     companyId: input.companyId,
     accessToken: input.accessToken,
   });
-  const url = new URL(`${META_GRAPH_BASE}/${input.adAccountId}/advideos`);
+  const url = new URL(`${META_GRAPH_BASE}/${adAccountId}/advideos`);
   url.searchParams.set('access_token', token);
 
   const form = new FormData();
@@ -576,9 +621,16 @@ export async function uploadAdVideo(
     : input.bytes.slice().buffer;
   form.set('source', new Blob([bytesForBlob], { type: 'application/octet-stream' }), input.filename);
 
+  logMetaUploadRequest('advideos', url);
   const res = await fetch(url, { method: 'POST', body: form, cache: 'no-store' });
   const json = (await res.json()) as { id?: string; error?: { message?: string } };
-  if (!res.ok || json.error) throw new Error(json.error?.message ?? `Meta API error (${res.status})`);
+  logMetaUploadResponse('advideos', res.status, json);
+  if (!res.ok || json.error) {
+    throw new Error(
+      json.error?.message ??
+        `Meta video upload failed (${res.status}) for ${adAccountId}. Ensure your Facebook token can manage this ad account.`,
+    );
+  }
   if (!json.id) throw new Error('Meta video upload failed (missing id)');
   return { videoId: json.id };
 }
@@ -594,9 +646,12 @@ export async function createAdCreative(
     landingUrl: string;
     imageHash?: string | null;
     videoId?: string | null;
+    /** Public URL for video thumbnail (Meta `video_data.image_url`). Required for video creatives. */
+    videoThumbnailUrl?: string | null;
     pixelIds?: string[] | null;
   } & MetaGraphAuth,
 ): Promise<{ id: string }> {
+  const adAccountId = normalizeMetaAdAccountId(input.adAccountId);
   // For simplicity, use object_story_spec with link_data (image) or video_data (video).
   const objectStorySpec: Record<string, unknown> = {
     page_id: input.fbPageId,
@@ -612,17 +667,24 @@ export async function createAdCreative(
       image_hash: input.imageHash,
     };
   } else if (input.videoId) {
+    const imageUrl = input.videoThumbnailUrl?.trim();
+    if (!imageUrl || isCloudflareStreamUrl(imageUrl)) {
+      throw new Error(
+        'Video ad creative requires a public R2 thumbnail URL for Meta video_data.image_url (not Cloudflare Stream)',
+      );
+    }
     objectStorySpec.video_data = {
       video_id: input.videoId,
       message: input.primaryText,
       title: input.headline,
+      image_url: imageUrl,
       call_to_action: { type: input.ctaType, value: { link: input.landingUrl } },
     };
   } else {
     throw new Error('Missing creative media (imageHash or videoId)');
   }
 
-  const resp = await metaFetch<{ id: string }>(`/${input.adAccountId}/adcreatives`, {
+  const resp = await metaFetch<{ id: string }>(`/${adAccountId}/adcreatives`, {
     method: 'POST',
     companyId: input.companyId,
     accessToken: input.accessToken,
@@ -644,7 +706,8 @@ export async function createAd(
     status: MetaAdStatus;
   } & MetaGraphAuth,
 ): Promise<{ id: string }> {
-  const resp = await metaFetch<{ id: string }>(`/${input.adAccountId}/ads`, {
+  const adAccountId = normalizeMetaAdAccountId(input.adAccountId);
+  const resp = await metaFetch<{ id: string }>(`/${adAccountId}/ads`, {
     method: 'POST',
     companyId: input.companyId,
     accessToken: input.accessToken,

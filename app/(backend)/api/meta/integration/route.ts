@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { isMetaOAuthConfigured } from '@/lib/auth/meta-oauth-state';
 import { getSession } from '@/lib/auth/session';
+import { normalizeMetaAdAccountId } from '@/lib/meta/ad-account-id';
 import {
   isUserMetaOAuthToken,
   META_INTEGRATION_PLACEHOLDER_TOKEN,
@@ -14,15 +15,6 @@ type PutBody = {
   adAccountId?: unknown;
   fbPageId?: unknown;
 };
-
-function normalizeAdAccountId(v: string) {
-  const trimmed = v.trim();
-  if (!trimmed) return '';
-  if (trimmed.startsWith('act_')) return trimmed;
-  // allow user to paste numeric id
-  if (/^\d{5,}$/.test(trimmed)) return `act_${trimmed}`;
-  return trimmed;
-}
 
 export async function GET() {
   const session = await getSession();
@@ -81,7 +73,7 @@ export async function PUT(req: NextRequest) {
   const adAccountIdRaw = typeof body.adAccountId === 'string' ? body.adAccountId : '';
   const fbPageIdRaw = typeof body.fbPageId === 'string' ? body.fbPageId : '';
 
-  const adAccountId = normalizeAdAccountId(adAccountIdRaw);
+  const adAccountId = normalizeMetaAdAccountId(adAccountIdRaw);
   const fbPageId = fbPageIdRaw.trim();
 
   if (!adAccountId || !adAccountId.startsWith('act_')) {

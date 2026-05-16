@@ -53,11 +53,10 @@ export function buildAdsetPresetBody(
   const pinnedMeta = options.metaCampaigns?.find((c) => c.id === draft.pinnedCampaignId);
   const campaignObjective =
     draft.pinnedCampaign?.objective ?? pinnedMeta?.objective ?? 'OUTCOME_SALES';
-  const promotedForValidate = normalizePromotedObject(draft.promotedObject);
   const metaCheck = validateAdsetPresetMeta({
     billingEvent: draft.billingEvent ?? DEFAULT_BILLING_EVENT,
     optimizationGoal: draft.optimizationGoal ?? DEFAULT_OPTIMIZATION_GOAL,
-    promotedObject: promotedForValidate,
+    promotedObject: draft.promotedObject,
     bidStrategy: draft.bidStrategy,
     bidAmount: draft.bidAmount,
     bidConstraints: draft.bidConstraints,

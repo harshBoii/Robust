@@ -2,6 +2,7 @@ import 'server-only';
 
 import { getAdAccountPixels } from '@/lib/meta/client';
 import {
+  isConversionTrackingEnabled,
   normalizePromotedObject,
   optimizationGoalRequiresPixel,
 } from '@/lib/meta/adset-preset-meta';
@@ -16,9 +17,13 @@ export async function resolvePromotedObjectForMeta(input: {
   adAccountId: string;
   companyId: string;
 }): Promise<Record<string, string> | null> {
+  if (!isConversionTrackingEnabled(input.promotedObject)) {
+    return null;
+  }
+
   const normalized = normalizePromotedObject(input.promotedObject);
 
-  if (!optimizationGoalRequiresPixel(input.optimizationGoal)) {
+  if (!optimizationGoalRequiresPixel(input.optimizationGoal, true)) {
     return Object.keys(normalized).length > 0 ? normalized : null;
   }
 

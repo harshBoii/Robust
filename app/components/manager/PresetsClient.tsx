@@ -335,7 +335,11 @@ export default function PresetsClient() {
     dailyBudget: null, lifetimeBudget: null, scheduleDuration: '1_week', scheduleCustomEnd: null,
     billingEvent: DEFAULT_BILLING_EVENT, optimizationGoal: DEFAULT_OPTIMIZATION_GOAL, destinationType: null,
     bidStrategy: null, bidAmount: null, isDefaultCreative: false, pacingType: 'standard',
-    promotedObject: { pixel_id: '', custom_event_type: 'PURCHASE' },
+    promotedObject: {
+      conversion_tracking_enabled: true,
+      pixel_id: '',
+      custom_event_type: 'PURCHASE',
+    },
     attributionSpec: [{ event_type: 'CLICK_THROUGH', window_days: 7 }],
     targeting: {
       age_min: 25, age_max: 40, genders: [2],
@@ -468,11 +472,10 @@ export default function PresetsClient() {
     const pinnedMeta = campaigns.find((c) => c.id === draftAdset.pinnedCampaignId);
     const campaignObjective =
       draftAdset.pinnedCampaign?.objective ?? pinnedMeta?.objective ?? 'OUTCOME_SALES';
-    const promotedForValidate = normalizePromotedObject(draftAdset.promotedObject);
     const metaCheck = validateAdsetPresetMeta({
       billingEvent: draftAdset.billingEvent ?? DEFAULT_BILLING_EVENT,
       optimizationGoal: draftAdset.optimizationGoal ?? DEFAULT_OPTIMIZATION_GOAL,
-      promotedObject: promotedForValidate,
+      promotedObject: draftAdset.promotedObject,
       bidStrategy: draftAdset.bidStrategy,
       bidAmount: draftAdset.bidAmount,
       bidConstraints: draftAdset.bidConstraints,

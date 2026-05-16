@@ -111,7 +111,11 @@ export function blankAdsetPreset(): AdsetPreset {
     bidAmount: null,
     isDefaultCreative: false,
     pacingType: 'standard',
-    promotedObject: { pixel_id: '', custom_event_type: 'PURCHASE' },
+    promotedObject: {
+      conversion_tracking_enabled: true,
+      pixel_id: '',
+      custom_event_type: 'PURCHASE',
+    },
     attributionSpec: [{ event_type: 'CLICK_THROUGH', window_days: 7 }],
     targeting: {
       age_min: 25,

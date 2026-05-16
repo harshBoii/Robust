@@ -7,6 +7,7 @@ import UploadStep from '@/app/components/createAd/steps/UploadStep';
 import {
   GroupAdCreativesPanel,
   type AssetCreativeState,
+  type BulkAdCreativeResultRow,
   type SavedAdCreative,
 } from '@/app/components/manager/GroupAdCreativesPanel';
 import { PostPresetFieldsPanel } from '@/app/components/manager/presets/PostPresetFieldsPanel';
@@ -545,6 +546,10 @@ export default function PostToMetaClient({ companyId }: { companyId: string }) {
   const [creatingAdSet, setCreatingAdSet] = useState(false);
   const [savedAdCreatives, setSavedAdCreatives] = useState<SavedAdCreative[]>([]);
   const [loadingAdCreatives, setLoadingAdCreatives] = useState(false);
+  const [bulkCreativeResultsByGroup, setBulkCreativeResultsByGroup] = useState<
+    Record<string, BulkAdCreativeResultRow[]>
+  >({});
+  const [creatingAllGroupId, setCreatingAllGroupId] = useState<string | null>(null);
 
   const selectedCampaign = useMemo(
     () => campaigns.find((c) => c.id === selectedCampaignId),
@@ -920,13 +925,142 @@ export default function PostToMetaClient({ companyId }: { companyId: string }) {
     async (groupId: string) => {
       const group = groups.find((g) => g.groupId === groupId);
       if (!group) return;
-      for (const assetId of group.selectedAssetIds) {
-        const state = group.assetCreatives[assetId];
-        if (state?.status === 'ready') continue;
-        await createAdCreativeForAsset(groupId, assetId);
+
+      const { headline, primaryText, description, landingUrl, ctaType, pixelId } = group.creative;
+      if (!headline.trim() || !landingUrl.trim()) {
+        toast.push({
+          kind: 'error',
+          title: 'Missing copy',
+          message: 'Fill in headline and landing URL before creating ad creatives.',
+        });
+        return;
+      }
+
+      if (group.selectedAssetIds.length === 0) {
+        toast.push({
+          kind: 'error',
+          title: 'No assets',
+          message: 'Select at least one asset in the Media step.',
+        });
+        return;
+      }
+
+      const assetIdsToCreate = group.selectedAssetIds.filter(
+        (assetId) => group.assetCreatives[assetId]?.status !== 'ready',
+      );
+
+      if (assetIdsToCreate.length === 0) {
+        toast.push({
+          kind: 'info',
+          title: 'Already created',
+          message: 'All selected assets already have Meta ad creatives. Use Recreate to replace one.',
+        });
+        return;
+      }
+
+      setCreatingAllGroupId(groupId);
+      setGroups((prev) =>
+        prev.map((g) => {
+          if (g.groupId !== groupId) return g;
+          const assetCreatives = { ...g.assetCreatives };
+          for (const assetId of assetIdsToCreate) {
+            assetCreatives[assetId] = { status: 'creating' };
+          }
+          return { ...g, assetCreatives };
+        }),
+      );
+
+      try {
+        const data = await json<{
+          results: BulkAdCreativeResultRow[];
+          summary: { total: number; created: number; failed: number };
+        }>(
+          await fetch('/api/meta/ad-creatives/bulk', {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              campaignId: selectedCampaignId || undefined,
+              items: assetIdsToCreate.map((assetId) => ({
+                assetId,
+                headline,
+                primaryText: primaryText || headline,
+                description: description || undefined,
+                landingUrl,
+                ctaType,
+                pixelId: pixelId || undefined,
+              })),
+            }),
+          }),
+        );
+
+        setBulkCreativeResultsByGroup((prev) => ({
+          ...prev,
+          [groupId]: data.results ?? [],
+        }));
+
+        setGroups((prev) =>
+          prev.map((g) => {
+            if (g.groupId !== groupId) return g;
+            const assetCreatives = { ...g.assetCreatives };
+            for (const row of data.results ?? []) {
+              if (row.ok && row.creative) {
+                assetCreatives[row.assetId] = {
+                  status: 'ready',
+                  metaCreativeDbId: row.creative.id,
+                  metaCreativeId: row.creative.metaCreativeId,
+                };
+              } else if (row.assetId) {
+                assetCreatives[row.assetId] = {
+                  status: 'error',
+                  error: row.error ?? 'Failed',
+                };
+              }
+            }
+            return { ...g, assetCreatives };
+          }),
+        );
+
+        await refreshSavedAdCreatives();
+
+        const { created, failed, total } = data.summary ?? {
+          total: data.results?.length ?? 0,
+          created: 0,
+          failed: 0,
+        };
+        const idList = (data.results ?? [])
+          .filter((r) => r.ok && r.creative?.metaCreativeId)
+          .map((r) => r.creative!.metaCreativeId)
+          .join(', ');
+
+        toast.push({
+          kind: failed > 0 ? 'error' : 'success',
+          title: `Ad creatives: ${created}/${total} created`,
+          message:
+            failed > 0
+              ? `${failed} failed. See Meta API results below.`
+              : idList
+                ? `Meta creative ids: ${idList}`
+                : 'Saved for publish',
+        });
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : 'Bulk create failed';
+        setGroups((prev) =>
+          prev.map((g) => {
+            if (g.groupId !== groupId) return g;
+            const assetCreatives = { ...g.assetCreatives };
+            for (const assetId of assetIdsToCreate) {
+              assetCreatives[assetId] = { status: 'error', error: msg };
+            }
+            return { ...g, assetCreatives };
+          }),
+        );
+        toast.push({ kind: 'error', title: 'Create all failed', message: msg });
+      } finally {
+        setCreatingAllGroupId(null);
       }
     },
-    [groups, createAdCreativeForAsset],
+    [groups, refreshSavedAdCreatives, selectedCampaignId, toast],
   );
 
   const applySavedCreativeToAsset = useCallback(
@@ -1613,6 +1747,9 @@ export default function PostToMetaClient({ companyId }: { companyId: string }) {
                             {group.selectedAssetIds.length} selected asset
                             {group.selectedAssetIds.length !== 1 ? 's' : ''}
                           </p>
+                          <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+                            Fill headline and landing URL below before Create all.
+                          </p>
                         </div>
 
                         <div className="flex flex-wrap gap-2">
@@ -1626,10 +1763,13 @@ export default function PostToMetaClient({ companyId }: { companyId: string }) {
                           </button>
                           <button
                             type="button"
+                            disabled={creatingAllGroupId === group.groupId}
                             onClick={() => void createAllAdCreativesForGroup(group.groupId)}
-                            className="inline-flex h-9 items-center justify-center rounded-xl bg-primary px-3 text-sm font-medium text-primary-foreground transition hover:opacity-95"
+                            className="inline-flex h-9 items-center justify-center rounded-xl bg-primary px-3 text-sm font-medium text-primary-foreground transition hover:opacity-95 disabled:opacity-60"
                           >
-                            Create all ad creatives
+                            {creatingAllGroupId === group.groupId
+                              ? 'Creating on Meta…'
+                              : 'Create all ad creatives'}
                           </button>
                         </div>
                       </div>
@@ -1640,6 +1780,7 @@ export default function PostToMetaClient({ companyId }: { companyId: string }) {
                         assetCreatives={group.assetCreatives}
                         savedAdCreatives={savedAdCreatives}
                         loadingAdCreatives={loadingAdCreatives}
+                        bulkResults={bulkCreativeResultsByGroup[group.groupId] ?? null}
                         onRefreshLibrary={() => void refreshSavedAdCreatives()}
                         onCreate={(assetId) => void createAdCreativeForAsset(group.groupId, assetId)}
                         onApplySaved={(assetId, creativeDbId) =>

@@ -15,6 +15,18 @@ export type SavedAdCreative = {
   thumbnailUrl: string | null;
 };
 
+export type BulkAdCreativeResultRow = {
+  assetId: string;
+  ok: boolean;
+  creative?: {
+    id: string;
+    metaCreativeId: string;
+    assetId: string | null;
+    headline: string;
+  };
+  error?: string;
+};
+
 type Asset = {
   id: string;
   title: string;
@@ -28,6 +40,7 @@ type Props = {
   assetCreatives: Record<string, AssetCreativeState>;
   savedAdCreatives: SavedAdCreative[];
   loadingAdCreatives: boolean;
+  bulkResults?: BulkAdCreativeResultRow[] | null;
   onRefreshLibrary: () => void;
   onCreate: (assetId: string) => void;
   onApplySaved: (assetId: string, creativeDbId: string) => void;
@@ -53,6 +66,7 @@ export function GroupAdCreativesPanel({
   assetCreatives,
   savedAdCreatives,
   loadingAdCreatives,
+  bulkResults,
   onRefreshLibrary,
   onCreate,
   onApplySaved,
@@ -149,6 +163,37 @@ export function GroupAdCreativesPanel({
           );
         })}
       </div>
+      {bulkResults && bulkResults.length > 0 ? (
+        <div className="mt-4 rounded-xl border border-border bg-muted/15 p-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Meta API results
+          </p>
+          <ul className="mt-2 space-y-2">
+            {bulkResults.map((row) => {
+              const asset = assets.find((a) => a.id === row.assetId);
+              return (
+                <li
+                  key={row.assetId}
+                  className={`rounded-lg border px-3 py-2 text-xs ${
+                    row.ok
+                      ? 'border-emerald-500/30 bg-emerald-500/5 text-emerald-800 dark:text-emerald-200'
+                      : 'border-red-500/30 bg-red-500/5 text-red-700 dark:text-red-300'
+                  }`}
+                >
+                  <p className="font-medium">{asset?.title ?? row.assetId}</p>
+                  {row.ok && row.creative ? (
+                    <p className="mt-1 font-mono text-[11px]">
+                      DB id: {row.creative.id} · Meta creative id: {row.creative.metaCreativeId}
+                    </p>
+                  ) : (
+                    <p className="mt-1">{row.error ?? 'Failed'}</p>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      ) : null}
     </div>
   );
 }

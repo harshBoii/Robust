@@ -251,6 +251,8 @@ model MetaMedia {
   kind              String   @db.VarChar(10)
   imageHash         String?  @db.VarChar(200)
   videoId           String?  @db.VarChar(100)
+  /// Ad account (`act_…`) this media was uploaded to on Meta; used to avoid cross-account reuse.
+  uploadedAdAccountId String? @db.VarChar(50)
   assetId           String?  @unique
   imageUrl          String?  @db.VarChar(1000)
   videoUrl          String?  @db.VarChar(1000)

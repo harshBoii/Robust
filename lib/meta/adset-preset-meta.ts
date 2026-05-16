@@ -61,6 +61,12 @@ export const CUSTOM_EVENT_TYPE_OPTIONS = [
 export const DEFAULT_BILLING_EVENT: BillingEvent = 'IMPRESSIONS';
 export const DEFAULT_OPTIMIZATION_GOAL: OptimizationGoal = 'OFFSITE_CONVERSIONS';
 
+/** Stored in promotedObject JSON; never sent to Meta Graph API. */
+export const CONVERSION_TRACKING_ENABLED_KEY = 'conversion_tracking_enabled';
+
+/** OUTCOME_SALES fallback when conversion tracking is off (no pixel / promoted_object). */
+export const NON_CONVERSION_SALES_OPTIMIZATION_GOAL: OptimizationGoal = 'LINK_CLICKS';
+
 const BILLING_EVENT_SET = new Set<string>(BILLING_EVENT_OPTIONS.map((o) => o.value));
 const OPTIMIZATION_GOAL_SET = new Set<string>(OPTIMIZATION_GOAL_OPTIONS.map((o) => o.value));
 
@@ -110,6 +116,7 @@ export function toMetaUnixTimestamp(d: Date | string | null | undefined): string
   return String(Math.floor(date.getTime() / 1000));
 }
 
+/** Meta Ad Set promoted_object fields only (pixel + custom event). */
 export function normalizePromotedObject(po: unknown): Record<string, string> {
   if (!po || typeof po !== 'object') return {};
   const o = po as Record<string, unknown>;
@@ -121,8 +128,103 @@ export function normalizePromotedObject(po: unknown): Record<string, string> {
   return out;
 }
 
-export function optimizationGoalRequiresPixel(goal: string | null | undefined): boolean {
+/** Presets without the flag default to enabled (existing presets). */
+export function isConversionTrackingEnabled(po: unknown): boolean {
+  if (!po || typeof po !== 'object') return true;
+  const v = (po as Record<string, unknown>)[CONVERSION_TRACKING_ENABLED_KEY];
+  if (v === false || v === 'false' || v === 0 || v === '0') return false;
+  return true;
+}
+
+export function withConversionTrackingFlag(
+  po: unknown,
+  enabled: boolean,
+): Record<string, unknown> {
+  const base =
+    po && typeof po === 'object' ? { ...(po as Record<string, unknown>) } : {};
+  return {
+    ...base,
+    [CONVERSION_TRACKING_ENABLED_KEY]: enabled,
+  };
+}
+
+export function optimizationGoalRequiresPixel(
+  goal: string | null | undefined,
+  conversionTrackingEnabled = true,
+): boolean {
+  if (!conversionTrackingEnabled) return false;
   return goal === 'OFFSITE_CONVERSIONS' || goal === 'VALUE';
+}
+
+/** Align billing/optimization with Meta when toggling conversion tracking. */
+export function applyConversionTrackingToggle(
+  preset: {
+    optimizationGoal?: string | null;
+    bidStrategy?: string | null;
+    bidConstraints?: unknown;
+    promotedObject?: unknown;
+  },
+  enabled: boolean,
+  campaignObjective?: string | null,
+): {
+  optimizationGoal: string | null | undefined;
+  bidStrategy: string | null | undefined;
+  bidConstraints: unknown;
+  promotedObject: Record<string, unknown>;
+} {
+  const sales = isSalesCampaignObjective(campaignObjective);
+  const currentGoal = preset.optimizationGoal ?? DEFAULT_OPTIMIZATION_GOAL;
+  const meta = normalizePromotedObject(preset.promotedObject);
+  const promotedBase =
+    preset.promotedObject && typeof preset.promotedObject === 'object'
+      ? { ...(preset.promotedObject as Record<string, unknown>) }
+      : {};
+
+  if (!enabled) {
+    let optimizationGoal = currentGoal;
+    let bidStrategy = preset.bidStrategy ?? null;
+    let bidConstraints = preset.bidConstraints;
+
+    if (optimizationGoalRequiresPixel(optimizationGoal, true)) {
+      optimizationGoal = sales ? NON_CONVERSION_SALES_OPTIMIZATION_GOAL : 'LINK_CLICKS';
+    }
+    if (currentGoal === 'VALUE' || bidStrategy === 'LOWEST_COST_WITH_MIN_ROAS') {
+      bidStrategy = null;
+      bidConstraints = {};
+    }
+
+    return {
+      optimizationGoal,
+      bidStrategy,
+      bidConstraints,
+      promotedObject: withConversionTrackingFlag(
+        { ...promotedBase, ...meta },
+        false,
+      ),
+    };
+  }
+
+  let optimizationGoal = currentGoal;
+  if (
+    sales &&
+    (optimizationGoal === 'LINK_CLICKS' || optimizationGoal === 'LANDING_PAGE_VIEWS')
+  ) {
+    optimizationGoal = DEFAULT_OPTIMIZATION_GOAL;
+  }
+
+  return {
+    optimizationGoal,
+    bidStrategy: preset.bidStrategy,
+    bidConstraints: preset.bidConstraints,
+    promotedObject: withConversionTrackingFlag(
+      {
+        ...promotedBase,
+        ...meta,
+        custom_event_type: meta.custom_event_type || 'PURCHASE',
+      },
+      true,
+    ),
+  };
 }
 
 export function coerceAdsetPresetMetaFields(body: {
@@ -132,23 +234,27 @@ export function coerceAdsetPresetMetaFields(body: {
 }): {
   billingEvent: BillingEvent;
   optimizationGoal: OptimizationGoal;
-  promotedObject: Record<string, string>;
+  promotedObject: Record<string, unknown>;
 } {
   const billingRaw = typeof body.billingEvent === 'string' ? body.billingEvent.trim() : '';
   const optRaw = typeof body.optimizationGoal === 'string' ? body.optimizationGoal.trim() : '';
   const billingEvent = isBillingEvent(billingRaw) ? billingRaw : DEFAULT_BILLING_EVENT;
   const optimizationGoal = isOptimizationGoal(optRaw) ? optRaw : DEFAULT_OPTIMIZATION_GOAL;
+  const conversionTrackingEnabled = isConversionTrackingEnabled(body.promotedObject);
   return {
     billingEvent,
     optimizationGoal,
-    promotedObject: normalizePromotedObject(body.promotedObject),
+    promotedObject: withConversionTrackingFlag(
+      normalizePromotedObject(body.promotedObject),
+      conversionTrackingEnabled,
+    ),
   };
 }
 
 export function validateAdsetPresetMeta(input: {
   billingEvent: string;
   optimizationGoal: string;
-  promotedObject: Record<string, string>;
+  promotedObject: unknown;
   bidStrategy?: string | null;
   bidAmount?: string | number | bigint | null;
   bidConstraints?: unknown;
@@ -161,6 +267,8 @@ export function validateAdsetPresetMeta(input: {
     return { ok: false, error: `Invalid optimization_goal: ${input.optimizationGoal}` };
   }
 
+  const conversionTrackingEnabled = isConversionTrackingEnabled(input.promotedObject);
+  const promotedObject = normalizePromotedObject(input.promotedObject);
   const sales = isSalesCampaignObjective(input.campaignObjective);
 
   if (sales) {
@@ -178,23 +286,44 @@ export function validateAdsetPresetMeta(input: {
     }
   }
 
-  if (optimizationGoalRequiresPixel(input.optimizationGoal)) {
-    if (!input.promotedObject.pixel_id) {
+  if (!conversionTrackingEnabled) {
+    if (optimizationGoalRequiresPixel(input.optimizationGoal, true)) {
+      return {
+        ok: false,
+        error:
+          'OFFSITE_CONVERSIONS and VALUE require conversion tracking. Enable it under Conversion Tracking, or choose LINK_CLICKS / LANDING_PAGE_VIEWS.',
+      };
+    }
+    if (input.bidStrategy === 'LOWEST_COST_WITH_MIN_ROAS') {
+      return {
+        ok: false,
+        error:
+          'Min ROAS (LOWEST_COST_WITH_MIN_ROAS) requires conversion tracking and optimization_goal VALUE.',
+      };
+    }
+  }
+
+  if (optimizationGoalRequiresPixel(input.optimizationGoal, conversionTrackingEnabled)) {
+    if (!promotedObject.pixel_id) {
       return {
         ok: false,
         error: 'promoted_object.pixel_id is required for OFFSITE_CONVERSIONS and VALUE',
       };
     }
-    if (!input.promotedObject.custom_event_type) {
+    if (!promotedObject.custom_event_type) {
       return {
         ok: false,
         error: 'promoted_object.custom_event_type is required (e.g. PURCHASE)',
       };
     }
-    if (!CUSTOM_EVENT_TYPE_OPTIONS.includes(input.promotedObject.custom_event_type as (typeof CUSTOM_EVENT_TYPE_OPTIONS)[number])) {
+    if (
+      !CUSTOM_EVENT_TYPE_OPTIONS.includes(
+        promotedObject.custom_event_type as (typeof CUSTOM_EVENT_TYPE_OPTIONS)[number],
+      )
+    ) {
       return {
         ok: false,
-        error: `Invalid custom_event_type: ${input.promotedObject.custom_event_type}`,
+        error: `Invalid custom_event_type: ${promotedObject.custom_event_type}`,
       };
     }
   }
@@ -259,9 +388,13 @@ export function resolveOptimizationGoalForCreate(
 
 function buildPromotedObjectForMeta(
   optimizationGoal: string,
-  promotedObject: Record<string, string>,
+  promotedObjectRaw: unknown,
 ): Record<string, string> | null {
-  if (!optimizationGoalRequiresPixel(optimizationGoal)) {
+  if (!isConversionTrackingEnabled(promotedObjectRaw)) {
+    return null;
+  }
+  const promotedObject = normalizePromotedObject(promotedObjectRaw);
+  if (!optimizationGoalRequiresPixel(optimizationGoal, true)) {
     return Object.keys(promotedObject).length > 0 ? promotedObject : null;
   }
   if (!promotedObject.pixel_id) {
@@ -296,10 +429,7 @@ export function buildCreateAdSetInputFromPreset(
   const promotedObject =
     opts.promotedObject !== undefined
       ? opts.promotedObject
-      : buildPromotedObjectForMeta(
-          optimizationGoal,
-          normalizePromotedObject(preset.promotedObject),
-        );
+      : buildPromotedObjectForMeta(optimizationGoal, preset.promotedObject);
 
   const valueMinRoas = isValueMinRoasBid(preset.bidStrategy, optimizationGoal);
   const bidConstraints =

@@ -8,6 +8,7 @@ import { prisma } from "@/lib/prisma";
 import { syncCampaigns, syncAdSets, createAndStoreCampaignFromPreset, createAndStoreAdSetFromPreset } from "@/lib/meta/sync";
 import { createAdCreative, getAdCreativePreviews, uploadAdImage, uploadAdVideo } from "@/lib/meta/client";
 import { requireMetaAdAccountId, requireMetaFbPageId } from "@/lib/meta/integration-token";
+import { resolveMetaVideoThumbnailImageUrl } from "@/lib/meta/r2-thumbnail-url";
 
 export type CreateMcpServerOptions = {
   /** Preferred public origin for MCP `publicR2Url` responses (bucket custom domain). Falls back to R2_PUBLIC_BASE_URL when omitted. */
@@ -482,18 +483,32 @@ export function createServer(options?: CreateMcpServerOptions): McpServer {
 
       const asset = await prisma.asset.findFirst({
         where: { id: assetId, companyId: company.id, assetBucketId: bucket.id },
-        select: { id: true, title: true, assetType: true, r2Key: true, r2Bucket: true, mimeType: true, playbackUrl: true },
+        select: {
+          id: true,
+          title: true,
+          assetType: true,
+          r2Key: true,
+          r2Bucket: true,
+          mimeType: true,
+          playbackUrl: true,
+          thumbnailUrl: true,
+        },
       });
       if (!asset) return { content: [{ type: "text" as const, text: "Error: Asset not found in group." }] };
 
       // If we already have MetaMedia for this asset, reuse it; otherwise upload to Meta now.
       const existing = await prisma.metaMedia.findFirst({
         where: { metaIntegrationId: integration.id, assetId: asset.id },
-        select: { imageHash: true, videoId: true, kind: true },
+        select: { imageHash: true, videoId: true, kind: true, uploadedAdAccountId: true },
       });
 
-      let imageHash: string | null = existing?.imageHash ?? null;
-      let videoId: string | null = existing?.videoId ?? null;
+      const mediaMatchesAdAccount =
+        !existing?.uploadedAdAccountId || existing.uploadedAdAccountId === adAccountId;
+
+      let imageHash: string | null =
+        existing?.imageHash && mediaMatchesAdAccount ? existing.imageHash : null;
+      let videoId: string | null =
+        existing?.videoId && mediaMatchesAdAccount ? existing.videoId : null;
 
       if (!imageHash && !videoId) {
         // Download bytes from R2 public URL if available, otherwise fail (we can extend later).
@@ -529,13 +544,14 @@ export function createServer(options?: CreateMcpServerOptions): McpServer {
               metaIntegrationId: integration.id,
               kind: "video",
               videoId,
+              uploadedAdAccountId: adAccountId,
               assetId: asset.id,
               filename: asset.title.slice(0, 500),
               mimeType: asset.mimeType ?? null,
               bytes: bytes.length,
               status: "ready",
             },
-            update: { videoId, kind: "video", status: "ready" },
+            update: { videoId, uploadedAdAccountId: adAccountId, kind: "video", status: "ready" },
           });
         } else {
           const up = await uploadAdImage({
@@ -551,16 +567,25 @@ export function createServer(options?: CreateMcpServerOptions): McpServer {
               metaIntegrationId: integration.id,
               kind: "image",
               imageHash,
+              uploadedAdAccountId: adAccountId,
               assetId: asset.id,
               filename: asset.title.slice(0, 500),
               mimeType: asset.mimeType ?? null,
               bytes: bytes.length,
               status: "ready",
             },
-            update: { imageHash, kind: "image", status: "ready" },
+            update: { imageHash, uploadedAdAccountId: adAccountId, kind: "image", status: "ready" },
           });
         }
       }
+
+      const metaVideoThumbnailUrl = videoId
+        ? resolveMetaVideoThumbnailImageUrl({
+            r2Key: asset.r2Key,
+            thumbnailUrl: asset.thumbnailUrl,
+            publicBaseUrlOverride: mcpR2PublicBaseUrl,
+          })
+        : null;
 
       const created = await createAdCreative({
         companyId: company.id,
@@ -573,6 +598,7 @@ export function createServer(options?: CreateMcpServerOptions): McpServer {
         landingUrl: creative.landingUrl,
         imageHash,
         videoId,
+        videoThumbnailUrl: metaVideoThumbnailUrl,
         pixelIds: creative.pixelIds ?? null,
       });
 

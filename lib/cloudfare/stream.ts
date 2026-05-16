@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { maybeAnalyzeBulkUpload } from "@/lib/gallery/analyze-bulk";
 import { r2 } from "./r2";
+import { syncStreamThumbnailToR2 } from "./r2-video-thumbnail";
 import { GetObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import {
@@ -114,13 +115,34 @@ export async function processNextQueueItem(): Promise<StreamUploadResult | null>
     const result = await uploadToCloudflareStream(queueItem);
     console.log("[STREAM QUEUE] Upload result:", result);
 
+    // Mirror Stream frame thumbnail to public R2 (companion .jpg) for Meta image_url + UI
+    let thumbnailUrl = result.thumbnailUrl;
+    try {
+      const r2Thumb = await syncStreamThumbnailToR2({
+        r2Bucket: queueItem.r2Bucket,
+        videoR2Key: queueItem.r2Key,
+        streamThumbnailUrl: result.thumbnailUrl,
+      });
+      if (r2Thumb?.publicUrl) {
+        thumbnailUrl = r2Thumb.publicUrl;
+        console.log(
+          `[STREAM QUEUE] R2 thumbnail for asset ${queueItem.assetId}: ${r2Thumb.publicUrl}`,
+        );
+      }
+    } catch (thumbErr) {
+      console.warn(
+        `[STREAM QUEUE] R2 thumbnail sync failed for asset ${queueItem.assetId}:`,
+        thumbErr,
+      );
+    }
+
     // Update Asset with Stream details
     const updatedAsset = await prisma.asset.update({
       where: { id: queueItem.assetId },
       data: {
         streamId: result.streamId,
         playbackUrl: result.playbackUrl,
-        thumbnailUrl: result.thumbnailUrl,
+        thumbnailUrl,
         status: AssetStatus.READY,
         // duration is Int? in schema — Math.round guards against floats from CF API
         duration: result.duration != null ? Math.round(result.duration) : undefined,

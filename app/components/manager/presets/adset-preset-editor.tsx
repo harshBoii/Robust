@@ -22,10 +22,12 @@ import {
   withRoasAverageFloor,
 } from '@/lib/meta/bid-constraints';
 import {
+  applyConversionTrackingToggle,
   BILLING_EVENT_OPTIONS,
   CUSTOM_EVENT_TYPE_OPTIONS,
   DEFAULT_BILLING_EVENT,
   DEFAULT_OPTIMIZATION_GOAL,
+  isConversionTrackingEnabled,
   OPTIMIZATION_GOAL_OPTIONS,
   billingEventsForCampaign,
   optimizationGoalRequiresPixel,
@@ -91,8 +93,14 @@ export function AdsetPresetEditor({
   const adsetCampaignObjective =
     value.pinnedCampaign?.objective ?? pinnedMetaCampaign?.objective ?? 'OUTCOME_SALES';
   const billingOptions = billingEventsForCampaign(adsetCampaignObjective);
-  const optimizationOptions = optimizationGoalsForCampaign(adsetCampaignObjective);
-  const needsPixel = optimizationGoalRequiresPixel(value.optimizationGoal);
+  const conversionTrackingEnabled = isConversionTrackingEnabled(value.promotedObject);
+  const optimizationOptions = optimizationGoalsForCampaign(adsetCampaignObjective).filter(
+    (goal) => conversionTrackingEnabled || !optimizationGoalRequiresPixel(goal, true),
+  );
+  const needsPixel = optimizationGoalRequiresPixel(
+    value.optimizationGoal,
+    conversionTrackingEnabled,
+  );
   const valueMinRoas = isValueMinRoasBid(value.bidStrategy, value.optimizationGoal);
   const roasFloor = getRoasAverageFloor(value.bidConstraints);
   const roasMultipleDisplay = roasFloor != null ? String(floorToRoasMultiple(roasFloor)) : '1';
@@ -286,9 +294,9 @@ export function AdsetPresetEditor({
 
       <SectionBox title="Billing & Optimization">
         <p className="text-xs text-muted-foreground">
-          OUTCOME_SALES: billing_event IMPRESSIONS + optimization_goal OFFSITE_CONVERSIONS (with pixel), or
-          VALUE + LOWEST_COST_WITH_MIN_ROAS with{' '}
-          <span className="font-mono">bid_constraints.roas_average_floor</span> (Meta: 10,000 = 1.0× ROAS).
+          {conversionTrackingEnabled
+            ? 'OUTCOME_SALES: billing_event IMPRESSIONS + optimization_goal OFFSITE_CONVERSIONS (with pixel), or VALUE + LOWEST_COST_WITH_MIN_ROAS with bid_constraints.roas_average_floor (Meta: 10,000 = 1.0× ROAS).'
+            : 'Conversion tracking is off — use LINK_CLICKS or LANDING_PAGE_VIEWS (no pixel / promoted_object). Meta will not receive pixel_id on the ad set.'}
         </p>
         {campaignUsesMinRoas && !valueMinRoas ? (
           <button
@@ -471,12 +479,51 @@ export function AdsetPresetEditor({
       </SectionBox>
 
       <SectionBox title="Conversion Tracking">
+        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-sm font-medium">Website conversion tracking</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              When enabled, ad sets use promoted_object with a pixel for OFFSITE_CONVERSIONS / VALUE. When
+              disabled, promoted_object is omitted and traffic-style goals apply (Meta Marketing API).
+            </p>
+          </div>
+          <label className="flex cursor-pointer items-center gap-2.5 select-none">
+            <input
+              type="checkbox"
+              className="h-4 w-4 rounded border-border"
+              checked={conversionTrackingEnabled}
+              onChange={(e) => {
+                const enabled = e.target.checked;
+                onChange((p) => {
+                  const next = applyConversionTrackingToggle(
+                    p,
+                    enabled,
+                    adsetCampaignObjective,
+                  );
+                  return {
+                    ...p,
+                    optimizationGoal: next.optimizationGoal ?? p.optimizationGoal,
+                    bidStrategy: next.bidStrategy ?? null,
+                    bidConstraints: (next.bidConstraints as AnyObj) ?? p.bidConstraints,
+                    promotedObject: next.promotedObject,
+                  };
+                });
+              }}
+            />
+            <span className="text-sm font-medium">
+              {conversionTrackingEnabled ? 'Enabled' : 'Disabled'}
+            </span>
+          </label>
+        </div>
         <div className="grid gap-4 md:grid-cols-2">
-          <div className="space-y-3 rounded-xl border border-border bg-muted/10 p-4">
+          <div
+            className={`space-y-3 rounded-xl border border-border bg-muted/10 p-4 ${conversionTrackingEnabled ? '' : 'opacity-50'}`}
+          >
             <FieldLabel sub={needsPixel ? 'required for conversions' : undefined}>promoted_object</FieldLabel>
             <input
               className={PRESET_INPUT_CLASS}
               placeholder="pixel_id"
+              disabled={!conversionTrackingEnabled}
               value={String(promoted.pixel_id ?? '')}
               onChange={(e) =>
                 onChange((p) => ({
@@ -487,6 +534,7 @@ export function AdsetPresetEditor({
             />
             <select
               className={PRESET_INPUT_CLASS}
+              disabled={!conversionTrackingEnabled}
               value={String(promoted.custom_event_type ?? 'PURCHASE')}
               onChange={(e) =>
                 onChange((p) => ({

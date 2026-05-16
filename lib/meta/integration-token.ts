@@ -31,18 +31,11 @@ export async function resolveMetaGraphAccessToken(companyId: string): Promise<st
   return system;
 }
 
-export class MetaIntegrationIncompleteError extends Error {
-  constructor(message = 'Configure ad account and page in workspace settings.') {
-    super(message);
-    this.name = 'MetaIntegrationIncompleteError';
-  }
-}
-
-export function requireMetaAdAccountId(adAccountId: string | null | undefined): string {
-  const id = adAccountId?.trim();
-  if (!id) throw new MetaIntegrationIncompleteError();
-  return id;
-}
+export {
+  MetaIntegrationIncompleteError,
+  normalizeMetaAdAccountId,
+  requireMetaAdAccountId,
+} from '@/lib/meta/ad-account-id';
 
 export function requireMetaFbPageId(fbPageId: string | null | undefined): string {
   const id = fbPageId?.trim();

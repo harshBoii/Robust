@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "backfill:image-thumbnails": "tsx scripts/backfill-image-thumbnails.ts",
+    "backfill:video-thumbnails-r2": "tsx scripts/backfill-video-thumbnails-r2.ts",
     "postinstall": "prisma generate"
   },
   "dependencies": {

@@ -4,8 +4,9 @@ import { GetObjectCommand } from '@aws-sdk/client-s3';
 
 import { requireMetaAdAccountId, requireMetaFbPageId } from '@/lib/meta/integration-token';
 import { prisma } from '@/lib/prisma';
-import { r2 } from '@/lib/cloudfare/r2';
+import { getR2PublicObjectUrl, r2 } from '@/lib/cloudfare/r2';
 import { createAdCreative, uploadAdImage, uploadAdVideo } from '@/lib/meta/client';
+import { resolveMetaVideoThumbnailImageUrl } from '@/lib/meta/r2-thumbnail-url';
 
 export type StoreAdCreativeInput = {
   companyId: string;
@@ -63,10 +64,18 @@ export async function storeAdCreativeForAsset(
       r2Bucket: true,
       r2Key: true,
       thumbnailUrl: true,
-      playbackUrl: true,
     },
   });
   if (!asset) throw new Error('Asset not found');
+
+  const r2PublicVideoUrl = getR2PublicObjectUrl(asset.r2Key);
+  const metaVideoThumbnailUrl =
+    asset.assetType === 'VIDEO'
+      ? resolveMetaVideoThumbnailImageUrl({
+          r2Key: asset.r2Key,
+          thumbnailUrl: asset.thumbnailUrl,
+        })
+      : null;
 
   if (input.metaCampaignId) {
     const campaign = await prisma.metaCampaign.findFirst({
@@ -90,16 +99,12 @@ export async function storeAdCreativeForAsset(
     });
     imageHash = up.imageHash;
     await prisma.metaMedia.upsert({
-      where: {
-        metaIntegrationId_imageHash: {
-          metaIntegrationId: integration.id,
-          imageHash,
-        },
-      },
+      where: { assetId: asset.id },
       create: {
         metaIntegrationId: integration.id,
         kind: 'image',
         imageHash,
+        uploadedAdAccountId: adAccountId,
         assetId: asset.id,
         imageUrl: asset.thumbnailUrl,
         r2Key: asset.r2Key,
@@ -108,7 +113,8 @@ export async function storeAdCreativeForAsset(
         status: 'ready',
       },
       update: {
-        assetId: asset.id,
+        imageHash,
+        uploadedAdAccountId: adAccountId,
         imageUrl: asset.thumbnailUrl,
         r2Key: asset.r2Key,
         filename: asset.filename,
@@ -117,6 +123,11 @@ export async function storeAdCreativeForAsset(
       },
     });
   } else if (asset.assetType === 'VIDEO') {
+    if (!metaVideoThumbnailUrl) {
+      throw new Error(
+        'No public R2 thumbnail for this video. Set R2_PUBLIC_BASE_URL and ensure a JPEG exists at the same key with .jpg extension or under thumbnails/.',
+      );
+    }
     const up = await uploadAdVideo({
       companyId: input.companyId,
       adAccountId,
@@ -126,27 +137,24 @@ export async function storeAdCreativeForAsset(
     });
     videoId = up.videoId;
     await prisma.metaMedia.upsert({
-      where: {
-        metaIntegrationId_videoId: {
-          metaIntegrationId: integration.id,
-          videoId,
-        },
-      },
+      where: { assetId: asset.id },
       create: {
         metaIntegrationId: integration.id,
         kind: 'video',
         videoId,
         assetId: asset.id,
-        videoUrl: asset.playbackUrl ?? asset.thumbnailUrl,
-        thumbnailUrl: asset.thumbnailUrl,
+        videoUrl: r2PublicVideoUrl,
+        thumbnailUrl: metaVideoThumbnailUrl,
         r2Key: asset.r2Key,
         filename: asset.filename,
         bytes: bytes.byteLength,
         status: 'ready',
       },
       update: {
-        assetId: asset.id,
-        thumbnailUrl: asset.thumbnailUrl,
+        videoId,
+        uploadedAdAccountId: adAccountId,
+        videoUrl: r2PublicVideoUrl,
+        thumbnailUrl: metaVideoThumbnailUrl,
         r2Key: asset.r2Key,
         filename: asset.filename,
         bytes: bytes.byteLength,
@@ -170,6 +178,7 @@ export async function storeAdCreativeForAsset(
     landingUrl: input.landingUrl,
     imageHash,
     videoId,
+    videoThumbnailUrl: metaVideoThumbnailUrl,
     pixelIds,
   });
 
@@ -186,7 +195,7 @@ export async function storeAdCreativeForAsset(
       description: input.description ?? null,
       ctaType: input.ctaType,
       landingUrl: input.landingUrl,
-      thumbnailUrl: asset.thumbnailUrl,
+      thumbnailUrl: metaVideoThumbnailUrl ?? asset.thumbnailUrl,
       aiGenerated: false,
       compliancePassed: false,
       approvedByUser: true,
