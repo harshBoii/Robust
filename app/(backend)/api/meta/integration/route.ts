@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+import { isMetaOAuthConfigured } from '@/lib/auth/meta-oauth-state';
 import { getSession } from '@/lib/auth/session';
 import { prisma } from '@/lib/prisma';
 
@@ -41,6 +42,7 @@ export async function GET() {
   return NextResponse.json({
     metaIntegration,
     hasSystemToken: Boolean(process.env.META_SYSTEM_ACCESS_TOKEN),
+    hasMetaOAuth: isMetaOAuthConfigured(),
   });
 }
 

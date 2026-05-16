@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useToast } from '@/app/components/UI/ToastProvider';
+import { SCHEDULE_DURATION_OPTIONS, type ScheduleDuration } from '@/lib/meta/adset-schedule';
 
 /* ─────────────────────────────────────────── types ── */
 type MetaCampaign = { id: string; name: string };
@@ -10,7 +11,8 @@ type AdsetPreset = {
   id: string; name: string; isDefault: boolean;
   pinnedCampaignId: string | null; pinnedCampaign?: MetaCampaign | null;
   dailyBudget: string | null; lifetimeBudget: string | null;
-  startTime: string | null; endTime: string | null;
+  scheduleDuration: ScheduleDuration | null;
+  scheduleCustomEnd: string | null;
   billingEvent: string | null; optimizationGoal: string | null;
   destinationType: string | null; bidStrategy: string | null; bidAmount: string | null;
   isDefaultCreative: boolean; pacingType: string | null;
@@ -313,7 +315,7 @@ export default function PresetsClient() {
 
   const blankAdsetPreset = useMemo<AdsetPreset>(() => ({
     id: '', name: '', isDefault: false, pinnedCampaignId: null, pinnedCampaign: null,
-    dailyBudget: null, lifetimeBudget: null, startTime: null, endTime: null,
+    dailyBudget: null, lifetimeBudget: null, scheduleDuration: '1_week', scheduleCustomEnd: null,
     billingEvent: null, optimizationGoal: null, destinationType: null,
     bidStrategy: null, bidAmount: null, isDefaultCreative: false, pacingType: null,
     promotedObject: { pixel_id: '', custom_event_type: 'PURCHASE' },
@@ -372,8 +374,20 @@ export default function PresetsClient() {
           pinnedCampaignId: typeof get(p,'pinnedCampaignId') === 'string' ? (get(p,'pinnedCampaignId') as string) : null,
           pinnedCampaign: pinned && typeof pinned === 'object' ? { id: String(get(pinned,'id') ?? ''), name: String(get(pinned,'name') ?? '') } : null,
           dailyBudget: normBigint(get(p,'dailyBudget')), lifetimeBudget: normBigint(get(p,'lifetimeBudget')),
-          startTime: typeof get(p,'startTime') === 'string' ? (get(p,'startTime') as string) : null,
-          endTime: typeof get(p,'endTime') === 'string' ? (get(p,'endTime') as string) : null,
+          scheduleDuration: (() => {
+            const d = get(p, 'scheduleDuration');
+            if (d === '3_days' || d === '1_week' || d === '1_month' || d === 'custom') return d;
+            const legacyEnd = get(p, 'endTime');
+            if (typeof legacyEnd === 'string' && legacyEnd) return 'custom' as ScheduleDuration;
+            return null;
+          })(),
+          scheduleCustomEnd: (() => {
+            const custom = get(p, 'scheduleCustomEnd');
+            if (typeof custom === 'string' && custom) return custom;
+            const legacyEnd = get(p, 'endTime');
+            if (typeof legacyEnd === 'string' && legacyEnd) return legacyEnd;
+            return null;
+          })(),
           billingEvent: typeof get(p,'billingEvent') === 'string' ? (get(p,'billingEvent') as string) : null,
           optimizationGoal: typeof get(p,'optimizationGoal') === 'string' ? (get(p,'optimizationGoal') as string) : null,
           destinationType: typeof get(p,'destinationType') === 'string' ? (get(p,'destinationType') as string) : null,
@@ -418,6 +432,10 @@ export default function PresetsClient() {
 
   const saveAdset = useCallback(async () => {
     if (!draftAdset.name.trim()) { toast.push({ kind: 'error', title: 'Missing name', message: 'Please name this preset.' }); return; }
+    if (draftAdset.scheduleDuration === 'custom' && !draftAdset.scheduleCustomEnd) {
+      toast.push({ kind: 'error', title: 'Missing end date', message: 'Pick a custom end date for the schedule.' });
+      return;
+    }
     let targeting: AnyObj = draftAdset.targeting ?? {};
     if (advancedTargetingJson.trim()) {
       try { targeting = JSON.parse(advancedTargetingJson) as AnyObj; }
@@ -427,7 +445,8 @@ export default function PresetsClient() {
       name: draftAdset.name, isDefault: draftAdset.isDefault, pinnedCampaignId: draftAdset.pinnedCampaignId,
       dailyBudget: draftAdset.dailyBudget ? Number(draftAdset.dailyBudget) : null,
       lifetimeBudget: draftAdset.lifetimeBudget ? Number(draftAdset.lifetimeBudget) : null,
-      startTime: draftAdset.startTime, endTime: draftAdset.endTime,
+      scheduleDuration: draftAdset.scheduleDuration,
+      scheduleCustomEnd: draftAdset.scheduleCustomEnd,
       billingEvent: draftAdset.billingEvent, optimizationGoal: draftAdset.optimizationGoal,
       destinationType: draftAdset.destinationType, bidStrategy: draftAdset.bidStrategy,
       bidAmount: draftAdset.bidAmount ? Number(draftAdset.bidAmount) : null,
@@ -649,18 +668,46 @@ export default function PresetsClient() {
                       <input type="number" className="glass-input mt-1.5 w-full px-3 py-2 text-sm" value={draftAdset.lifetimeBudget ?? ''}
                         onChange={(e) => setDraftAdset((p) => ({ ...p, lifetimeBudget: e.target.value || null, dailyBudget: e.target.value ? null : p.dailyBudget }))} />
                     </div>
-                    <div>
-                      <FieldLabel>Start time</FieldLabel>
-                      <input type="datetime-local" className="glass-input mt-1.5 w-full px-3 py-2 text-sm"
-                        value={asIsoLocalInput(draftAdset.startTime)}
-                        onChange={(e) => setDraftAdset((p) => ({ ...p, startTime: toIsoFromLocalInput(e.target.value) }))} />
+                    <div className="md:col-span-2">
+                      <FieldLabel>Duration</FieldLabel>
+                      <select
+                        className="glass-input mt-1.5 w-full px-3 py-2 text-sm"
+                        value={draftAdset.scheduleDuration ?? ''}
+                        onChange={(e) => {
+                          const next = (e.target.value || null) as ScheduleDuration | null;
+                          setDraftAdset((p) => ({
+                            ...p,
+                            scheduleDuration: next,
+                            scheduleCustomEnd: next === 'custom' ? p.scheduleCustomEnd : null,
+                          }));
+                        }}
+                      >
+                        <option value="">— not set —</option>
+                        {SCHEDULE_DURATION_OPTIONS.map((opt) => (
+                          <option key={opt.value} value={opt.value}>{opt.label}</option>
+                        ))}
+                      </select>
+                      <p className="mt-1.5 text-xs text-muted-foreground">
+                        When you create an ad set, the schedule starts immediately and runs for this
+                        duration.
+                      </p>
                     </div>
-                    <div>
-                      <FieldLabel>End time</FieldLabel>
-                      <input type="datetime-local" className="glass-input mt-1.5 w-full px-3 py-2 text-sm"
-                        value={asIsoLocalInput(draftAdset.endTime)}
-                        onChange={(e) => setDraftAdset((p) => ({ ...p, endTime: toIsoFromLocalInput(e.target.value) }))} />
-                    </div>
+                    {draftAdset.scheduleDuration === 'custom' ? (
+                      <div className="md:col-span-2">
+                        <FieldLabel>Custom end date</FieldLabel>
+                        <input
+                          type="datetime-local"
+                          className="glass-input mt-1.5 w-full px-3 py-2 text-sm"
+                          value={asIsoLocalInput(draftAdset.scheduleCustomEnd)}
+                          onChange={(e) =>
+                            setDraftAdset((p) => ({
+                              ...p,
+                              scheduleCustomEnd: toIsoFromLocalInput(e.target.value),
+                            }))
+                          }
+                        />
+                      </div>
+                    ) : null}
                   </div>
                 </SectionBox>
 

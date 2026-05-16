@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 
+import { verifyMetaOAuthState } from "@/lib/auth/meta-oauth-state";
 import { getSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 
@@ -61,6 +62,14 @@ export async function GET(req: NextRequest) {
   const session = await getSession();
   if (!session) {
     return redirect(req, "/login", { meta_oauth: "session" });
+  }
+
+  const stateParam = searchParams.get("state");
+  if (stateParam) {
+    const companyIdFromState = await verifyMetaOAuthState(stateParam);
+    if (!companyIdFromState || companyIdFromState !== session.companyId) {
+      return redirect(req, "/workspace/settings", { meta_oauth: "invalid_state" });
+    }
   }
 
   const existing = await prisma.metaIntegration.findUnique({

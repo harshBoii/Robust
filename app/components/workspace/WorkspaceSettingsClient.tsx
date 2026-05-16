@@ -6,6 +6,35 @@ import AutomationControls, {
   type AutomationRule,
 } from '@/app/components/dashboard/AutomationControls';
 
+const META_OAUTH_MESSAGES: Record<string, string> = {
+  connected: 'Facebook connected. Your access token was updated.',
+  needs_integration: 'Save your ad account and page first, then connect with Facebook.',
+  session: 'Sign in to connect Facebook.',
+  config: 'Meta OAuth is not configured on the server (META_APP_ID, META_APP_SECRET, META_REDIRECT_URI).',
+  token_exchange: 'Could not exchange the Facebook authorization code. Try again.',
+  error: 'Facebook authorization was denied or failed.',
+  missing_code: 'Facebook did not return an authorization code.',
+  invalid_state: 'Invalid OAuth state. Please try connecting again.',
+};
+
+function metaOAuthMessage(code: string | null): string | null {
+  if (!code) return null;
+  return META_OAUTH_MESSAGES[code] ?? 'Facebook connection failed. Please try again.';
+}
+
+function FacebookIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      aria-hidden
+    >
+      <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
+    </svg>
+  );
+}
+
 type MetaIntegration = {
   id: string;
   companyId: string;
@@ -28,6 +57,7 @@ async function json<T>(res: Response): Promise<T> {
 export default function WorkspaceSettingsClient() {
   const [metaIntegration, setMetaIntegration] = useState<MetaIntegration | null>(null);
   const [hasSystemToken, setHasSystemToken] = useState(false);
+  const [hasMetaOAuth, setHasMetaOAuth] = useState(false);
   const [rules, setRules] = useState<AutomationRule[]>([]);
 
   const [adAccounts, setAdAccounts] = useState<Array<{ id: string; name?: string }>>([]);
@@ -46,11 +76,14 @@ export default function WorkspaceSettingsClient() {
     setError(null);
     setSuccess(null);
     try {
-      const meta = await json<{ metaIntegration: MetaIntegration | null; hasSystemToken: boolean }>(
-        await fetch('/api/meta/integration'),
-      );
+      const meta = await json<{
+        metaIntegration: MetaIntegration | null;
+        hasSystemToken: boolean;
+        hasMetaOAuth: boolean;
+      }>(await fetch('/api/meta/integration'));
       setMetaIntegration(meta.metaIntegration);
       setHasSystemToken(meta.hasSystemToken);
+      setHasMetaOAuth(meta.hasMetaOAuth);
       setAdAccountId(meta.metaIntegration?.adAccountId ?? '');
       setFbPageId(meta.metaIntegration?.fbPageId ?? '');
 
@@ -84,6 +117,28 @@ export default function WorkspaceSettingsClient() {
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void load();
+  }, [load]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const oauth = params.get('meta_oauth');
+    const message = metaOAuthMessage(oauth);
+    if (message) {
+      if (oauth === 'connected') {
+        setSuccess(message);
+        setError(null);
+      } else {
+        setError(message);
+        setSuccess(null);
+      }
+      params.delete('meta_oauth');
+      const qs = params.toString();
+      const path = window.location.pathname + (qs ? `?${qs}` : '');
+      window.history.replaceState({}, '', path);
+      if (oauth === 'connected') {
+        void load();
+      }
+    }
   }, [load]);
 
   const saveMeta = useCallback(async () => {
@@ -160,14 +215,50 @@ export default function WorkspaceSettingsClient() {
           <div>
             <h3 className="text-lg font-semibold">Meta setup</h3>
             <p className="text-sm text-muted-foreground">
-              Uses <code className="font-mono">META_SYSTEM_ACCESS_TOKEN</code> on the server.
+              Connect your Facebook account to store a long-lived user token, or use the system
+              token for server-side API calls.
             </p>
           </div>
-          <span
-            className={`glass-badge ${hasSystemToken ? 'text-emerald-600 dark:text-emerald-300' : 'text-red-600 dark:text-red-300'}`}
+          <div className="flex flex-col items-end gap-2">
+            <span
+              className={`glass-badge ${hasSystemToken ? 'text-emerald-600 dark:text-emerald-300' : 'text-red-600 dark:text-red-300'}`}
+            >
+              {hasSystemToken ? 'System token: OK' : 'System token: missing'}
+            </span>
+            {metaIntegration ? (
+              <span className="glass-badge text-emerald-600 dark:text-emerald-300">
+                Integration saved
+              </span>
+            ) : null}
+          </div>
+        </div>
+
+        <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-xs text-muted-foreground">
+            {!hasMetaOAuth
+              ? 'OAuth is not configured (META_APP_ID, META_APP_SECRET, META_REDIRECT_URI).'
+              : !metaIntegration
+                ? 'Save ad account and page below before connecting Facebook.'
+                : 'Authorize Robust to update your workspace access token.'}
+          </p>
+          <a
+            href="/api/auth/meta/start"
+            className={`glass-button inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium ${
+              !hasMetaOAuth || !metaIntegration
+                ? 'pointer-events-none opacity-50'
+                : ''
+            }`}
+            aria-disabled={!hasMetaOAuth || !metaIntegration}
+            tabIndex={!hasMetaOAuth || !metaIntegration ? -1 : 0}
+            onClick={(e) => {
+              if (!hasMetaOAuth || !metaIntegration) {
+                e.preventDefault();
+              }
+            }}
           >
-            {hasSystemToken ? 'System token: OK' : 'System token: missing'}
-          </span>
+            <FacebookIcon className="h-4 w-4" />
+            Connect with Facebook
+          </a>
         </div>
 
         <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">

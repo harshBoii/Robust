@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 import { getSession } from '@/lib/auth/session';
+import { parseScheduleDuration } from '@/lib/meta/adset-schedule';
 import { prisma } from '@/lib/prisma';
 import { Prisma } from '@/app/generated/prisma/client';
 
@@ -13,6 +14,8 @@ type PatchBody = {
   lifetimeBudget?: unknown;
   startTime?: unknown;
   endTime?: unknown;
+  scheduleDuration?: unknown;
+  scheduleCustomEnd?: unknown;
   billingEvent?: unknown;
   optimizationGoal?: unknown;
   destinationType?: unknown;
@@ -56,6 +59,23 @@ export async function PATCH(
   });
   if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
+  const scheduleDuration =
+    body.scheduleDuration !== undefined ? parseScheduleDuration(body.scheduleDuration) : undefined;
+  const scheduleCustomEnd =
+    body.scheduleCustomEnd !== undefined ? parseIso(body.scheduleCustomEnd) : undefined;
+
+  if (scheduleDuration === 'custom' && scheduleCustomEnd === null) {
+    return NextResponse.json({ error: 'Custom end date is required when duration is custom' }, { status: 400 });
+  }
+  if (
+    scheduleCustomEnd &&
+    scheduleDuration !== undefined &&
+    scheduleDuration !== null &&
+    scheduleDuration !== 'custom'
+  ) {
+    return NextResponse.json({ error: 'scheduleCustomEnd is only valid with custom duration' }, { status: 400 });
+  }
+
   const pinnedCampaignId =
     typeof body.pinnedCampaignId === 'string' ? body.pinnedCampaignId : undefined;
   if (pinnedCampaignId) {
@@ -82,8 +102,23 @@ export async function PATCH(
       ...(typeof body.lifetimeBudget === 'number' || body.lifetimeBudget === null
         ? { lifetimeBudget: body.lifetimeBudget == null ? null : BigInt(Math.floor(body.lifetimeBudget)) }
         : {}),
-      ...(body.startTime !== undefined ? { startTime: parseIso(body.startTime) } : {}),
-      ...(body.endTime !== undefined ? { endTime: parseIso(body.endTime) } : {}),
+      ...(body.scheduleDuration !== undefined
+        ? {
+            scheduleDuration,
+            scheduleCustomEnd:
+              scheduleDuration === 'custom' ? (scheduleCustomEnd ?? null) : null,
+            ...(scheduleDuration ? { startTime: null, endTime: null } : {}),
+          }
+        : {}),
+      ...(body.scheduleDuration === undefined && body.startTime !== undefined
+        ? { startTime: parseIso(body.startTime) }
+        : {}),
+      ...(body.scheduleDuration === undefined && body.endTime !== undefined
+        ? { endTime: parseIso(body.endTime) }
+        : {}),
+      ...(body.scheduleDuration === undefined && body.scheduleCustomEnd !== undefined
+        ? { scheduleCustomEnd }
+        : {}),
       ...(typeof body.billingEvent === 'string' || body.billingEvent === null ? { billingEvent: body.billingEvent as string | null } : {}),
       ...(typeof body.optimizationGoal === 'string' || body.optimizationGoal === null ? { optimizationGoal: body.optimizationGoal as string | null } : {}),
       ...(typeof body.destinationType === 'string' || body.destinationType === null ? { destinationType: body.destinationType as string | null } : {}),

@@ -9,6 +9,7 @@ import {
   getCampaignsForAccount,
 } from '@/lib/meta/client';
 import type { MetaCampaignStatus } from '@/lib/meta/client';
+import { resolveAdsetScheduleTimes } from '@/lib/meta/adset-schedule';
 
 function asMetaCampaignStatus(v: unknown): MetaCampaignStatus | undefined {
   return v === 'ACTIVE' || v === 'PAUSED' || v === 'ARCHIVED' ? v : undefined;
@@ -236,6 +237,8 @@ export async function createAndStoreAdSetFromPreset(input: {
   const preset = await prisma.adsetPreset.findUnique({ where: { id: input.presetId } });
   if (!preset) throw new Error('Adset preset not found');
 
+  const schedule = resolveAdsetScheduleTimes(preset);
+
   const created = await createAdSet({
     adAccountId: integration.adAccountId,
     name: input.name ?? preset.name,
@@ -248,8 +251,8 @@ export async function createAndStoreAdSetFromPreset(input: {
     optimizationGoal: null,
     billingEvent: null,
     targeting: (preset.targeting as Record<string, unknown>) ?? null,
-    startTime: preset.startTime ? preset.startTime.toISOString() : null,
-    endTime: preset.endTime ? preset.endTime.toISOString() : null,
+    startTime: schedule.startTime?.toISOString() ?? null,
+    endTime: schedule.endTime?.toISOString() ?? null,
   });
 
   return prisma.metaAdSet.create({
@@ -268,8 +271,8 @@ export async function createAndStoreAdSetFromPreset(input: {
       optimizationGoal: null,
       billingEvent: null,
       targeting: preset.targeting ? (preset.targeting as Prisma.InputJsonValue) : Prisma.DbNull,
-      startTime: preset.startTime,
-      endTime: preset.endTime,
+      startTime: schedule.startTime,
+      endTime: schedule.endTime,
     },
     select: { id: true, metaAdSetId: true, name: true, status: true },
   });

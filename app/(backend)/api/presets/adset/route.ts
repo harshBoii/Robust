@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { Prisma } from '@/app/generated/prisma/client';
 
 import { getSession } from '@/lib/auth/session';
+import { parseScheduleDuration } from '@/lib/meta/adset-schedule';
 import { prisma } from '@/lib/prisma';
 
 export const dynamic = 'force-dynamic';
@@ -30,6 +31,8 @@ type PostBody = {
   lifetimeBudget?: unknown;
   startTime?: unknown;
   endTime?: unknown;
+  scheduleDuration?: unknown;
+  scheduleCustomEnd?: unknown;
   billingEvent?: unknown;
   optimizationGoal?: unknown;
   destinationType?: unknown;
@@ -64,6 +67,15 @@ export async function POST(req: NextRequest) {
   const name = typeof body.name === 'string' ? body.name.trim() : '';
   if (!name) return NextResponse.json({ error: 'Missing name' }, { status: 400 });
 
+  const scheduleDuration = parseScheduleDuration(body.scheduleDuration);
+  const scheduleCustomEnd = parseIso(body.scheduleCustomEnd);
+  if (scheduleDuration === 'custom' && !scheduleCustomEnd) {
+    return NextResponse.json({ error: 'Custom end date is required when duration is custom' }, { status: 400 });
+  }
+  if (scheduleCustomEnd && scheduleDuration !== 'custom') {
+    return NextResponse.json({ error: 'scheduleCustomEnd is only valid with custom duration' }, { status: 400 });
+  }
+
   const pinnedCampaignId =
     typeof body.pinnedCampaignId === 'string' ? body.pinnedCampaignId : null;
   if (pinnedCampaignId) {
@@ -86,8 +98,10 @@ export async function POST(req: NextRequest) {
       isDefault: Boolean(body.isDefault),
       dailyBudget: typeof body.dailyBudget === 'number' ? BigInt(Math.floor(body.dailyBudget)) : null,
       lifetimeBudget: typeof body.lifetimeBudget === 'number' ? BigInt(Math.floor(body.lifetimeBudget)) : null,
-      startTime: parseIso(body.startTime),
-      endTime: parseIso(body.endTime),
+      startTime: scheduleDuration ? null : parseIso(body.startTime),
+      endTime: scheduleDuration ? null : parseIso(body.endTime),
+      scheduleDuration,
+      scheduleCustomEnd: scheduleDuration === 'custom' ? scheduleCustomEnd : null,
       billingEvent: typeof body.billingEvent === 'string' ? body.billingEvent : null,
       optimizationGoal: typeof body.optimizationGoal === 'string' ? body.optimizationGoal : null,
       destinationType: typeof body.destinationType === 'string' ? body.destinationType : null,

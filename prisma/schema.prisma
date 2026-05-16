@@ -494,8 +494,13 @@ model AdsetPreset {
   isDefault      Boolean   @default(false)
   dailyBudget    BigInt?
   lifetimeBudget BigInt?
+  /// Legacy absolute schedule; prefer scheduleDuration + scheduleCustomEnd
   startTime      DateTime?
   endTime        DateTime?
+  /// 3_days | 1_week | 1_month | custom — end is computed at ad set creation time
+  scheduleDuration   String?   @db.VarChar(32)
+  /// Required when scheduleDuration is custom
+  scheduleCustomEnd  DateTime? @db.Timestamptz(3)
   billingEvent     String?  @db.VarChar(64)
   optimizationGoal String?  @db.VarChar(100)
   destinationType  String?  @db.VarChar(64)
