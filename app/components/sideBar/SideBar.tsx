@@ -403,7 +403,7 @@ const SecondarySidebarContent = ({
       return (
         <>
           <SectionLabel label="Account" />
-          <SecondaryNavItem icon={Settings} label="Settings" href="/workspace/settings" />
+          {/* <SecondaryNavItem icon={Settings} label="Settings" href="/workspace/settings" /> */}
         </>
       );
 
@@ -545,7 +545,7 @@ export default function AppSidebar({ companyId }: { companyId: string }) {
           <div className="mt-2" />
 
           {/* Workspace / Settings */}
-          <div className="flex w-full flex-col items-center select-none">
+          {/* <div className="flex w-full flex-col items-center select-none">
             <button
               type="button"
               onClick={() => handleSectionClick('workspace')}
@@ -567,7 +567,7 @@ export default function AppSidebar({ companyId }: { companyId: string }) {
             >
               Settings
             </span>
-          </div>
+          </div> */}
 
           {/* Help */}
           <div className="flex w-full flex-col items-center select-none">
