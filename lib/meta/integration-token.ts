@@ -26,7 +26,7 @@ export async function resolveMetaGraphAccessToken(companyId: string): Promise<st
 
   const system = process.env.META_SYSTEM_ACCESS_TOKEN?.trim();
   if (!system) {
-    throw new Error('META_SYSTEM_ACCESS_TOKEN is not set');
+    throw new Error('TOKEN is not set');
   }
   return system;
 }
@@ -39,6 +39,6 @@ export {
 
 export function requireMetaFbPageId(fbPageId: string | null | undefined): string {
   const id = fbPageId?.trim();
-  if (!id) throw new MetaIntegrationIncompleteError();
+  if (!id) throw new Error('PAGE_ID is not set');
   return id;
 }

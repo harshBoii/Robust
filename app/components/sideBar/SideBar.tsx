@@ -442,7 +442,7 @@ export default function AppSidebar({ companyId }: { companyId: string }) {
     switch (sectionId) {
       case 'home':      return '/home';
       case 'manager':   return '/manager/post';
-      case 'createAd':  return '/create-ad';
+      // case 'createAd':  return '/create-ad';
       case 'gallery':   return '/gallery';
       case 'workspace': return '/workspace/settings';
       default:          return '/';
