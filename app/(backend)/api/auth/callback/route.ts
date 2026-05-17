@@ -45,18 +45,18 @@ export async function GET(req: NextRequest) {
 
   if (oauthError) {
     console.error("[meta oauth callback] provider error:", oauthError, oauthErrorDescription ?? "");
-    return redirect(req, "/workspace/settings", { meta_oauth: "error" });
+    return redirect(req, "/manager/meta", { meta_oauth: "error" });
   }
 
   const code = searchParams.get("code");
   if (!code) {
-    return redirect(req, "/workspace/settings", { meta_oauth: "missing_code" });
+    return redirect(req, "/manager/meta", { meta_oauth: "missing_code" });
   }
 
   const env = requireMetaOAuthEnv();
   if (!env) {
     console.error("[meta oauth callback] META_APP_ID, META_APP_SECRET, or META_REDIRECT_URI missing");
-    return redirect(req, "/workspace/settings", { meta_oauth: "config" });
+    return redirect(req, "/manager/meta", { meta_oauth: "config" });
   }
 
   const session = await getSession();
@@ -68,7 +68,7 @@ export async function GET(req: NextRequest) {
   if (stateParam) {
     const companyIdFromState = await verifyMetaOAuthState(stateParam);
     if (!companyIdFromState || companyIdFromState !== session.companyId) {
-      return redirect(req, "/workspace/settings", { meta_oauth: "invalid_state" });
+      return redirect(req, "/manager/meta", { meta_oauth: "invalid_state" });
     }
   }
 
@@ -83,7 +83,7 @@ export async function GET(req: NextRequest) {
 
   if (shortData.error || !shortData.access_token) {
     console.error("[meta oauth callback] short-lived token exchange failed");
-    return redirect(req, "/workspace/settings", { meta_oauth: "token_exchange" });
+    return redirect(req, "/manager/meta", { meta_oauth: "token_exchange" });
   }
 
   const longParams = new URLSearchParams({
@@ -97,7 +97,7 @@ export async function GET(req: NextRequest) {
 
   if (longData.error || !longData.access_token) {
     console.error("[meta oauth callback] long-lived token exchange failed");
-    return redirect(req, "/workspace/settings", { meta_oauth: "token_exchange" });
+    return redirect(req, "/manager/meta", { meta_oauth: "token_exchange" });
   }
 
   await prisma.metaIntegration.upsert({
@@ -111,5 +111,5 @@ export async function GET(req: NextRequest) {
     },
   });
 
-  return redirect(req, "/workspace/settings", { meta_oauth: "connected" });
+  return redirect(req, "/manager/meta", { meta_oauth: "connected" });
 }

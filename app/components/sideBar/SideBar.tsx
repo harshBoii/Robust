@@ -370,11 +370,10 @@ const SecondarySidebarContent = ({
           <SectionLabel label="Automation" />
           <SecondaryNavItem icon={PauseCircle}       label="Auto-Pause Rules" href="/manager/rules" />
           <SecondaryNavItem icon={SlidersHorizontal} label="Presets"          href="/manager/presets" />
-          <SecondaryNavItem icon={CalendarClock}     label="Scheduled Ads"    href="/manager/schedule" />
 
           <SectionLabel label="Integrations" />
           <SecondaryNavItem icon={SiMeta}            label="Meta Connection"  href="/manager/meta" />
-          <DisabledSecondaryNavItem icon={LayoutDashboard} label="Google Ads" badge="Soon" />
+          {/* <DisabledSecondaryNavItem icon={LayoutDashboard} label="Google Ads" badge="Soon" /> */}
         </>
       );
 
