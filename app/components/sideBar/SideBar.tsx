@@ -76,7 +76,7 @@ type MainSection = {
 const MAIN_SECTIONS: MainSection[] = [
   { id: 'home',      label: 'Home',      icon: IconHome,    hasSecondary: true },
   { id: 'manager',   label: 'Manager',   icon: IconManager, hasSecondary: true },
-  { id: 'createAd',  label: 'Create Ad', icon: PlusCircle,  hasSecondary: false },
+  // { id: 'createAd',  label: 'Create Ad', icon: PlusCircle,  hasSecondary: false },
   { id: 'gallery',   label: 'Gallery',   icon: IconGallery, hasSecondary: true },
   { id: 'workspace', label: 'Workspace', icon: Settings,    hasSecondary: true, hidden: true },
 ];
