@@ -11,6 +11,10 @@ import {
   type SavedAdCreative,
 } from '@/app/components/manager/GroupAdCreativesPanel';
 import { PostPresetFieldsPanel } from '@/app/components/manager/presets/PostPresetFieldsPanel';
+import {
+  formatPublishWorkerErrors,
+  triggerPublishWorker,
+} from '@/app/components/manager/triggerPublishWorker';
 import { normalizeAdsetPreset, normalizeCampaignPreset } from '@/app/components/manager/presets/normalize';
 import { persistAdsetPresetDraft, persistCampaignPresetDraft } from '@/app/components/manager/presets/save-preset';
 import type { AdsetPreset, CampaignPreset } from '@/app/components/manager/presets/types';
@@ -538,7 +542,9 @@ export default function PostToMetaClient({ companyId }: { companyId: string }) {
   const [jobRows, setJobRows] = useState<JobRow[]>([]);
 
   const [loading, setLoading] = useState(false);
+  const [workerLoading, setWorkerLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [workerError, setWorkerError] = useState<string | null>(null);
 
   const [campaignPresetId, setCampaignPresetId] = useState('');
   const [adsetPresetId, setAdsetPresetId] = useState('');
@@ -1141,6 +1147,30 @@ export default function PostToMetaClient({ companyId }: { companyId: string }) {
     }
   }, [includedGroups, scheduledAt, selectedAdSetId, selectedCampaignId, toast, useAdSetPerGroup]);
 
+  const refreshJobRows = useCallback(async () => {
+    if (!jobIds.length) return;
+    const qs = new URLSearchParams({ ids: jobIds.join(',') });
+    const data = await json<{ jobs: JobRow[] }>(
+      await fetch(`/api/meta/publish/jobs?${qs.toString()}`, { credentials: 'include' }),
+    );
+    setJobRows(data.jobs ?? []);
+  }, [jobIds]);
+
+  const runPublishWorker = useCallback(async () => {
+    setWorkerLoading(true);
+    setWorkerError(null);
+    try {
+      const { processed } = await triggerPublishWorker(10);
+      const failures = formatPublishWorkerErrors(processed);
+      if (failures) setWorkerError(failures);
+      await refreshJobRows();
+    } catch (e) {
+      setWorkerError(e instanceof Error ? e.message : 'Failed to process publish queue');
+    } finally {
+      setWorkerLoading(false);
+    }
+  }, [refreshJobRows]);
+
   /* ── SSE job tracking ── */
   useEffect(() => {
     if (!jobIds.length) return;
@@ -1351,14 +1381,24 @@ export default function PostToMetaClient({ companyId }: { companyId: string }) {
           </button>
 
           {step === 'Publish' ? (
-            <button
-              type="button"
-              onClick={publish}
-              disabled={loading || includedGroups.length === 0}
-              className="inline-flex h-10 items-center justify-center rounded-xl bg-primary px-4 text-sm font-medium text-primary-foreground transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {loading ? 'Publishing…' : scheduledAt ? 'Schedule ads' : 'Publish now'}
-            </button>
+            <>
+              <button
+                type="button"
+                onClick={runPublishWorker}
+                disabled={loading || workerLoading}
+                className="inline-flex h-10 items-center justify-center rounded-xl border border-input bg-background px-4 text-sm font-medium text-foreground transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {workerLoading ? 'Processing…' : 'Refresh'}
+              </button>
+              <button
+                type="button"
+                onClick={publish}
+                disabled={loading || workerLoading || includedGroups.length === 0}
+                className="inline-flex h-10 items-center justify-center rounded-xl bg-primary px-4 text-sm font-medium text-primary-foreground transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {loading ? 'Publishing…' : scheduledAt ? 'Schedule ads' : 'Publish now'}
+              </button>
+            </>
           ) : (
             <button
               type="button"
@@ -1924,6 +1964,12 @@ export default function PostToMetaClient({ companyId }: { companyId: string }) {
 
             {step === 'Publish' && (
               <div className="space-y-5">
+                {workerError ? (
+                  <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-600 whitespace-pre-wrap">
+                    {workerError}
+                  </div>
+                ) : null}
+
                 <div className="grid gap-3 sm:grid-cols-3">
                   <div className="rounded-2xl border border-border bg-muted/20 p-4">
                     <p className="text-xs font-medium text-muted-foreground">Campaign</p>
@@ -1941,7 +1987,7 @@ export default function PostToMetaClient({ companyId }: { companyId: string }) {
                   </div>
                 </div>
 
-                <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_220px]">
+                <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto_auto]">
                   <div>
                     <Label htmlFor="scheduleAt" optional>
                       Schedule
@@ -1956,8 +2002,17 @@ export default function PostToMetaClient({ companyId }: { companyId: string }) {
 
                   <button
                     type="button"
+                    onClick={runPublishWorker}
+                    disabled={loading || workerLoading}
+                    className="inline-flex h-10 items-center justify-center self-end rounded-xl border border-input bg-background px-4 text-sm font-medium text-foreground transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {workerLoading ? 'Processing…' : 'Refresh'}
+                  </button>
+
+                  <button
+                    type="button"
                     onClick={publish}
-                    disabled={loading || includedGroups.length === 0}
+                    disabled={loading || workerLoading || includedGroups.length === 0}
                     className="inline-flex h-10 items-center justify-center self-end rounded-xl bg-primary px-4 text-sm font-medium text-primary-foreground transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {loading ? 'Publishing…' : scheduledAt ? 'Schedule ads' : 'Publish now'}

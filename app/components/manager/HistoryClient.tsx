@@ -3,6 +3,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Loader2, Copy, RefreshCw } from 'lucide-react';
 import { useToast } from '@/app/components/UI/ToastProvider';
+import {
+  formatPublishWorkerErrors,
+  triggerPublishWorker,
+} from '@/app/components/manager/triggerPublishWorker';
 
 type HistoryRow = {
   kind: 'ad' | 'job';
@@ -32,7 +36,9 @@ export default function HistoryClient() {
   const toast = useToast();
   const [rows, setRows] = useState<HistoryRow[]>([]);
   const [loading, setLoading] = useState(false);
+  const [workerLoading, setWorkerLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [workerError, setWorkerError] = useState<string | null>(null);
 
   const [q, setQ] = useState('');
   const [status, setStatus] = useState<'ALL' | 'ACTIVE' | 'PAUSED' | 'ARCHIVED' | 'PROCESSING' | 'FAILED'>('ALL');
@@ -84,6 +90,21 @@ export default function HistoryClient() {
     }
   }, [load, toast]);
 
+  const runPublishWorker = useCallback(async () => {
+    setWorkerLoading(true);
+    setWorkerError(null);
+    try {
+      const { processed } = await triggerPublishWorker(10);
+      const failures = formatPublishWorkerErrors(processed);
+      if (failures) setWorkerError(failures);
+      await load();
+    } catch (e) {
+      setWorkerError(e instanceof Error ? e.message : 'Failed to process publish queue');
+    } finally {
+      setWorkerLoading(false);
+    }
+  }, [load]);
+
   return (
     <div className="glass-card p-6 space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -91,9 +112,25 @@ export default function HistoryClient() {
           <h1 className="font-heading text-3xl font-semibold tracking-tight">Ad History</h1>
           <p className="mt-2 text-muted-foreground">Active, processing, and historical ads (jobs + published ads).</p>
         </div>
-        <button type="button" className="glass-button px-3 py-2 text-sm flex items-center gap-2" onClick={load} disabled={loading}>
-          <RefreshCw className="h-4 w-4" /> Refresh
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            className="glass-button px-3 py-2 text-sm"
+            onClick={load}
+            disabled={loading || workerLoading}
+          >
+            Reload list
+          </button>
+          <button
+            type="button"
+            className="glass-button-primary px-3 py-2 text-sm flex items-center gap-2"
+            onClick={runPublishWorker}
+            disabled={loading || workerLoading}
+          >
+            <RefreshCw className={`h-4 w-4 ${workerLoading ? 'animate-spin' : ''}`} />
+            {workerLoading ? 'Processing…' : 'Refresh'}
+          </button>
+        </div>
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
@@ -126,6 +163,12 @@ export default function HistoryClient() {
       {error && (
         <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-600">
           {error}
+        </div>
+      )}
+
+      {workerError && (
+        <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-600 whitespace-pre-wrap">
+          {workerError}
         </div>
       )}
 
