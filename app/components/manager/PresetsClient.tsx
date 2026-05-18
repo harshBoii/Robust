@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useToast } from '@/app/components/UI/ToastProvider';
 import { SCHEDULE_DURATION_OPTIONS, type ScheduleDuration } from '@/lib/meta/adset-schedule';
 import {
@@ -366,6 +366,8 @@ export default function PresetsClient() {
   const [advancedTargetingJson, setAdvancedTargetingJson] = useState('');
   const [robustaAdType, setRobustaAdType] = useState<string | null>(null);
   const [robustaTone, setRobustaTone] = useState<string | null>(null);
+  const lastLoadedCampaignPresetIdRef = useRef<string | null | undefined>(undefined);
+  const lastLoadedAdsetPresetIdRef = useRef<string | null | undefined>(undefined);
 
   const setTargeting = useCallback((updater: (prev: AnyObj) => AnyObj) => {
     setDraftAdset((p) => {
@@ -457,14 +459,23 @@ export default function PresetsClient() {
 
   useEffect(() => {
     if (tab !== 'adset') return;
+    if (lastLoadedAdsetPresetIdRef.current === selectedAdsetPresetId) return;
+    lastLoadedAdsetPresetIdRef.current = selectedAdsetPresetId;
     setDraftAdset(selectedAdsetPreset ?? blankAdsetPreset);
     setAdvancedTargetingJson(JSON.stringify((selectedAdsetPreset ?? blankAdsetPreset).targeting ?? {}, null, 2));
-  }, [tab, selectedAdsetPreset, blankAdsetPreset]);
+  }, [tab, selectedAdsetPresetId, selectedAdsetPreset, blankAdsetPreset]);
 
   useEffect(() => {
     if (tab !== 'campaign') return;
+    if (lastLoadedCampaignPresetIdRef.current === selectedCampaignPresetId) return;
+    lastLoadedCampaignPresetIdRef.current = selectedCampaignPresetId;
     setDraftCampaign(selectedCampaignPreset ?? blankCampaignPreset);
-  }, [tab, selectedCampaignPreset, blankCampaignPreset]);
+  }, [tab, selectedCampaignPresetId, selectedCampaignPreset, blankCampaignPreset]);
+
+  useEffect(() => {
+    if (!robustaAdType) return;
+    setDraftCampaign((p) => ({ ...p, objective: robustaAdType }));
+  }, [robustaAdType]);
 
   const saveAdset = useCallback(async () => {
     if (!draftAdset.name.trim()) { toast.push({ kind: 'error', title: 'Missing name', message: 'Please name this preset.' }); return; }
@@ -661,7 +672,12 @@ export default function PresetsClient() {
           <PresetList
             title="Ad Set Presets" items={adsetPresets} selectedId={selectedAdsetPresetId}
             onSelect={setSelectedAdsetPresetId}
-            onNew={() => { setSelectedAdsetPresetId(null); setDraftAdset(blankAdsetPreset); setAdvancedTargetingJson(JSON.stringify(blankAdsetPreset.targeting ?? {}, null, 2)); }}
+            onNew={() => {
+              lastLoadedAdsetPresetIdRef.current = undefined;
+              setSelectedAdsetPresetId(null);
+              setDraftAdset(blankAdsetPreset);
+              setAdvancedTargetingJson(JSON.stringify(blankAdsetPreset.targeting ?? {}, null, 2));
+            }}
             emptyText="No ad set presets yet"
             renderSub={(p) => p.pinnedCampaign?.name ? `📌 ${p.pinnedCampaign.name}` : 'Not pinned'}
           />
@@ -669,7 +685,11 @@ export default function PresetsClient() {
           <PresetList
             title="Campaign Presets" items={campaignPresets} selectedId={selectedCampaignPresetId}
             onSelect={setSelectedCampaignPresetId}
-            onNew={() => { setSelectedCampaignPresetId(null); setDraftCampaign(blankCampaignPreset); }}
+            onNew={() => {
+              lastLoadedCampaignPresetIdRef.current = undefined;
+              setSelectedCampaignPresetId(null);
+              setDraftCampaign(blankCampaignPreset);
+            }}
             emptyText="No campaign presets yet"
             renderSub={(p) => [p.objective, p.status].filter(Boolean).join(' · ') || '—'}
           />
@@ -820,14 +840,18 @@ export default function PresetsClient() {
       <MissRobustaPanel
         mode="preset"
         subtitle="Preset setup assistant"
+        activePresetTab={tab}
         adType={robustaAdType}
         tone={robustaTone}
         onAdTypeChange={setRobustaAdType}
         onToneChange={setRobustaTone}
         draftCampaign={draftCampaign}
         draftAdset={draftAdset}
-        onApplyCampaign={setDraftCampaign}
-        onApplyAdset={setDraftAdset}
+        onApplyCampaign={(next) => setDraftCampaign({ ...next })}
+        onApplyAdset={(next) => {
+          setDraftAdset({ ...next });
+          setAdvancedTargetingJson(JSON.stringify(next.targeting ?? {}, null, 2));
+        }}
         onAdvancedTargetingSync={setAdvancedTargetingJson}
         showDefaultPresetWarning={
           Boolean(draftCampaign.isDefault) || Boolean(draftAdset.isDefault)

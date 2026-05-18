@@ -614,8 +614,15 @@ export async function createAdCreative(
       image_hash: input.imageHash,
     };
   } else if (input.videoId) {
+    const imageUrl = input.videoThumbnailUrl?.trim();
+    if (!imageUrl) {
+      throw new Error(
+        'Video ad creative requires videoThumbnailUrl (public R2 image_url for Meta video_data)',
+      );
+    }
     objectStorySpec.video_data = {
       video_id: input.videoId,
+      image_url: imageUrl,
       message: input.primaryText,
       title: input.headline,
       call_to_action: { type: input.ctaType, value: { link: input.landingUrl } },

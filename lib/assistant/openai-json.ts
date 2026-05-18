@@ -23,6 +23,25 @@ export async function completeJsonChat(params: {
   return res.choices[0]?.message?.content ?? '{}';
 }
 
+export async function completeJsonChatWithHistory(params: {
+  model: string;
+  system: string;
+  messages: { role: 'user' | 'assistant'; content: string }[];
+  maxTokens?: number;
+}): Promise<string> {
+  const res = await openai.chat.completions.create({
+    model: params.model,
+    max_tokens: params.maxTokens ?? 1200,
+    temperature: 0.6,
+    response_format: { type: 'json_object' },
+    messages: [
+      { role: 'system', content: params.system },
+      ...params.messages.map((m) => ({ role: m.role, content: m.content })),
+    ],
+  });
+  return res.choices[0]?.message?.content ?? '{}';
+}
+
 export async function completeVisionJsonChat(params: {
   system: string;
   userText: string;

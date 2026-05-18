@@ -56,9 +56,12 @@ export async function POST(req: Request) {
   const tone = typeof body.tone === 'string' ? body.tone.trim() : '';
   const groupLabel = typeof body.groupLabel === 'string' ? body.groupLabel.trim() : undefined;
 
-  if (!assetId || !adType || !tone) {
-    return NextResponse.json({ error: 'assetId, adType, and tone are required' }, { status: 400 });
+  if (!assetId) {
+    return NextResponse.json({ error: 'assetId is required' }, { status: 400 });
   }
+
+  const effectiveAdType = adType || 'OUTCOME_SALES';
+  const effectiveTone = tone || 'general';
 
   try {
     await assertCreativeSuggestAllowed(session.companyId);
@@ -85,7 +88,11 @@ export async function POST(req: Request) {
   }
 
   const system = buildCreativeSuggestSystemPrompt();
-  const userText = buildCreativeSuggestUserText({ adType, tone, groupLabel });
+  const userText = buildCreativeSuggestUserText({
+    adType: effectiveAdType,
+    tone: effectiveTone,
+    groupLabel,
+  });
 
   let imageUrls: string[] = [];
   if (asset.assetType === AssetType.VIDEO) {

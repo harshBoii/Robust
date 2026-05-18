@@ -56,6 +56,10 @@ export const presetBuilderResponseSchema = z.object({
   explanation: z.string(),
 });
 
+export const presetChatResponseSchema = presetBuilderResponseSchema.extend({
+  reply: z.string(),
+});
+
 export const creativeSuggestResponseSchema = z.object({
   headline: z.string().min(1).max(500),
   primaryText: z.string().min(1).max(2000),
@@ -65,7 +69,19 @@ export const creativeSuggestResponseSchema = z.object({
   rationale: z.string(),
 });
 
+export const creativeRefinePatchSchema = z.object({
+  reply: z.string(),
+  headline: z.string().min(1).max(500).optional(),
+  primaryText: z.string().min(1).max(2000).optional(),
+  description: z.string().max(500).optional(),
+  ctaType: z.enum(CTA_OPTIONS).optional(),
+  landingUrl: z.string().url().optional(),
+  rationale: z.string().optional(),
+});
+
 export type CampaignPresetPatch = z.infer<typeof campaignPresetPatchSchema>;
 export type AdsetPresetPatch = z.infer<typeof adsetPresetPatchSchema>;
 export type PresetBuilderResponse = z.infer<typeof presetBuilderResponseSchema>;
+export type PresetChatResponse = z.infer<typeof presetChatResponseSchema>;
 export type CreativeSuggestResponse = z.infer<typeof creativeSuggestResponseSchema>;
+export type CreativeRefineResponse = z.infer<typeof creativeRefinePatchSchema>;

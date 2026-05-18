@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { readApiJson } from '@/lib/api/read-json';
 import { useToast } from '@/app/components/UI/ToastProvider';
 import UploadStep from '@/app/components/createAd/steps/UploadStep';
@@ -18,7 +18,10 @@ import {
 import { normalizeAdsetPreset, normalizeCampaignPreset } from '@/app/components/manager/presets/normalize';
 import { persistAdsetPresetDraft, persistCampaignPresetDraft } from '@/app/components/manager/presets/save-preset';
 import type { AdsetPreset, CampaignPreset } from '@/app/components/manager/presets/types';
+import { CreativeGroupAnalyzeDialog } from '@/app/components/assistant/CreativeGroupAnalyzeDialog';
 import { MissRobustaPanel } from '@/app/components/assistant/MissRobustaPanel';
+import { buildCreativeApplyPatch } from '@/lib/assistant/merge-preset-patch';
+import { pickGroupVideoAssetId } from '@/lib/assistant/pick-group-video-asset';
 
 /* ─────────────────────────────────────────── types ── */
 type Campaign = { id: string; name: string; objective?: string; status?: string; bidStrategy?: string | null };
@@ -559,6 +562,13 @@ export default function PostToMetaClient({ companyId }: { companyId: string }) {
   const [creatingAllGroupId, setCreatingAllGroupId] = useState<string | null>(null);
   const [robustaAdType, setRobustaAdType] = useState<string | null>(null);
   const [robustaTone, setRobustaTone] = useState<string | null>(null);
+  const [activeCreativeGroupId, setActiveCreativeGroupId] = useState<string | null>(null);
+  const [creativeAnalyzeDialogOpen, setCreativeAnalyzeDialogOpen] = useState(false);
+  const [creativeAnalyzeSeedGroupId, setCreativeAnalyzeSeedGroupId] = useState<string | null>(null);
+  const [creativeAnalyzing, setCreativeAnalyzing] = useState(false);
+  /** Skip one preset-id → draft sync after Miss Robusta applies (avoids DB preset overwriting merge). */
+  const skipCampaignPresetSyncRef = useRef(false);
+  const skipAdsetPresetSyncRef = useRef(false);
 
   const selectedCampaign = useMemo(
     () => campaigns.find((c) => c.id === selectedCampaignId),
@@ -579,15 +589,16 @@ export default function PostToMetaClient({ companyId }: { companyId: string }) {
     return 'preset';
   }, [step]);
 
-  const creativeAssistantGroup = includedGroups[0] ?? null;
+  const creativeAssistantGroup = useMemo(() => {
+    if (activeCreativeGroupId) {
+      return includedGroups.find((g) => g.groupId === activeCreativeGroupId) ?? includedGroups[0] ?? null;
+    }
+    return includedGroups[0] ?? null;
+  }, [includedGroups, activeCreativeGroupId]);
+
   const creativeAssistantAssetId = useMemo(() => {
     if (!creativeAssistantGroup) return null;
-    for (const id of creativeAssistantGroup.selectedAssetIds) {
-      const asset = creativeAssistantGroup.assets.find((a) => a.id === id);
-      if (asset?.assetType === 'VIDEO') return asset.id;
-    }
-    const fallback = creativeAssistantGroup.assets.find((a) => a.assetType === 'VIDEO');
-    return fallback?.id ?? null;
+    return pickGroupVideoAssetId(creativeAssistantGroup);
   }, [creativeAssistantGroup]);
 
   const totalSelectedAssets = useMemo(
@@ -606,6 +617,108 @@ export default function PostToMetaClient({ companyId }: { companyId: string }) {
       ),
     );
   }, []);
+
+  const openCreativeAnalyzeDialog = useCallback((seedGroupId: string | null) => {
+    setCreativeAnalyzeSeedGroupId(seedGroupId);
+    setCreativeAnalyzeDialogOpen(true);
+  }, []);
+
+  const runCreativeAnalyzeForGroups = useCallback(
+    async (groupIds: string[]) => {
+      if (groupIds.length === 0) return;
+
+      setCreativeAnalyzing(true);
+      const adType =
+        robustaAdType?.trim() || selectedCampaign?.objective?.trim() || 'OUTCOME_SALES';
+      const tone = robustaTone?.trim() || 'general';
+
+      let succeeded = 0;
+      const failures: string[] = [];
+
+      for (const groupId of groupIds) {
+        const group = includedGroups.find((g) => g.groupId === groupId);
+        if (!group) continue;
+
+        const assetId = pickGroupVideoAssetId(group);
+        if (!assetId) {
+          failures.push(`${group.label}: no video asset`);
+          continue;
+        }
+
+        try {
+          const res = await fetch('/api/assistant/creative-suggest', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              assetId,
+              adType,
+              tone,
+              groupLabel: group.label,
+            }),
+          });
+          const data = (await res.json()) as {
+            headline?: string;
+            primaryText?: string;
+            description?: string;
+            ctaType?: string;
+            landingUrl?: string;
+            skippedFields?: string[];
+            error?: string;
+          };
+          if (!res.ok) throw new Error(data.error ?? 'Analysis failed');
+
+          const patch = buildCreativeApplyPatch(
+            {
+              headline: data.headline,
+              primaryText: data.primaryText,
+              description: data.description,
+              ctaType: data.ctaType,
+              landingUrl: data.landingUrl,
+            },
+            data.skippedFields ?? [],
+          );
+          updateGroupCreative(groupId, patch);
+          succeeded += 1;
+        } catch (e) {
+          failures.push(
+            `${group.label}: ${e instanceof Error ? e.message : 'Analysis failed'}`,
+          );
+        }
+      }
+
+      setCreativeAnalyzing(false);
+      setCreativeAnalyzeDialogOpen(false);
+      if (groupIds[0]) setActiveCreativeGroupId(groupIds[0]);
+
+      if (succeeded > 0) {
+        toast.push({
+          kind: failures.length > 0 ? 'info' : 'success',
+          title:
+            failures.length > 0
+              ? `Analyzed ${succeeded} of ${groupIds.length} groups`
+              : `Analyzed ${succeeded} group${succeeded !== 1 ? 's' : ''}`,
+          message:
+            failures.length > 0
+              ? failures.join(' · ')
+              : 'Creative fields were filled from your videos.',
+        });
+      } else {
+        toast.push({
+          kind: 'error',
+          title: 'Analysis failed',
+          message: failures.join(' · ') || 'Could not analyze the selected groups.',
+        });
+      }
+    },
+    [
+      includedGroups,
+      robustaAdType,
+      robustaTone,
+      selectedCampaign?.objective,
+      updateGroupCreative,
+      toast,
+    ],
+  );
 
   const toggleAsset = useCallback((groupId: string, assetId: string) => {
     setGroups((prev) =>
@@ -1241,6 +1354,10 @@ export default function PostToMetaClient({ companyId }: { companyId: string }) {
   }, [jobIds]);
 
   useEffect(() => {
+    if (skipCampaignPresetSyncRef.current) {
+      skipCampaignPresetSyncRef.current = false;
+      return;
+    }
     if (!campaignPresetId) {
       setDraftCampaignPreset(null);
       return;
@@ -1251,6 +1368,10 @@ export default function PostToMetaClient({ companyId }: { companyId: string }) {
   }, [campaignPresetId, campaignPresetRecords]);
 
   useEffect(() => {
+    if (skipAdsetPresetSyncRef.current) {
+      skipAdsetPresetSyncRef.current = false;
+      return;
+    }
     if (!adsetPresetId) {
       setDraftAdsetPreset(null);
       setAdvancedTargetingJson('');
@@ -1798,7 +1919,21 @@ export default function PostToMetaClient({ companyId }: { companyId: string }) {
                     description="Go back to Media and include at least one group."
                   />
                 ) : (
-                  includedGroups.map((group, index) => (
+                  <>
+                    <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-muted/20 px-4 py-3">
+                      <p className="text-sm text-muted-foreground">
+                        Use Miss Robusta to analyze videos and fill creative copy per group.
+                      </p>
+                      <button
+                        type="button"
+                        disabled={creativeAnalyzing}
+                        onClick={() => openCreativeAnalyzeDialog(null)}
+                        className="inline-flex h-9 items-center justify-center rounded-xl border border-primary/30 bg-primary/10 px-3 text-sm font-medium text-primary transition hover:bg-primary/15 disabled:opacity-50"
+                      >
+                        Analyze groups…
+                      </button>
+                    </div>
+                    {includedGroups.map((group, index) => (
                     <div key={group.groupId} className="rounded-2xl border border-border bg-background">
                       <div className="flex flex-col gap-3 border-b border-border px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
                         <div>
@@ -1813,6 +1948,14 @@ export default function PostToMetaClient({ companyId }: { companyId: string }) {
                         </div>
 
                         <div className="flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            disabled={creativeAnalyzing}
+                            onClick={() => openCreativeAnalyzeDialog(group.groupId)}
+                            className="inline-flex h-9 items-center justify-center rounded-xl border border-primary/30 bg-primary/10 px-3 text-sm font-medium text-primary transition hover:bg-primary/15 disabled:opacity-50"
+                          >
+                            Analyze
+                          </button>
                           <button
                             type="button"
                             onClick={() => copyCreativeFromPrevious(group.groupId)}
@@ -1919,7 +2062,8 @@ export default function PostToMetaClient({ companyId }: { companyId: string }) {
                         </div>
                       </div>
                     </div>
-                  ))
+                  ))}
+                  </>
                 )}
               </div>
             )}
@@ -2188,6 +2332,23 @@ export default function PostToMetaClient({ companyId }: { companyId: string }) {
         </aside>
       </div>
 
+      <CreativeGroupAnalyzeDialog
+        open={creativeAnalyzeDialogOpen}
+        seedGroupId={creativeAnalyzeSeedGroupId}
+        groups={includedGroups.map((g) => ({
+          groupId: g.groupId,
+          label: g.label,
+          selectedAssetCount: g.selectedAssetIds.length,
+          assets: g.assets,
+          selectedAssetIds: g.selectedAssetIds,
+        }))}
+        analyzing={creativeAnalyzing}
+        onClose={() => {
+          if (!creativeAnalyzing) setCreativeAnalyzeDialogOpen(false);
+        }}
+        onConfirm={(groupIds) => void runCreativeAnalyzeForGroups(groupIds)}
+      />
+
       <MissRobustaPanel
         mode={missRobustaMode}
         subtitle={
@@ -2195,6 +2356,7 @@ export default function PostToMetaClient({ companyId }: { companyId: string }) {
             ? 'Video creative copy assistant'
             : 'Campaign & ad set preset assistant'
         }
+        activePresetTab={step === 'Ad Set' ? 'adset' : 'campaign'}
         presetDisabled={step !== 'Campaign' && step !== 'Ad Set'}
         creativeDisabled={step !== 'Creative Fields'}
         adType={robustaAdType}
@@ -2204,19 +2366,22 @@ export default function PostToMetaClient({ companyId }: { companyId: string }) {
         draftCampaign={draftCampaignPreset}
         draftAdset={draftAdsetPreset}
         onApplyCampaign={(next) => {
+          skipCampaignPresetSyncRef.current = true;
+          setDraftCampaignPreset({ ...next });
           if (!campaignPresetId) {
             const pick =
               campaignPresetRecords.find((p) => p.isDefault) ?? campaignPresetRecords[0];
             if (pick) setCampaignPresetId(pick.id);
           }
-          setDraftCampaignPreset(next);
         }}
         onApplyAdset={(next) => {
+          skipAdsetPresetSyncRef.current = true;
+          setDraftAdsetPreset({ ...next });
+          setAdvancedTargetingJson(JSON.stringify(next.targeting ?? {}, null, 2));
           if (!adsetPresetId) {
             const pick = adsetPresetRecords.find((p) => p.isDefault) ?? adsetPresetRecords[0];
             if (pick) setAdsetPresetId(pick.id);
           }
-          setDraftAdsetPreset(next);
         }}
         onAdvancedTargetingSync={setAdvancedTargetingJson}
         showDefaultPresetWarning={
@@ -2224,6 +2389,7 @@ export default function PostToMetaClient({ companyId }: { companyId: string }) {
         }
         creativeAssetId={creativeAssistantAssetId}
         creativeGroupLabel={creativeAssistantGroup?.label}
+        currentCreative={creativeAssistantGroup?.creative}
         onApplyCreative={(patch) => {
           const groupId = creativeAssistantGroup?.groupId;
           if (groupId) updateGroupCreative(groupId, patch);

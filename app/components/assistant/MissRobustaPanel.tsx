@@ -5,14 +5,17 @@ import { useState } from 'react';
 
 import type { AdsetPreset, CampaignPreset } from '@/app/components/manager/presets/types';
 
-import { CreativeModeRenderer } from './CreativeModeRenderer';
+import {
+  CreativeModeRenderer,
+  type CreativeFields,
+} from './CreativeModeRenderer';
 import { PresetModeRenderer } from './PresetModeRenderer';
-import { RobustaAvatar } from './RobustaAvatar';
 
 export type MissRobustaMode = 'preset' | 'creative';
 
 export type MissRobustaPanelProps = {
   mode: MissRobustaMode;
+  activePresetTab?: 'campaign' | 'adset';
   subtitle?: string;
   presetDisabled?: boolean;
   creativeDisabled?: boolean;
@@ -28,11 +31,13 @@ export type MissRobustaPanelProps = {
   showDefaultPresetWarning?: boolean;
   creativeAssetId?: string | null;
   creativeGroupLabel?: string;
+  currentCreative?: CreativeFields;
   onApplyCreative?: (patch: Record<string, string>) => void;
 };
 
 export function MissRobustaPanel({
   mode,
+  activePresetTab = 'campaign',
   subtitle = 'Meta Ads setup assistant',
   presetDisabled,
   creativeDisabled,
@@ -48,6 +53,7 @@ export function MissRobustaPanel({
   showDefaultPresetWarning,
   creativeAssetId,
   creativeGroupLabel,
+  currentCreative,
   onApplyCreative,
 }: MissRobustaPanelProps) {
   const [open, setOpen] = useState(false);
@@ -55,9 +61,16 @@ export function MissRobustaPanel({
   return (
     <div className="fixed bottom-5 right-5 z-[60] flex flex-col items-end gap-3">
       {open && (
-        <div className="glass-card-elevated flex max-h-[min(520px,80vh)] w-[360px] max-w-[calc(100vw-2rem)] flex-col overflow-hidden shadow-2xl">
-          <div className="flex items-center gap-3 border-b border-border/40 px-4 py-3">
-            <RobustaAvatar size="lg" />
+        <div className="glass-card-elevated flex h-[min(560px,85vh)] w-[400px] max-w-[calc(100vw-2rem)] flex-col overflow-hidden shadow-2xl">
+          <div className="flex shrink-0 items-center gap-3 border-b border-border/40 px-4 py-3">
+            <Image
+              src="/mascot/Robust.png"
+              alt="Miss Robusta"
+              width={36}
+              height={36}
+              className="h-9 w-9 rounded-full object-cover"
+              unoptimized
+            />
             <div className="min-w-0 flex-1">
               <p className="text-sm font-semibold text-foreground">Miss Robusta</p>
               <p className="text-[11px] text-muted-foreground">{subtitle}</p>
@@ -75,9 +88,10 @@ export function MissRobustaPanel({
             </button>
           </div>
 
-          <div className="custom-scrollbar flex-1 overflow-y-auto px-3 py-3">
+          <div className="flex min-h-0 flex-1 flex-col px-3 pb-3 pt-2">
             {mode === 'preset' ? (
               <PresetModeRenderer
+                activePresetTab={activePresetTab}
                 adType={adType}
                 tone={tone}
                 onAdTypeChange={onAdTypeChange}
@@ -98,6 +112,7 @@ export function MissRobustaPanel({
                 onToneCapture={onToneChange}
                 assetId={creativeAssetId ?? null}
                 groupLabel={creativeGroupLabel}
+                currentCreative={currentCreative}
                 onApply={(patch) => onApplyCreative?.(patch)}
                 disabled={creativeDisabled}
               />

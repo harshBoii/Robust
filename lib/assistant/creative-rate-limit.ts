@@ -26,9 +26,9 @@ export async function assertCreativeSuggestAllowed(
   const date = utcDateOnly();
 
   const rows = await prisma.$queryRaw<[{ count: number }]>`
-    INSERT INTO assistant_creative_usage (company_id, date, count)
+    INSERT INTO assistant_creative_usage ("companyId", date, count)
     VALUES (${companyId}, ${date}::date, 1)
-    ON CONFLICT (company_id, date)
+    ON CONFLICT ("companyId", date)
     DO UPDATE SET count = assistant_creative_usage.count + 1
     RETURNING count
   `;
