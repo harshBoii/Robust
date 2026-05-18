@@ -50,9 +50,22 @@ model Company {
   adAutomationEvents AdAutomationEvent[]
   notifications      Notification[]
   adPublishJobs      AdPublishJob[]
+  assistantCreativeUsage AssistantCreativeUsage[]
 
   @@index([slug])
   @@map("companies")
+}
+
+/// Per-company daily counter for vision creative-suggest API
+model AssistantCreativeUsage {
+  companyId String
+  date      DateTime @db.Date
+  count     Int      @default(0)
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@id([companyId, date])
+  @@map("assistant_creative_usage")
 }
 
 // ================================================================

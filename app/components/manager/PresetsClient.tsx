@@ -12,6 +12,7 @@ import {
   MESSENGER_POSITION_OPTIONS,
   sanitizeMetaTargeting,
 } from '@/lib/meta/targeting';
+import { MissRobustaPanel } from '@/app/components/assistant/MissRobustaPanel';
 import { AdsetPresetEditor } from '@/app/components/manager/presets/adset-preset-editor';
 import {
   BILLING_EVENT_OPTIONS,
@@ -363,6 +364,8 @@ export default function PresetsClient() {
   const [draftAdset, setDraftAdset] = useState<AdsetPreset>(blankAdsetPreset);
   const [draftCampaign, setDraftCampaign] = useState<CampaignPreset>(blankCampaignPreset);
   const [advancedTargetingJson, setAdvancedTargetingJson] = useState('');
+  const [robustaAdType, setRobustaAdType] = useState<string | null>(null);
+  const [robustaTone, setRobustaTone] = useState<string | null>(null);
 
   const setTargeting = useCallback((updater: (prev: AnyObj) => AnyObj) => {
     setDraftAdset((p) => {
@@ -813,6 +816,23 @@ export default function PresetsClient() {
           </div>
         </div>
       </div>
+
+      <MissRobustaPanel
+        mode="preset"
+        subtitle="Preset setup assistant"
+        adType={robustaAdType}
+        tone={robustaTone}
+        onAdTypeChange={setRobustaAdType}
+        onToneChange={setRobustaTone}
+        draftCampaign={draftCampaign}
+        draftAdset={draftAdset}
+        onApplyCampaign={setDraftCampaign}
+        onApplyAdset={setDraftAdset}
+        onAdvancedTargetingSync={setAdvancedTargetingJson}
+        showDefaultPresetWarning={
+          Boolean(draftCampaign.isDefault) || Boolean(draftAdset.isDefault)
+        }
+      />
     </div>
   );
 }

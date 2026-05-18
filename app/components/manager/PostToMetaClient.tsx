@@ -18,6 +18,7 @@ import {
 import { normalizeAdsetPreset, normalizeCampaignPreset } from '@/app/components/manager/presets/normalize';
 import { persistAdsetPresetDraft, persistCampaignPresetDraft } from '@/app/components/manager/presets/save-preset';
 import type { AdsetPreset, CampaignPreset } from '@/app/components/manager/presets/types';
+import { MissRobustaPanel } from '@/app/components/assistant/MissRobustaPanel';
 
 /* ─────────────────────────────────────────── types ── */
 type Campaign = { id: string; name: string; objective?: string; status?: string; bidStrategy?: string | null };
@@ -556,6 +557,8 @@ export default function PostToMetaClient({ companyId }: { companyId: string }) {
     Record<string, BulkAdCreativeResultRow[]>
   >({});
   const [creatingAllGroupId, setCreatingAllGroupId] = useState<string | null>(null);
+  const [robustaAdType, setRobustaAdType] = useState<string | null>(null);
+  const [robustaTone, setRobustaTone] = useState<string | null>(null);
 
   const selectedCampaign = useMemo(
     () => campaigns.find((c) => c.id === selectedCampaignId),
@@ -570,6 +573,23 @@ export default function PostToMetaClient({ companyId }: { companyId: string }) {
     [bulkUploads, activeBulkUploadId],
   );
   const includedGroups = useMemo(() => groups.filter((g) => g.included), [groups]);
+
+  const missRobustaMode = useMemo<'preset' | 'creative'>(() => {
+    if (step === 'Creative Fields') return 'creative';
+    return 'preset';
+  }, [step]);
+
+  const creativeAssistantGroup = includedGroups[0] ?? null;
+  const creativeAssistantAssetId = useMemo(() => {
+    if (!creativeAssistantGroup) return null;
+    for (const id of creativeAssistantGroup.selectedAssetIds) {
+      const asset = creativeAssistantGroup.assets.find((a) => a.id === id);
+      if (asset?.assetType === 'VIDEO') return asset.id;
+    }
+    const fallback = creativeAssistantGroup.assets.find((a) => a.assetType === 'VIDEO');
+    return fallback?.id ?? null;
+  }, [creativeAssistantGroup]);
+
   const totalSelectedAssets = useMemo(
     () => includedGroups.reduce((sum, group) => sum + group.selectedAssetIds.length, 0),
     [includedGroups],
@@ -2167,6 +2187,48 @@ export default function PostToMetaClient({ companyId }: { companyId: string }) {
           </Card>
         </aside>
       </div>
+
+      <MissRobustaPanel
+        mode={missRobustaMode}
+        subtitle={
+          missRobustaMode === 'creative'
+            ? 'Video creative copy assistant'
+            : 'Campaign & ad set preset assistant'
+        }
+        presetDisabled={step !== 'Campaign' && step !== 'Ad Set'}
+        creativeDisabled={step !== 'Creative Fields'}
+        adType={robustaAdType}
+        tone={robustaTone}
+        onAdTypeChange={setRobustaAdType}
+        onToneChange={setRobustaTone}
+        draftCampaign={draftCampaignPreset}
+        draftAdset={draftAdsetPreset}
+        onApplyCampaign={(next) => {
+          if (!campaignPresetId) {
+            const pick =
+              campaignPresetRecords.find((p) => p.isDefault) ?? campaignPresetRecords[0];
+            if (pick) setCampaignPresetId(pick.id);
+          }
+          setDraftCampaignPreset(next);
+        }}
+        onApplyAdset={(next) => {
+          if (!adsetPresetId) {
+            const pick = adsetPresetRecords.find((p) => p.isDefault) ?? adsetPresetRecords[0];
+            if (pick) setAdsetPresetId(pick.id);
+          }
+          setDraftAdsetPreset(next);
+        }}
+        onAdvancedTargetingSync={setAdvancedTargetingJson}
+        showDefaultPresetWarning={
+          Boolean(draftCampaignPreset?.isDefault) || Boolean(draftAdsetPreset?.isDefault)
+        }
+        creativeAssetId={creativeAssistantAssetId}
+        creativeGroupLabel={creativeAssistantGroup?.label}
+        onApplyCreative={(patch) => {
+          const groupId = creativeAssistantGroup?.groupId;
+          if (groupId) updateGroupCreative(groupId, patch);
+        }}
+      />
     </div>
   );
 }
