@@ -90,6 +90,10 @@ export function normalizeCampaignPreset(p: unknown): CampaignPreset {
     specialAdCategories: Array.isArray(get(p, 'specialAdCategories'))
       ? ((get(p, 'specialAdCategories') as unknown[]).filter((x) => typeof x === 'string') as string[])
       : [],
+    isAdsetBudgetSharingEnabled:
+      typeof get(p, 'isAdsetBudgetSharingEnabled') === 'boolean'
+        ? (get(p, 'isAdsetBudgetSharingEnabled') as boolean)
+        : null,
   };
 }
 
@@ -144,5 +148,6 @@ export function blankCampaignPreset(): CampaignPreset {
     lifetimeBudget: null,
     bidStrategy: null,
     specialAdCategories: [],
+    isAdsetBudgetSharingEnabled: false,
   };
 }

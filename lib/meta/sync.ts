@@ -194,6 +194,10 @@ export async function createAndStoreCampaignFromPreset(input: {
   });
   if (!preset) throw new Error('Campaign preset not found');
 
+  const dailyBudget = preset.dailyBudget ? Number(preset.dailyBudget) : null;
+  const lifetimeBudget = preset.lifetimeBudget ? Number(preset.lifetimeBudget) : null;
+  const usesAdsetBudget = dailyBudget == null && lifetimeBudget == null;
+
   const created = await createCampaign({
     companyId: integration.companyId,
     adAccountId,
@@ -201,12 +205,15 @@ export async function createAndStoreCampaignFromPreset(input: {
     objective: preset.objective ?? 'OUTCOME_TRAFFIC',
     status: asMetaCampaignStatus(preset.status) ?? 'PAUSED',
     bidStrategy: preset.bidStrategy,
-    dailyBudget: preset.dailyBudget ? Number(preset.dailyBudget) : null,
-    lifetimeBudget: preset.lifetimeBudget ? Number(preset.lifetimeBudget) : null,
+    dailyBudget,
+    lifetimeBudget,
     spendCap: preset.spendCap ? Number(preset.spendCap) : null,
     specialAdCategories: Array.isArray(preset.specialAdCategories)
       ? (preset.specialAdCategories as string[])
       : [],
+    isAdsetBudgetSharingEnabled: usesAdsetBudget
+      ? (preset.isAdsetBudgetSharingEnabled ?? false)
+      : null,
   });
 
   return prisma.metaCampaign.create({

@@ -1,6 +1,7 @@
 'use client';
 
 import type { CampaignPreset } from './types';
+import { campaignUsesAdsetBudget } from './payload';
 import { FieldLabel, PRESET_INPUT_CLASS, SectionBox, uniqStrings } from './preset-form-ui';
 
 const BID_STRATEGY_OPTIONS = [
@@ -39,6 +40,28 @@ export function CampaignPresetEditor({
   onChange: (next: CampaignPreset | ((prev: CampaignPreset) => CampaignPreset)) => void;
   showDefaultToggle?: boolean;
 }) {
+  const usesAdsetBudget = campaignUsesAdsetBudget(value);
+
+  const applyCampaignBudget = (patch: {
+    dailyBudget?: string | null;
+    lifetimeBudget?: string | null;
+  }) => {
+    onChange((p) => {
+      const dailyBudget = patch.dailyBudget !== undefined ? patch.dailyBudget : p.dailyBudget;
+      const lifetimeBudget =
+        patch.lifetimeBudget !== undefined ? patch.lifetimeBudget : p.lifetimeBudget;
+      const hasCampaignBudget = Boolean(dailyBudget?.trim() || lifetimeBudget?.trim());
+      return {
+        ...p,
+        dailyBudget,
+        lifetimeBudget,
+        isAdsetBudgetSharingEnabled: hasCampaignBudget
+          ? null
+          : (p.isAdsetBudgetSharingEnabled ?? false),
+      };
+    });
+  };
+
   return (
     <>
       <SectionBox title="Identity">
@@ -137,11 +160,10 @@ export function CampaignPresetEditor({
               className={`${PRESET_INPUT_CLASS} mt-1.5`}
               value={value.dailyBudget ?? ''}
               onChange={(e) =>
-                onChange((p) => ({
-                  ...p,
+                applyCampaignBudget({
                   dailyBudget: e.target.value || null,
-                  lifetimeBudget: e.target.value ? null : p.lifetimeBudget,
-                }))
+                  lifetimeBudget: e.target.value ? null : value.lifetimeBudget,
+                })
               }
             />
           </div>
@@ -155,11 +177,10 @@ export function CampaignPresetEditor({
               className={`${PRESET_INPUT_CLASS} mt-1.5`}
               value={value.lifetimeBudget ?? ''}
               onChange={(e) =>
-                onChange((p) => ({
-                  ...p,
+                applyCampaignBudget({
                   lifetimeBudget: e.target.value || null,
-                  dailyBudget: e.target.value ? null : p.dailyBudget,
-                }))
+                  dailyBudget: e.target.value ? null : value.dailyBudget,
+                })
               }
             />
           </div>
@@ -176,6 +197,39 @@ export function CampaignPresetEditor({
             />
           </div>
         </div>
+        {usesAdsetBudget ? (
+          <div className="mt-4 rounded-xl border border-border/60 bg-muted/20 p-4">
+            <FieldLabel>is_adset_budget_sharing_enabled</FieldLabel>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Required when budget lives on ad sets (no campaign daily/lifetime budget). When enabled,
+              ad sets may share up to 20% of budget to optimize performance.
+            </p>
+            <div className="mt-3 flex gap-2">
+              {(
+                [
+                  { value: false, label: 'Disabled' },
+                  { value: true, label: 'Enabled' },
+                ] as const
+              ).map(({ value: enabled, label }) => (
+                <button
+                  key={label}
+                  type="button"
+                  onClick={() => onChange((p) => ({ ...p, isAdsetBudgetSharingEnabled: enabled }))}
+                  className={[
+                    'flex-1 rounded-xl border py-2 text-xs font-semibold transition-all',
+                    value.isAdsetBudgetSharingEnabled === enabled
+                      ? enabled
+                        ? 'border-primary/40 bg-primary/10 text-primary'
+                        : 'border-border bg-muted text-foreground'
+                      : 'border-border/40 text-muted-foreground hover:border-border hover:text-foreground',
+                  ].join(' ')}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : null}
       </SectionBox>
 
       <SectionBox title="Bidding & Compliance">

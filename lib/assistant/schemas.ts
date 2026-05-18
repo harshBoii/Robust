@@ -30,6 +30,7 @@ export const campaignPresetPatchSchema = z.object({
   lifetimeBudget: budgetString.nullable().optional(),
   bidStrategy: z.enum(BID_STRATEGY_OPTIONS).nullable().optional(),
   specialAdCategories: z.array(z.enum(SPECIAL_AD_CATEGORY_OPTIONS)).optional(),
+  isAdsetBudgetSharingEnabled: z.boolean().nullable().optional(),
 });
 
 export const adsetPresetPatchSchema = z.object({

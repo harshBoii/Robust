@@ -50,6 +50,7 @@ type CampaignPreset = {
   objective: string | null; status: string | null;
   spendCap: string | null; dailyBudget: string | null; lifetimeBudget: string | null;
   bidStrategy: string | null; specialAdCategories: string[] | null;
+  isAdsetBudgetSharingEnabled: boolean | null;
 };
 
 type Tab = 'adset' | 'campaign';
@@ -359,6 +360,7 @@ export default function PresetsClient() {
     objective: 'OUTCOME_SALES', status: 'PAUSED',
     spendCap: null, dailyBudget: null, lifetimeBudget: null,
     bidStrategy: null, specialAdCategories: [],
+    isAdsetBudgetSharingEnabled: false,
   }), []);
 
   const [draftAdset, setDraftAdset] = useState<AdsetPreset>(blankAdsetPreset);
@@ -449,6 +451,10 @@ export default function PresetsClient() {
         lifetimeBudget: normBigint(get(p,'lifetimeBudget')),
         bidStrategy: typeof get(p,'bidStrategy') === 'string' ? (get(p,'bidStrategy') as string) : null,
         specialAdCategories: Array.isArray(get(p,'specialAdCategories')) ? ((get(p,'specialAdCategories') as unknown[]).filter((x) => typeof x === 'string') as string[]) : [],
+        isAdsetBudgetSharingEnabled:
+          typeof get(p, 'isAdsetBudgetSharingEnabled') === 'boolean'
+            ? (get(p, 'isAdsetBudgetSharingEnabled') as boolean)
+            : null,
       })));
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load presets');
@@ -550,6 +556,15 @@ export default function PresetsClient() {
 
   const saveCampaign = useCallback(async () => {
     if (!draftCampaign.name.trim()) { toast.push({ kind: 'error', title: 'Missing name', message: 'Please name this preset.' }); return; }
+    const usesAdsetBudget = !draftCampaign.dailyBudget?.trim() && !draftCampaign.lifetimeBudget?.trim();
+    if (usesAdsetBudget && draftCampaign.isAdsetBudgetSharingEnabled == null) {
+      toast.push({
+        kind: 'error',
+        title: 'Budget sharing required',
+        message: 'Choose enabled or disabled for ad set budget sharing when the campaign has no budget.',
+      });
+      return;
+    }
     const payload = {
       name: draftCampaign.name, isDefault: draftCampaign.isDefault,
       objective: draftCampaign.objective, status: draftCampaign.status,
@@ -558,6 +573,9 @@ export default function PresetsClient() {
       lifetimeBudget: draftCampaign.lifetimeBudget ? Number(draftCampaign.lifetimeBudget) : null,
       bidStrategy: draftCampaign.bidStrategy,
       specialAdCategories: draftCampaign.specialAdCategories ?? [],
+      isAdsetBudgetSharingEnabled: usesAdsetBudget
+        ? draftCampaign.isAdsetBudgetSharingEnabled
+        : null,
     };
     setLoading(true); setError(null);
     try {
@@ -610,6 +628,9 @@ export default function PresetsClient() {
   const messengerPositions = Array.isArray(tgt.messenger_positions)
     ? (tgt.messenger_positions as unknown[]).filter((x) => typeof x === 'string') as string[]
     : [];
+
+  const campaignUsesAdsetBudget =
+    !draftCampaign.dailyBudget?.trim() && !draftCampaign.lifetimeBudget?.trim();
 
   /* ════════════════════════════════════════════════════ render ══ */
   return (
@@ -775,12 +796,36 @@ export default function PresetsClient() {
                     <div>
                       <FieldLabel>Daily budget <span className="text-[10px] normal-case tracking-normal font-normal opacity-60">int64</span></FieldLabel>
                       <input type="number" className="glass-input mt-1.5 w-full px-3 py-2 text-sm" value={draftCampaign.dailyBudget ?? ''}
-                        onChange={(e) => setDraftCampaign((p) => ({ ...p, dailyBudget: e.target.value || null, lifetimeBudget: e.target.value ? null : p.lifetimeBudget }))} />
+                        onChange={(e) => {
+                          const dailyBudget = e.target.value || null;
+                          const lifetimeBudget = dailyBudget ? null : draftCampaign.lifetimeBudget;
+                          const hasCampaignBudget = Boolean(dailyBudget?.trim() || lifetimeBudget?.trim());
+                          setDraftCampaign((p) => ({
+                            ...p,
+                            dailyBudget,
+                            lifetimeBudget,
+                            isAdsetBudgetSharingEnabled: hasCampaignBudget
+                              ? null
+                              : (p.isAdsetBudgetSharingEnabled ?? false),
+                          }));
+                        }} />
                     </div>
                     <div>
                       <FieldLabel>Lifetime budget <span className="text-[10px] normal-case tracking-normal font-normal opacity-60">int64</span></FieldLabel>
                       <input type="number" className="glass-input mt-1.5 w-full px-3 py-2 text-sm" value={draftCampaign.lifetimeBudget ?? ''}
-                        onChange={(e) => setDraftCampaign((p) => ({ ...p, lifetimeBudget: e.target.value || null, dailyBudget: e.target.value ? null : p.dailyBudget }))} />
+                        onChange={(e) => {
+                          const lifetimeBudget = e.target.value || null;
+                          const dailyBudget = lifetimeBudget ? null : draftCampaign.dailyBudget;
+                          const hasCampaignBudget = Boolean(dailyBudget?.trim() || lifetimeBudget?.trim());
+                          setDraftCampaign((p) => ({
+                            ...p,
+                            lifetimeBudget,
+                            dailyBudget,
+                            isAdsetBudgetSharingEnabled: hasCampaignBudget
+                              ? null
+                              : (p.isAdsetBudgetSharingEnabled ?? false),
+                          }));
+                        }} />
                     </div>
                     <div>
                       <FieldLabel>spend_cap <span className="text-[10px] normal-case tracking-normal font-normal opacity-60">int64</span></FieldLabel>
@@ -788,6 +833,41 @@ export default function PresetsClient() {
                         onChange={(e) => setDraftCampaign((p) => ({ ...p, spendCap: e.target.value || null }))} />
                     </div>
                   </div>
+                  {campaignUsesAdsetBudget ? (
+                    <div className="mt-4 rounded-xl border border-border/60 bg-muted/20 p-4">
+                      <FieldLabel>is_adset_budget_sharing_enabled</FieldLabel>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Required when budget lives on ad sets. Enabled allows ad sets to share up to 20% of
+                        budget for performance.
+                      </p>
+                      <div className="mt-3 flex gap-2">
+                        {(
+                          [
+                            { value: false, label: 'Disabled' },
+                            { value: true, label: 'Enabled' },
+                          ] as const
+                        ).map(({ value: enabled, label }) => (
+                          <button
+                            key={label}
+                            type="button"
+                            onClick={() =>
+                              setDraftCampaign((p) => ({ ...p, isAdsetBudgetSharingEnabled: enabled }))
+                            }
+                            className={[
+                              'flex-1 rounded-xl border py-2 text-xs font-semibold transition-all',
+                              draftCampaign.isAdsetBudgetSharingEnabled === enabled
+                                ? enabled
+                                  ? 'border-primary/40 bg-primary/10 text-primary'
+                                  : 'border-border bg-muted text-foreground'
+                                : 'border-border/40 text-muted-foreground hover:border-border hover:text-foreground',
+                            ].join(' ')}
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
                 </SectionBox>
 
                 <SectionBox title="Bidding & Compliance">

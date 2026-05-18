@@ -19,11 +19,12 @@ Return ONLY valid JSON matching this shape:
   "explanation": "short friendly summary for the user"
 }
 
-Allowed campaign fields: name, objective, status, spendCap, dailyBudget, lifetimeBudget, bidStrategy, specialAdCategories
+Allowed campaign fields: name, objective, status, spendCap, dailyBudget, lifetimeBudget, bidStrategy, specialAdCategories, isAdsetBudgetSharingEnabled
 - objective: one of ${CAMPAIGN_OBJECTIVE_OPTIONS.join(', ')}
 - status: one of ${CAMPAIGN_STATUS_OPTIONS.join(', ')}
 - bidStrategy: one of ${BID_STRATEGY_OPTIONS.join(', ')} or null
 - specialAdCategories: array from ${SPECIAL_AD_CATEGORY_OPTIONS.join(', ')}
+- isAdsetBudgetSharingEnabled: boolean — required when dailyBudget and lifetimeBudget are both empty (ad-set budgets). true lets ad sets share ~20% budget; false disables. Omit/null when campaign has a budget.
 - budgets: numeric strings in smallest currency unit (paise for INR)
 
 Allowed adset fields: name, dailyBudget, lifetimeBudget, scheduleDuration, scheduleCustomEnd, billingEvent, optimizationGoal, destinationType, bidStrategy, bidAmount, pacingType, promotedObject, attributionSpec, targeting, bidConstraints

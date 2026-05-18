@@ -54,6 +54,16 @@ export function PresetFieldPreviewCard({
           <Row label="Status" value={campaign.status} />
           <Row label="Daily budget" value={campaign.dailyBudget} />
           <Row label="Bid strategy" value={campaign.bidStrategy} />
+          <Row
+            label="Ad set budget sharing"
+            value={
+              campaign.isAdsetBudgetSharingEnabled == null
+                ? null
+                : campaign.isAdsetBudgetSharingEnabled
+                  ? 'Enabled'
+                  : 'Disabled'
+            }
+          />
         </div>
       ) : null}
       {adset ? (

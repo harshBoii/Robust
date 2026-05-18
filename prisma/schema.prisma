@@ -560,9 +560,11 @@ model CampaignPreset {
   spendCap            BigInt?
   dailyBudget         BigInt?
   lifetimeBudget      BigInt?
-  bidStrategy         String?  @db.VarChar(64)
-  specialAdCategories Json?    @default("[]")
-  createdAt           DateTime @default(now()) @db.Timestamptz(3)
+  bidStrategy                  String?  @db.VarChar(64)
+  specialAdCategories          Json?    @default("[]")
+  /// Required by Meta when campaign has no daily/lifetime budget (ad-set budgets). null = CBO / not applicable.
+  isAdsetBudgetSharingEnabled  Boolean?
+  createdAt                    DateTime @default(now()) @db.Timestamptz(3)
   updatedAt           DateTime @updatedAt @db.Timestamptz(3)
 
   company   Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)

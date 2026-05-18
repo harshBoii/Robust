@@ -41,6 +41,8 @@ export type CampaignPreset = {
   lifetimeBudget: string | null;
   bidStrategy: string | null;
   specialAdCategories: string[] | null;
+  /** Meta requires true/false when campaign has no daily/lifetime budget. null when using CBO. */
+  isAdsetBudgetSharingEnabled: boolean | null;
 };
 
 export type AnyObj = Record<string, unknown>;

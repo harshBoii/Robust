@@ -29,6 +29,7 @@ type PostBody = {
   lifetimeBudget?: unknown;
   bidStrategy?: unknown;
   specialAdCategories?: unknown;
+  isAdsetBudgetSharingEnabled?: unknown;
 };
 
 export async function POST(req: NextRequest) {
@@ -59,6 +60,11 @@ export async function POST(req: NextRequest) {
       specialAdCategories: Array.isArray(body.specialAdCategories)
         ? (body.specialAdCategories.filter((x) => typeof x === 'string') as string[])
         : [],
+      ...(typeof body.isAdsetBudgetSharingEnabled === 'boolean'
+        ? { isAdsetBudgetSharingEnabled: body.isAdsetBudgetSharingEnabled }
+        : body.isAdsetBudgetSharingEnabled === null
+          ? { isAdsetBudgetSharingEnabled: null }
+          : {}),
     },
   });
 

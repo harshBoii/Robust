@@ -16,6 +16,7 @@ type PatchBody = {
   lifetimeBudget?: unknown;
   bidStrategy?: unknown;
   specialAdCategories?: unknown;
+  isAdsetBudgetSharingEnabled?: unknown;
 };
 
 export async function PATCH(
@@ -61,6 +62,11 @@ export async function PATCH(
       ...(Array.isArray(body.specialAdCategories)
         ? { specialAdCategories: body.specialAdCategories.filter((x) => typeof x === 'string') as string[] }
         : {}),
+      ...(typeof body.isAdsetBudgetSharingEnabled === 'boolean'
+        ? { isAdsetBudgetSharingEnabled: body.isAdsetBudgetSharingEnabled }
+        : body.isAdsetBudgetSharingEnabled === null
+          ? { isAdsetBudgetSharingEnabled: null }
+          : {}),
     },
   });
 

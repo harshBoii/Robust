@@ -433,8 +433,11 @@ export async function createCampaign(
     lifetimeBudget?: number | null;
     bidStrategy?: string | null;
     spendCap?: number | null;
+    /** Required when daily/lifetime campaign budget is omitted (ad-set budgets). */
+    isAdsetBudgetSharingEnabled?: boolean | null;
   } & MetaGraphAuth,
 ): Promise<{ id: string }> {
+  const usesAdsetBudget = input.dailyBudget == null && input.lifetimeBudget == null;
   const resp = await metaFetch<{ id: string }>(`/${input.adAccountId}/campaigns`, {
     method: 'POST',
     companyId: input.companyId,
@@ -449,6 +452,13 @@ export async function createCampaign(
       ...(input.spendCap != null ? { spend_cap: String(Math.floor(input.spendCap)) } : {}),
       ...(input.specialAdCategories?.length
         ? { special_ad_categories: JSON.stringify(input.specialAdCategories) }
+        : {}),
+      ...(usesAdsetBudget
+        ? {
+            is_adset_budget_sharing_enabled: String(
+              input.isAdsetBudgetSharingEnabled === true,
+            ),
+          }
         : {}),
     },
   });

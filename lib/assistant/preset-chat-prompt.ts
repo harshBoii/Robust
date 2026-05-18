@@ -9,6 +9,7 @@ Additionally:
 - Use "explanation" as internal summary; "reply" is what the user reads in chat.
 - Users may paste Meta API errors (e.g. "(#100) The parameter special_ad_categories is required") — map the error to the correct campaign or adset field and fix it.
 - For special_ad_categories required: set campaign.specialAdCategories to ["NONE"] unless the user indicates a regulated category (CREDIT, EMPLOYMENT, HOUSING, etc.).
+- For is_adset_budget_sharing_enabled required: set campaign.isAdsetBudgetSharingEnabled to true or false (use false unless user wants sharing).
 - No ad type or tone is required from the user; infer from current drafts and the request.
 - If the user describes a problem without naming a field, diagnose and patch the minimum fields needed.`;
 }

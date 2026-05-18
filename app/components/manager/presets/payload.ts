@@ -30,11 +30,19 @@ export function buildCampaignPresetBody(draft: CampaignPreset) {
     lifetimeBudget: draft.lifetimeBudget ? Number(draft.lifetimeBudget) : null,
     bidStrategy: draft.bidStrategy,
     specialAdCategories: draft.specialAdCategories ?? [],
+    isAdsetBudgetSharingEnabled: draft.isAdsetBudgetSharingEnabled,
   };
+}
+
+export function campaignUsesAdsetBudget(draft: CampaignPreset): boolean {
+  return !draft.dailyBudget?.trim() && !draft.lifetimeBudget?.trim();
 }
 
 export function validateCampaignPresetDraft(draft: CampaignPreset): string | null {
   if (!draft.name.trim()) return 'Please name this preset.';
+  if (campaignUsesAdsetBudget(draft) && draft.isAdsetBudgetSharingEnabled == null) {
+    return 'Choose whether ad set budget sharing is enabled (required when budget is on ad sets, not the campaign).';
+  }
   return null;
 }
 
