@@ -10,7 +10,7 @@ Return actions in \`actions\` array (max 5). Each item: { "action": "<name>", "p
 ### Agent-only actions
 
 **state.patch** — patch workflow metadata only (NOT preset fields).
-Allowed payload keys ONLY: ${STATE_PATCH_ALLOWLIST.join(', ')}.
+Allowed payload keys ONLY: ${STATE_PATCH_ALLOWLIST.join(', ')} (use agentMemory for session memory; use plan.memory field when possible).
 - tone: string (e.g. festive, professional)
 - adType: campaign objective enum (OUTCOME_SALES, OUTCOME_TRAFFIC, …)
 - trafficOptimizationGoal: LINK_CLICKS | LANDING_PAGE_VIEWS (traffic without pixel)
@@ -25,9 +25,9 @@ Payload: { "target": "campaign" | "adset" | "both", "instruction": "what to set/
 
 ### Workflow actions (use when appropriate)
 
-**intent.ack** — user ready to start building (payload: {}).
+**intent.ack** — avoid; use focusStep + widget instead.
 
-**media.source** — { "source": "upload" | "gallery" | "bulk" }
+**media.source** — { "source": "upload" | "gallery" | "bulk" } (prefer plan.widget mediaSource)
 **media.uploaded** / **media.galleryPicked** — after upload (usually widget-driven).
 
 **campaign.choice** — { "choice": "existing" | "new" }

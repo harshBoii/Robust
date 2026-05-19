@@ -2,6 +2,8 @@ import 'server-only';
 
 import OpenAI from 'openai';
 
+import { CREATIVE_ANALYSIS_MODEL } from '@/lib/assistant/models';
+
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 export async function completeJsonChat(params: {
@@ -59,7 +61,7 @@ export async function completeVisionJsonChat(params: {
   ];
 
   const res = await openai.chat.completions.create({
-    model: 'gpt-5.5',
+    model: CREATIVE_ANALYSIS_MODEL,
     response_format: { type: 'json_object' },
     messages: [{ role: 'system', content: params.system }, { role: 'user', content }],
   });

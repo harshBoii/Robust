@@ -47,6 +47,10 @@ export type WorkflowState = {
   trafficOptimizationGoal?: 'LINK_CLICKS' | 'LANDING_PAGE_VIEWS';
   /** Agent notes from conversation (not sent to Meta). */
   intentNotes?: string;
+  /** Last actionable step the agent chose (persisted for next turn). */
+  agentNextStep?: string;
+  /** Rolling session memory from the agent (not sent to Meta). */
+  agentMemory?: string;
   /** Shown in UI thinking panel only — not inline in messages. */
   lastOperationError?: string | null;
 };

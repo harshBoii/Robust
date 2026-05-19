@@ -2,6 +2,8 @@ import { z } from 'zod';
 
 import { CAMPAIGN_OBJECTIVE_OPTIONS } from '@/lib/assistant/constants';
 
+import { AGENT_ACTIONABLE_STEPS } from './agent-steps';
+
 const chatWorkflowSteps = z.enum([
   'intent',
   'mediaSource',
@@ -54,6 +56,7 @@ export const STATE_PATCH_ALLOWLIST = [
   'adType',
   'trafficOptimizationGoal',
   'intentNotes',
+  'agentMemory',
 ] as const;
 
 export const statePatchPayloadSchema = z.object({
@@ -70,6 +73,10 @@ export const agentActionSchema = z.object({
 
 export const agentPlanSchema = z.object({
   reply: z.string().min(1).max(8000),
+  /** Required actionable step — drives widget + persisted state. */
+  nextStep: z.enum(AGENT_ACTIONABLE_STEPS),
+  /** Short session memory persisted for following turns. */
+  memory: z.string().max(4000).optional(),
   focusStep: chatWorkflowSteps.optional(),
   widget: z
     .object({

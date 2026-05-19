@@ -2,6 +2,7 @@ import 'server-only';
 
 import type { AdsetPreset, CampaignPreset } from '@/app/components/manager/presets/types';
 import { completeJsonChatWithHistory } from '@/lib/assistant/openai-json';
+import { PRESET_BUILD_MODEL } from '@/lib/assistant/models';
 import {
   buildPresetChatMessagesForApi,
   buildPresetChatSystemPrompt,
@@ -53,7 +54,7 @@ export async function runPresetChatTurn(input: {
   });
 
   const content = await completeJsonChatWithHistory({
-    model: 'gpt-5.5',
+    model: PRESET_BUILD_MODEL,
     system,
     messages: apiMessages,
   });

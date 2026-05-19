@@ -7,6 +7,7 @@ import type { SerializedMessage } from '@/lib/chats/types';
 
 import { ChatWidgetRenderer } from './ChatWidgetRenderer';
 import { ChatsThread, type ThreadMessage } from './ChatsThread';
+import { composerSuggestions as agentComposerSuggestions } from '@/lib/chats/composer-suggestions';
 import { getBackStepOptions } from '@/lib/chats/workflow-navigation';
 import type { ChatWorkflowStep, WorkflowState } from '@/lib/chats/types';
 
@@ -20,22 +21,7 @@ function stepSuggestions(
     ? getBackStepOptions(step as ChatWorkflowStep, workflowState).map((o) => o.label)
     : [];
 
-  const base = (() => {
-  switch (step) {
-    case 'intent':
-      return ['Post an ad', 'I want to promote a product', 'Help me launch a campaign'];
-    case 'mediaSource':
-      return ['Upload here', 'Pick from gallery'];
-    case 'campaignChoice':
-      return ['Use existing campaign', 'Create a new campaign'];
-    case 'adsetChoice':
-      return ['Use existing ad set', 'Create a new ad set'];
-    case 'creativeMode':
-      return ['Write copy with AI', 'I have a CSV'];
-    default:
-      return undefined;
-  }
-  })();
+  const base = agentComposerSuggestions(step, workflowState);
 
   if (!base && back.length === 0) return undefined;
   const merged = [...(back.length ? ['Go back'] : []), ...(base ?? [])];

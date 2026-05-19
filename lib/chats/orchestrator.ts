@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { enqueueBulkPublish } from '@/lib/meta/process-publish-jobs';
 
 import { runAdAgentTurn } from './agent-turn';
+import { buildGuidedReply } from './guided-replies';
 import { approveAdsetWithRecovery, approveCampaignWithRecovery } from './approve-with-recovery';
 import { resolveActionUserMessage } from './action-user-message';
 import { isCampaignObjectiveAllowed } from './campaign-objective-rules';
@@ -178,8 +179,14 @@ export async function handleChatMessage(
     companyId,
     plan,
     userRow,
+    userText: text,
   });
 }
+
+export type HandleChatActionOptions = {
+  /** When true, update workflow only — no chat rows (agent turn emits one reply). */
+  silent?: boolean;
+};
 
 export async function handleChatAction(
   sessionId: string,
@@ -187,6 +194,7 @@ export async function handleChatAction(
   action: ChatActionType,
   payload: Record<string, unknown>,
   userMessage?: string | null,
+  options?: HandleChatActionOptions,
 ): Promise<OrchestratorResult> {
   const session = await getChatSession(sessionId, companyId);
   if (!session) throw new Error('Session not found');
@@ -199,61 +207,45 @@ export async function handleChatAction(
 
   const displayUserText =
     userMessage?.trim() || resolveActionUserMessage(action, payload) || null;
-  if (displayUserText && action !== 'creative.aiDone') {
+  if (displayUserText && action !== 'creative.aiDone' && !options?.silent) {
     newMessages.push(await userMsg(sessionId, displayUserText));
   }
+
+  const silent = options?.silent === true;
+  const say = async (
+    content: string,
+    widgetType?: WidgetType | null,
+    widgetPayload?: unknown,
+  ) => {
+    if (silent) return;
+    newMessages.push(await assistantMsg(sessionId, content, widgetType ?? undefined, widgetPayload));
+  };
 
   switch (action) {
     case 'intent.ack': {
       if (hasCreativesReady(nextState)) {
         nextStep = 'campaignChoice';
-        newMessages.push(
-          await assistantMsg(
-            sessionId,
-            "Your creatives are already in — let's set up your campaign.",
-            'campaignChoice',
-          ),
-        );
+        await say("Your creatives are already in — let's set up your campaign.",'campaignChoice');
         break;
       }
       nextStep = 'mediaSource';
-      newMessages.push(
-        await assistantMsg(
-          sessionId,
-          "Let's build your ad. How would you like to add your creatives?",
-          'mediaSource',
-        ),
-      );
+      await say("Let's build your ad. How would you like to add your creatives?",'mediaSource');
       break;
     }
 
     case 'media.source': {
       if (hasCreativesReady(nextState)) {
         nextStep = 'campaignChoice';
-        newMessages.push(
-          await assistantMsg(
-            sessionId,
-            "Your creatives are already in — let's set up your campaign.",
-            'campaignChoice',
-          ),
-        );
+        await say("Your creatives are already in — let's set up your campaign.",'campaignChoice');
         break;
       }
       const source = payload.source as string;
       if (source === 'gallery') {
         nextStep = 'mediaPick';
-        newMessages.push(
-          await assistantMsg(sessionId, 'Pick a bulk folder or creatives from your gallery.', 'mediaPick'),
-        );
+        await say('Pick a bulk folder or creatives from your gallery.', 'mediaPick');
       } else {
         nextStep = 'mediaUpload';
-        newMessages.push(
-          await assistantMsg(
-            sessionId,
-            "Drop your images and videos here. I'll group them once processing finishes.",
-            'mediaUpload',
-          ),
-        );
+        await say("Drop your images and videos here. I'll group them once processing finishes.",'mediaUpload');
       }
       break;
     }
@@ -267,7 +259,7 @@ export async function handleChatAction(
       nextState.bulkUploadId = bulkUploadId;
       nextState.assetIds = assetIds;
       await persistSession(session, 'mediaAnalyze', nextState, { bulkUploadId });
-      return handleChatAction(sessionId, companyId, 'media.analyzed', { bulkUploadId });
+      return handleChatAction(sessionId, companyId, 'media.analyzed', { bulkUploadId }, undefined, options);
     }
 
     case 'media.analyzed': {
@@ -281,14 +273,9 @@ export async function handleChatAction(
       nextState.bulkUploadId = bulkUploadId;
       nextState.groups = groups;
       nextStep = 'campaignChoice';
+      nextState.agentNextStep = 'setup_campaign';
       await settleAnalyzingMessages(sessionId, { groupCount: groups.length });
-      newMessages.push(
-        await assistantMsg(
-          sessionId,
-          `Found **${groups.length}** creative group${groups.length === 1 ? '' : 's'}. Now let's set up your campaign.`,
-          'campaignChoice',
-        ),
-      );
+      await say(buildGuidedReply('setup_campaign', nextState), 'campaignChoice');
       await persistSession(session, nextStep, nextState, { bulkUploadId });
       break;
     }
@@ -297,23 +284,15 @@ export async function handleChatAction(
       const choice = payload.choice as string;
       if (choice === 'existing') {
         nextStep = 'campaignSelect';
-        newMessages.push(
-          await assistantMsg(sessionId, 'Choose an existing campaign:', 'campaignPicker', {
+        await say('Choose an existing campaign:', 'campaignPicker', {
             mode: 'campaign',
-          }),
-        );
+          });
       } else {
         nextStep = 'pixelSetup';
         delete nextState.hasPixel;
         delete nextState.pixelId;
         delete nextState.trafficOptimizationGoal;
-        newMessages.push(
-          await assistantMsg(
-            sessionId,
-            'Before we build your campaign — **do you have a Meta Pixel ID?** Conversion campaigns (Sales, website Leads) need one. You can still run Traffic, Engagement, or Awareness without a pixel.',
-            'pixelQuestion',
-          ),
-        );
+        await say('Before we build your campaign — **do you have a Meta Pixel ID?** Conversion campaigns (Sales, website Leads) need one. You can still run Traffic, Engagement, or Awareness without a pixel.','pixelQuestion');
       }
       break;
     }
@@ -330,11 +309,9 @@ export async function handleChatAction(
       const hint = nextState.hasPixel
         ? 'Great — pick a campaign objective below, then tell me your budget and schedule.'
         : 'No pixel — Sales and website Leads are disabled. Pick Traffic, Engagement, Awareness, or App promotion.';
-      newMessages.push(
-        await assistantMsg(sessionId, hint, 'campaignObjective', {
+      await say(hint, 'campaignObjective', {
           hasPixel: nextState.hasPixel,
-        }),
-      );
+        });
       break;
     }
 
@@ -347,14 +324,10 @@ export async function handleChatAction(
       if (!objective) break;
 
       if (!isCampaignObjectiveAllowed(objective, workflowHasPixel(nextState))) {
-        newMessages.push(
-          await assistantMsg(
-            sessionId,
-            'That objective needs a Meta Pixel. Add your pixel ID above or pick Traffic, Engagement, or Awareness.',
+        await say('That objective needs a Meta Pixel. Add your pixel ID above or pick Traffic, Engagement, or Awareness.',
             'campaignObjective',
             { hasPixel: nextState.hasPixel },
-          ),
-        );
+          );
         nextStep = 'campaignObjective';
         break;
       }
@@ -370,14 +343,7 @@ export async function handleChatAction(
         objective === 'OUTCOME_TRAFFIC' && trafficGoal
           ? ` (optimize for **${trafficGoal === 'LANDING_PAGE_VIEWS' ? 'landing page views' : 'link clicks'}**)`
           : '';
-      newMessages.push(
-        await assistantMsg(
-          sessionId,
-          `**${objective.replace(/^OUTCOME_/, '').replace(/_/g, ' ')}** selected${goalNote}. Tell me your budget, schedule, and any targeting preferences — I'll draft the campaign preset.`,
-          'campaignPreset',
-          { objective, hasPixel: nextState.hasPixel },
-        ),
-      );
+      await say(`**${objective.replace(/^OUTCOME_/, '').replace(/_/g, ' ')}** selected${goalNote}. Tell me your budget, schedule, and any targeting preferences — I'll draft the campaign preset.`, 'campaignPreset', { objective, hasPixel: nextState.hasPixel });
       break;
     }
 
@@ -385,14 +351,10 @@ export async function handleChatAction(
       const campaignId = String(payload.campaignId ?? '');
       nextState.campaignId = campaignId;
       nextStep = 'adsetChoice';
-      newMessages.push(
-        await assistantMsg(
-          sessionId,
-          'Campaign selected. Do you want an existing ad set or create a new one?',
+      await say('Campaign selected. Do you want an existing ad set or create a new one?',
           'adsetChoice',
           { campaignId },
-        ),
-      );
+        );
       await persistSession(session, nextStep, nextState, { campaignId });
       break;
     }
@@ -412,18 +374,11 @@ export async function handleChatAction(
         nextStep = 'campaignApprove';
         const approveHint =
           '\n\nIf this looks right, say **approve** or use the button below.';
-        newMessages.push(
-          await assistantMsg(
-            sessionId,
-            (result.reply ?? 'Please review the updated campaign preset.') + approveHint,
-            'presetPreview',
-            {
+        await say((result.reply ?? 'Please review the updated campaign preset.') + approveHint, 'presetPreview', {
               target: 'campaign',
               campaign: nextState.draftCampaign,
               adset: null,
-            },
-          ),
-        );
+            });
         break;
       }
 
@@ -435,9 +390,7 @@ export async function handleChatAction(
       const intro = result.recovered
         ? `Campaign **${result.created.name}** created after I fixed a Meta validation issue. Existing ad set or create new?`
         : `Campaign **${result.created.name}** created. Existing ad set or create new?`;
-      newMessages.push(
-        await assistantMsg(sessionId, intro, 'adsetChoice', { campaignId: result.created.id }),
-      );
+      await say(intro, 'adsetChoice', { campaignId: result.created.id });
       await persistSession(session, nextStep, nextState, { campaignId: result.created.id });
       break;
     }
@@ -446,11 +399,9 @@ export async function handleChatAction(
       const choice = payload.choice as string;
       if (choice === 'existing') {
         nextStep = 'adsetSelect';
-        newMessages.push(
-          await assistantMsg(sessionId, 'Choose an ad set for your ads:', 'adsetPicker', {
+        await say('Choose an ad set for your ads:', 'adsetPicker', {
             campaignId: nextState.campaignId,
-          }),
-        );
+          });
       } else {
         nextStep = 'adsetPreset';
         const campaignDraft = await resolveCampaignDraftForAdset(nextState, companyId);
@@ -462,13 +413,7 @@ export async function handleChatAction(
         );
         nextState.presetChatMessages = [];
         nextState.presetTarget = 'adset';
-        newMessages.push(
-          await assistantMsg(
-            sessionId,
-            'Describe your ad set — budget, schedule, audience, and optimization. I will align it with your campaign settings.',
-            'adsetPreset',
-          ),
-        );
+        await say('Describe your ad set — budget, schedule, audience, and optimization. I will align it with your campaign settings.','adsetPreset');
       }
       break;
     }
@@ -480,18 +425,14 @@ export async function handleChatAction(
       if (!targetStep) {
         const options = getBackStepOptions(current, nextState);
         nextStep = current;
-        newMessages.push(
-          await assistantMsg(sessionId, 'Which step would you like to go back to?', 'stepNav', {
+        await say('Which step would you like to go back to?', 'stepNav', {
             options,
-          }),
-        );
+          });
         break;
       }
 
       if (!isAllowedBackStep(current, targetStep, nextState)) {
-        newMessages.push(
-          await assistantMsg(sessionId, "You can't jump to that step from here. Pick another option."),
-        );
+        await say("You can't jump to that step from here. Pick another option.");
         break;
       }
 
@@ -530,9 +471,7 @@ export async function handleChatAction(
         widgetPayload.groups = nextState.groups;
       }
 
-      newMessages.push(
-        await assistantMsg(sessionId, content, widgetType ?? undefined, widgetPayload),
-      );
+      await say(content, widgetType ?? undefined, widgetPayload);
       await persistSession(session, nextStep, nextState, {
         campaignId: nextState.campaignId ?? null,
       });
@@ -546,13 +485,7 @@ export async function handleChatAction(
         nextState.groups = nextState.groups.map((g) => ({ ...g, adSetId }));
       }
       nextStep = 'creativeMode';
-      newMessages.push(
-        await assistantMsg(
-          sessionId,
-          'How should we fill in ad copy for each creative group?',
-          'creativeMode',
-        ),
-      );
+      await say('How should we fill in ad copy for each creative group?','creativeMode');
       break;
     }
 
@@ -577,18 +510,11 @@ export async function handleChatAction(
         nextStep = 'adsetApprove';
         const approveHint =
           '\n\nIf this looks right, say **approve** or use the button below.';
-        newMessages.push(
-          await assistantMsg(
-            sessionId,
-            (result.reply ?? 'Please review the updated ad set preset.') + approveHint,
-            'presetPreview',
-            {
+        await say((result.reply ?? 'Please review the updated ad set preset.') + approveHint, 'presetPreview', {
               target: 'adset',
               campaign: nextState.draftCampaign,
               adset: nextState.draftAdset,
-            },
-          ),
-        );
+            });
         break;
       }
 
@@ -603,7 +529,7 @@ export async function handleChatAction(
       const intro = result.recovered
         ? `Ad set **${result.created.name}** is ready — I fixed conversion tracking / pixel settings. How should we write your ad copy?`
         : `Ad set **${result.created.name}** is ready. How should we write your ad copy?`;
-      newMessages.push(await assistantMsg(sessionId, intro, 'creativeMode'));
+      await say(intro, 'creativeMode');
       break;
     }
 
@@ -612,13 +538,7 @@ export async function handleChatAction(
       nextState.creativeMode = mode;
       if (mode === 'csv') {
         nextStep = 'creativeCsv';
-        newMessages.push(
-          await assistantMsg(
-            sessionId,
-            'Upload a CSV with columns: groupKey, headline, primaryText, landingUrl, ctaType (optional).',
-            'creativeCsv',
-          ),
-        );
+        await say('Upload a CSV with columns: groupKey, headline, primaryText, landingUrl, ctaType (optional).','creativeCsv');
       } else {
         nextStep = 'creativeBuild';
         console.log('[chats:creative-ai] creative.mode → creativeBuild', {
@@ -626,13 +546,7 @@ export async function handleChatAction(
           groupCount: nextState.groups?.length ?? 0,
           included: nextState.groups?.filter((g) => g.included).length ?? 0,
         });
-        newMessages.push(
-          await assistantMsg(
-            sessionId,
-            'Generating ad copy for each group with AI…',
-            'creativeBuilding',
-          ),
-        );
+        await say('Generating ad copy for each group with AI…','creativeBuilding');
       }
       break;
     }
@@ -661,11 +575,9 @@ export async function handleChatAction(
         });
       }
       nextStep = 'preview';
-      newMessages.push(
-        await assistantMsg(sessionId, 'Here is your ad preview. Approve or request changes.', 'adPreview', {
+      await say('Here is your ad preview. Approve or request changes.', 'adPreview', {
           groups: nextState.groups,
-        }),
-      );
+        });
       break;
     }
 
@@ -679,35 +591,21 @@ export async function handleChatAction(
       if (incoming) nextState.groups = incoming;
       nextStep = 'preview';
       await settleCreativeBuildingMessages(sessionId);
-      newMessages.push(
-        await assistantMsg(sessionId, 'Here is your ad preview. Approve or request changes.', 'adPreview', {
+      await say('Here is your ad preview. Approve or request changes.', 'adPreview', {
           groups: nextState.groups,
-        }),
-      );
+        });
       break;
     }
 
     case 'preview.changes': {
       nextStep = 'creativeBuild';
-      newMessages.push(
-        await assistantMsg(
-          sessionId,
-          'Tell me what to change, or use AI regenerate on the next card.',
-          'creativeBuilding',
-        ),
-      );
+      await say('Tell me what to change, or use AI regenerate on the next card.','creativeBuilding');
       break;
     }
 
     case 'preview.approved': {
       nextStep = 'publishChoice';
-      newMessages.push(
-        await assistantMsg(
-          sessionId,
-          'Ready to publish. Post immediately or schedule for later?',
-          'publishSchedule',
-        ),
-      );
+      await say('Ready to publish. Post immediately or schedule for later?','publishSchedule');
       break;
     }
 
@@ -740,14 +638,10 @@ export async function handleChatAction(
         currentStep: nextStep,
         workflowState: nextState,
       });
-      newMessages.push(
-        await assistantMsg(
-          sessionId,
-          `Queued **${jobIds.length}** ad${jobIds.length === 1 ? '' : 's'} for publishing. View progress in Ad History.`,
+      await say(`Queued **${jobIds.length}** ad${jobIds.length === 1 ? '' : 's'} for publishing. View progress in Ad History.`,
           'done',
           { jobIds },
-        ),
-      );
+        );
       const refreshed = await getChatSession(sessionId, companyId);
       const serialized = serializeSession(refreshed!);
       return {
@@ -766,7 +660,7 @@ export async function handleChatAction(
     }
 
     default:
-      newMessages.push(await assistantMsg(sessionId, 'Unknown action.'));
+      await say('Unknown action.');
   }
 
   await persistSession(session, nextStep, nextState);

@@ -2,9 +2,11 @@ import 'server-only';
 
 import type { CampaignPreset } from '@/app/components/manager/presets/types';
 import { completeJsonChatWithHistory } from '@/lib/assistant/openai-json';
+import { CHAT_AGENT_MODEL } from '@/lib/assistant/models';
 
 import { buildAdAgentContextMessage, buildAdAgentSystemPrompt } from './agent-prompt';
 import { type AgentPlan, agentPlanSchema } from './agent-schema';
+import { normalizeAgentPlan, suggestAgentNextStep } from './agent-steps';
 import { buildWorkflowProgress } from './workflow-manifest';
 import type { ChatWorkflowStep, SerializedMessage, WorkflowState } from './types';
 
@@ -26,6 +28,8 @@ export function summarizeWorkflowStateForAgent(state: WorkflowState): Record<str
     adType: state.adType ?? campaign?.objective,
     trafficOptimizationGoal: state.trafficOptimizationGoal,
     intentNotes: state.intentNotes,
+    agentNextStep: state.agentNextStep,
+    agentMemory: state.agentMemory,
     groupCount: state.groups?.length ?? 0,
     campaignId: state.campaignId,
     defaultAdSetId: state.defaultAdSetId,
@@ -75,7 +79,8 @@ export async function runAdAgentTurn(input: {
   };
 
   const history = buildAgentHistoryMessages(input.priorMessages);
-  const contextBlock = buildAdAgentContextMessage(ctx);
+  const suggested = suggestAgentNextStep(input.state);
+  const contextBlock = buildAdAgentContextMessage(ctx, suggested);
 
   const apiMessages: { role: 'user' | 'assistant'; content: string }[] = [
     ...history,
@@ -86,7 +91,7 @@ export async function runAdAgentTurn(input: {
   ];
 
   const raw = await completeJsonChatWithHistory({
-    model: 'gpt-5.5',
+    model: CHAT_AGENT_MODEL,
     system: buildAdAgentSystemPrompt(),
     messages: apiMessages,
   });
@@ -95,20 +100,11 @@ export async function runAdAgentTurn(input: {
   try {
     parsed = JSON.parse(raw);
   } catch {
-    parsed = { reply: 'I had trouble processing that. Could you rephrase?', actions: [] };
+    parsed = null;
   }
 
-  const result = agentPlanSchema.safeParse(parsed);
+  const normalized = normalizeAgentPlan(parsed, input.state);
+  const result = agentPlanSchema.safeParse(normalized);
   if (result.success) return result.data;
-
-  return {
-    reply:
-      typeof parsed === 'object' &&
-      parsed !== null &&
-      'reply' in parsed &&
-      typeof (parsed as { reply: unknown }).reply === 'string'
-        ? (parsed as { reply: string }).reply
-        : 'I had trouble planning the next step. Please try again.',
-    actions: [],
-  };
+  return normalized;
 }

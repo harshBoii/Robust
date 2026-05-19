@@ -15,8 +15,14 @@ import {
 } from './agent-schema';
 import { appendChatMessages, getChatSession, updateChatSession } from './repository';
 import { runPresetChatTurn } from './preset-chat-turn';
+import { inferConfidentAutoAction } from './auto-advance-step';
+import { enrichAgentReply } from './guided-replies';
+import {
+  isAgentActionableStep,
+  resolveAgentNextStepUi,
+  suggestAgentNextStep,
+} from './agent-steps';
 import { parseWorkflowState, serializeMessage, serializeSession } from './serialize';
-import { suggestFocusStep } from './workflow-manifest';
 import type {
   ChatActionType,
   ChatWorkflowStep,
@@ -25,11 +31,6 @@ import type {
   WidgetType,
   WorkflowState,
 } from './types';
-
-type PresetBuildAction = AgentAction & {
-  action: 'preset.build';
-  payload?: { target?: string; instruction?: string };
-};
 
 function campaignDraftHasObjective(state: WorkflowState): boolean {
   const d = state.draftCampaign as CampaignPreset | undefined;
@@ -74,24 +75,19 @@ export function normalizePresetBuildOrder(
     expanded.push(a);
   }
 
-  const presetIndices = expanded
-    .map((a, i) => (a.action === 'preset.build' ? i : -1))
-    .filter((i) => i >= 0);
-  if (presetIndices.length >= 2) {
-    const campaignIdx = expanded.findIndex(
-      (a) => a.action === 'preset.build' && a.payload?.target === 'campaign',
-    );
-    const adsetIdx = expanded.findIndex(
-      (a) => a.action === 'preset.build' && a.payload?.target === 'adset',
-    );
-    if (campaignIdx >= 0 && adsetIdx >= 0 && adsetIdx < campaignIdx) {
-      const campaignAction = expanded[campaignIdx];
-      const adsetAction = expanded[adsetIdx];
-      const reordered = expanded.filter((_, i) => i !== campaignIdx && i !== adsetIdx);
-      const insertAt = Math.min(campaignIdx, adsetIdx);
-      reordered.splice(insertAt, 0, campaignAction, adsetAction);
-      return { actions: reordered, rejectReason };
-    }
+  const campaignIdx = expanded.findIndex(
+    (a) => a.action === 'preset.build' && a.payload?.target === 'campaign',
+  );
+  const adsetIdx = expanded.findIndex(
+    (a) => a.action === 'preset.build' && a.payload?.target === 'adset',
+  );
+  if (campaignIdx >= 0 && adsetIdx >= 0 && adsetIdx < campaignIdx) {
+    const campaignAction = expanded[campaignIdx];
+    const adsetAction = expanded[adsetIdx];
+    const reordered = expanded.filter((_, i) => i !== campaignIdx && i !== adsetIdx);
+    const insertAt = Math.min(campaignIdx, adsetIdx);
+    reordered.splice(insertAt, 0, campaignAction, adsetAction);
+    return { actions: reordered, rejectReason };
   }
 
   return { actions: expanded, rejectReason };
@@ -114,17 +110,12 @@ async function appendAssistant(
   return serializeMessage(row);
 }
 
-async function runPresetBuildAction(
-  sessionId: string,
-  companyId: string,
+/** Runs preset LLM and merges drafts — no chat rows (agent emits one combined reply). */
+async function runPresetBuildSilent(
   instruction: string,
   target: 'campaign' | 'adset',
   state: WorkflowState,
-): Promise<{
-  state: WorkflowState;
-  step: ChatWorkflowStep;
-  message: SerializedMessage;
-}> {
+): Promise<{ state: WorkflowState; step: ChatWorkflowStep }> {
   const turn = await runPresetChatTurn({
     target,
     userText: instruction,
@@ -143,29 +134,10 @@ async function runPresetBuildAction(
   };
   delete nextState.lastOperationError;
 
-  const previewCampaign = nextState.draftCampaign as CampaignPreset | undefined;
-  const previewAdset = nextState.draftAdset as AdsetPreset | undefined;
   const nextStep: ChatWorkflowStep =
     target === 'campaign' ? 'campaignApprove' : 'adsetApprove';
 
-  const approveHint = '\n\nIf this looks right, use **Approve** or say you want to create on Meta.';
-  const message = await appendAssistant(
-    sessionId,
-    turn.reply + approveHint,
-    'presetPreview',
-    {
-      target,
-      campaign: target === 'campaign' ? previewCampaign : previewCampaign ?? null,
-      adset: target === 'adset' ? previewAdset : null,
-    },
-  );
-
-  await updateChatSession(sessionId, companyId, {
-    currentStep: nextStep,
-    workflowState: nextState,
-  });
-
-  return { state: nextState, step: nextStep, message };
+  return { state: nextState, step: nextStep };
 }
 
 function isChatActionType(action: string): action is ChatActionType {
@@ -196,11 +168,28 @@ function isChatActionType(action: string): action is ChatActionType {
   return known.includes(action as ChatActionType);
 }
 
+async function runSilentWorkflowAction(
+  sessionId: string,
+  companyId: string,
+  action: ChatActionType,
+  payload: Record<string, unknown>,
+): Promise<{ state: WorkflowState; step: ChatWorkflowStep }> {
+  const { handleChatAction } = await import('./orchestrator');
+  const result = await handleChatAction(sessionId, companyId, action, payload, undefined, {
+    silent: true,
+  });
+  return {
+    state: result.session.workflowState,
+    step: result.session.currentStep,
+  };
+}
+
 export async function executeAgentPlan(input: {
   sessionId: string;
   companyId: string;
   plan: AgentPlan;
   userRow: SerializedMessage;
+  userText: string;
 }): Promise<OrchestratorResult> {
   const parsed = agentPlanSchema.safeParse(input.plan);
   const plan = parsed.success ? parsed.data : input.plan;
@@ -211,8 +200,9 @@ export async function executeAgentPlan(input: {
   let state = parseWorkflowState(session.workflowState);
   let step = session.currentStep as ChatWorkflowStep;
   const newMessages: SerializedMessage[] = [input.userRow];
-  let widgetEmitted = false;
   const actionErrors: string[] = [];
+  let ranPresetBuild = false;
+  let builtPresetAdset = false;
 
   const { actions: normalizedActions, rejectReason } = normalizePresetBuildOrder(
     plan.actions ?? [],
@@ -229,8 +219,7 @@ export async function executeAgentPlan(input: {
         actionErrors.push('Invalid state.patch payload');
         continue;
       }
-      const patch = patchResult.data;
-      state = { ...state, ...patch };
+      state = { ...state, ...patchResult.data };
       await updateChatSession(input.sessionId, input.companyId, { workflowState: state });
       continue;
     }
@@ -239,17 +228,15 @@ export async function executeAgentPlan(input: {
       const target = (item.payload?.target as 'campaign' | 'adset') ?? 'campaign';
       const instruction = String(item.payload?.instruction ?? plan.reply);
       try {
-        const built = await runPresetBuildAction(
-          input.sessionId,
-          input.companyId,
-          instruction,
-          target,
-          state,
-        );
+        const built = await runPresetBuildSilent(instruction, target, state);
         state = built.state;
         step = built.step;
-        newMessages.push(built.message);
-        widgetEmitted = true;
+        ranPresetBuild = true;
+        if (target === 'adset') builtPresetAdset = true;
+        await updateChatSession(input.sessionId, input.companyId, {
+          workflowState: state,
+          currentStep: step,
+        });
         session = (await getChatSession(input.sessionId, input.companyId))!;
       } catch (err) {
         console.error('[chats:agent] preset.build failed:', err);
@@ -268,52 +255,73 @@ export async function executeAgentPlan(input: {
       continue;
     }
 
-    const { handleChatAction } = await import('./orchestrator');
-    const actionResult = await handleChatAction(
+    const ran = await runSilentWorkflowAction(
       input.sessionId,
       input.companyId,
       item.action,
       (item.payload ?? {}) as Record<string, unknown>,
     );
-
-    newMessages.push(...actionResult.newMessages);
-    state = actionResult.session.workflowState;
-    step = actionResult.session.currentStep;
-
-    if (actionResult.newMessages.some((m) => m.widgetType)) {
-      widgetEmitted = true;
-    }
-
+    state = ran.state;
+    step = ran.step;
     session = (await getChatSession(input.sessionId, input.companyId))!;
   }
 
-  const focusStep = plan.focusStep ?? suggestFocusStep(state);
-  step = focusStep;
+  let nextStep = isAgentActionableStep(plan.nextStep)
+    ? plan.nextStep
+    : suggestAgentNextStep(state);
 
-  let replyText = plan.reply;
+  const auto = inferConfidentAutoAction({
+    nextStep,
+    state,
+    userText: input.userText,
+    actionsInPlan: normalizedActions,
+  });
+  if (auto) {
+    console.log('[chats:agent] auto-advance one step:', auto.action, auto.reason);
+    const ran = await runSilentWorkflowAction(
+      input.sessionId,
+      input.companyId,
+      auto.action,
+      auto.payload,
+    );
+    state = ran.state;
+    step = ran.step;
+    nextStep = suggestAgentNextStep(state);
+    session = (await getChatSession(input.sessionId, input.companyId))!;
+  }
+
+  const ui = resolveAgentNextStepUi(nextStep, state, {
+    ranPresetBuild,
+    builtPresetAdset,
+  });
+
+  step = plan.focusStep ?? ui.focusStep;
+  state = {
+    ...state,
+    agentNextStep: nextStep,
+    ...(plan.memory?.trim() ? { agentMemory: plan.memory.trim() } : {}),
+  };
+
+  let replyText = enrichAgentReply(plan.reply, nextStep, state);
   if (actionErrors.length > 0) {
-    replyText = `${plan.reply}\n\n_(Note: ${actionErrors.join(' ')})_`;
+    replyText = `${replyText}\n\n_(Note: ${actionErrors.join(' ')})_`;
   }
 
-  if (!widgetEmitted) {
-    const widgetType = plan.widget?.type as WidgetType | undefined;
-    if (widgetType) {
-      const finalMsg = await appendAssistant(
-        input.sessionId,
-        replyText,
-        widgetType,
-        plan.widget?.payload,
-      );
-      newMessages.push(finalMsg);
-      widgetEmitted = true;
-    } else {
-      const finalMsg = await appendAssistant(input.sessionId, replyText);
-      newMessages.push(finalMsg);
-    }
-  } else {
-    const finalMsg = await appendAssistant(input.sessionId, replyText);
-    newMessages.push(finalMsg);
-  }
+  const widgetType: WidgetType =
+    (ranPresetBuild ? ui.widgetType : (plan.widget?.type as WidgetType | undefined)) ??
+    ui.widgetType;
+  const widgetPayload =
+    ranPresetBuild || !plan.widget?.type
+      ? ui.widgetPayload
+      : { ...ui.widgetPayload, ...plan.widget.payload };
+
+  const finalMsg = await appendAssistant(
+    input.sessionId,
+    replyText,
+    widgetType,
+    widgetPayload,
+  );
+  newMessages.push(finalMsg);
 
   await updateChatSession(input.sessionId, input.companyId, {
     currentStep: step,

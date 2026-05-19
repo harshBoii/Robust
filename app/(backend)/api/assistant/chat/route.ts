@@ -88,7 +88,7 @@ export async function POST(req: Request) {
   }
 
   const stream = await openai.chat.completions.create({
-    model: 'gpt-5.5',
+    model: 'gpt-5.4-mini',
     stream: true,
     messages: [{ role: 'system', content: buildSystemPrompt(context) }, ...messages.map((m) => ({ role: m.role, content: m.content }))],
   });
