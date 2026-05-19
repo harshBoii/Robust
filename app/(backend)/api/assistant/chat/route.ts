@@ -88,14 +88,9 @@ export async function POST(req: Request) {
   }
 
   const stream = await openai.chat.completions.create({
-    model: 'gpt-4o-mini',
+    model: 'gpt-5.5',
     stream: true,
-    max_tokens: 450,
-    temperature: 0.7,
-    messages: [
-      { role: 'system', content: buildSystemPrompt(context) },
-      ...messages.map((m) => ({ role: m.role, content: m.content })),
-    ],
+    messages: [{ role: 'system', content: buildSystemPrompt(context) }, ...messages.map((m) => ({ role: m.role, content: m.content }))],
   });
 
   const encoder = new TextEncoder();

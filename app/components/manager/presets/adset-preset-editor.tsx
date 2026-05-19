@@ -4,12 +4,14 @@ import { SCHEDULE_DURATION_OPTIONS, type ScheduleDuration } from '@/lib/meta/ads
 import {
   ADVANTAGE_AUDIENCE_OPTIONS,
   AUDIENCE_NETWORK_POSITION_OPTIONS,
+  DEVICE_PLATFORM_OPTIONS,
   FACEBOOK_POSITION_OPTIONS,
   getAdvantageAudienceFromTargeting,
   getTargetingExcludedAudiencesForEditor,
   getTargetingInterestsForEditor,
   INSTAGRAM_POSITION_OPTIONS,
   MESSENGER_POSITION_OPTIONS,
+  PUBLISHER_PLATFORM_OPTIONS,
   type AdvantageAudienceFlag,
   withAdvantageAudience,
 } from '@/lib/meta/targeting';
@@ -62,8 +64,6 @@ const DESTINATION_TYPE_OPTIONS = [
   'INSTAGRAM_PROFILE',
 ] as const;
 const ATTRIBUTION_EVENT_TYPE_OPTIONS = ['CLICK_THROUGH', 'VIEW_THROUGH'] as const;
-const DEVICE_PLATFORM_OPTIONS = ['mobile', 'desktop'] as const;
-const PUBLISHER_PLATFORM_OPTIONS = ['facebook', 'instagram', 'messenger', 'audience_network'] as const;
 
 export function AdsetPresetEditor({
   value,

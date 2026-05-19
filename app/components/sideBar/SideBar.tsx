@@ -10,9 +10,10 @@ import {
   Upload, FolderOpen, Image as ImageIcon,
   Play, PauseCircle, PlusCircle, CalendarClock,
   SlidersHorizontal, Megaphone, History,
-  ShieldCheck, ScrollText,
+  ShieldCheck, ScrollText, MessageSquare,
   X,
 } from 'lucide-react';
+import ChatsHistoryList from '@/app/components/chats/ChatsHistoryList';
 import GalleryUploadZone from '@/app/(frontend)/(workspace)/gallery/GalleryUploadZone';
 import { SiMeta } from 'react-icons/si';
 
@@ -75,6 +76,7 @@ type MainSection = {
 
 const MAIN_SECTIONS: MainSection[] = [
   { id: 'home',      label: 'Home',      icon: IconHome,    hasSecondary: true },
+  { id: 'chats',     label: 'Chats',     icon: MessageSquare, hasSecondary: true },
   { id: 'manager',   label: 'Manager',   icon: IconManager, hasSecondary: true },
   // { id: 'createAd',  label: 'Create Ad', icon: PlusCircle,  hasSecondary: false },
   { id: 'gallery',   label: 'Gallery',   icon: IconGallery, hasSecondary: true },
@@ -357,6 +359,16 @@ const SecondarySidebarContent = ({
     case 'home':
       return <NotificationsPanel />;
 
+    case 'chats':
+      return (
+        <>
+          <SectionLabel label="Chats" />
+          <SecondaryNavItem icon={PlusCircle} label="New chat" href="/chats" />
+          <SectionLabel label="Recents" />
+          <ChatsHistoryList />
+        </>
+      );
+
     case 'manager':
       return (
         <>
@@ -440,6 +452,7 @@ export default function AppSidebar({ companyId }: { companyId: string }) {
   const getFirstRoute = (sectionId: string) => {
     switch (sectionId) {
       case 'home':      return '/home';
+      case 'chats':     return '/chats';
       case 'manager':   return '/manager/post';
       // case 'createAd':  return '/create-ad';
       case 'gallery':   return '/gallery';
@@ -479,6 +492,8 @@ export default function AppSidebar({ companyId }: { companyId: string }) {
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     if      (pathname === '/')                   setActiveSection('home');
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    else if (pathname?.startsWith('/chats'))     setActiveSection('chats');
     // eslint-disable-next-line react-hooks/set-state-in-effect
     else if (pathname?.startsWith('/manager'))   setActiveSection('manager');
     // eslint-disable-next-line react-hooks/set-state-in-effect

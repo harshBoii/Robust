@@ -60,6 +60,13 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'assetId is required' }, { status: 400 });
   }
 
+  console.log('[chats:creative-ai] creative-suggest', {
+    companyId: session.companyId,
+    assetId,
+    groupLabel,
+    adType,
+  });
+
   const effectiveAdType = adType || 'OUTCOME_SALES';
   const effectiveTone = tone || 'general';
 
@@ -130,6 +137,10 @@ export async function POST(req: Request) {
     }
 
     if (result.data && !result.partial) {
+      console.log('[chats:creative-ai] creative-suggest ok', {
+        assetId,
+        headline: result.data.headline?.slice(0, 40),
+      });
       return NextResponse.json({
         ...result.data,
         skippedFields: [] as string[],

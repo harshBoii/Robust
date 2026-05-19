@@ -95,10 +95,9 @@ export async function POST(req: Request) {
         : apiMessages;
 
     const content = await completeJsonChatWithHistory({
-      model: 'gpt-4o-mini',
+      model: 'gpt-5.5',
       system,
       messages: msgs,
-      maxTokens: 900,
     });
 
     const raw = parseJson(content);

@@ -28,6 +28,23 @@ export const MESSENGER_POSITION_OPTIONS = [
   'story',
 ] as const;
 
+export const DEVICE_PLATFORM_OPTIONS = ['mobile', 'desktop'] as const;
+
+export const PUBLISHER_PLATFORM_OPTIONS = [
+  'facebook',
+  'instagram',
+  'messenger',
+  'audience_network',
+] as const;
+
+/** Defaults when the LLM or UI leaves placement fields empty (Robust preset standard). */
+export const DEFAULT_TARGETING_PLACEMENTS = {
+  device_platforms: ['mobile'] as string[],
+  publisher_platforms: ['facebook', 'instagram'] as string[],
+  facebook_positions: ['feed', 'story'] as string[],
+  instagram_positions: ['stream', 'reels'] as string[],
+};
+
 const FACEBOOK_POSITION_SET = new Set<string>(FACEBOOK_POSITION_OPTIONS);
 const INSTAGRAM_POSITION_SET = new Set<string>(INSTAGRAM_POSITION_OPTIONS);
 const AUDIENCE_NETWORK_POSITION_SET = new Set<string>(AUDIENCE_NETWORK_POSITION_OPTIONS);
@@ -234,4 +251,63 @@ export function getTargetingExcludedAudiencesForEditor(
   targeting: Record<string, unknown>,
 ): AudienceRef[] {
   return extractExcludedAudiences(targeting);
+}
+
+/** Fill device/publisher/placement arrays when missing (after LLM merge or draft init). */
+export function ensureTargetingPlacements(
+  targeting: Record<string, unknown> | null | undefined,
+): Record<string, unknown> {
+  const t = { ...(targeting && typeof targeting === 'object' ? targeting : {}) };
+  if (!isNonEmptyArray(t.device_platforms)) {
+    t.device_platforms = [...DEFAULT_TARGETING_PLACEMENTS.device_platforms];
+  }
+  if (!isNonEmptyArray(t.publisher_platforms)) {
+    t.publisher_platforms = [...DEFAULT_TARGETING_PLACEMENTS.publisher_platforms];
+  }
+  if (!sanitizeFacebookPositions(t.facebook_positions).length) {
+    t.facebook_positions = [...DEFAULT_TARGETING_PLACEMENTS.facebook_positions];
+  }
+  if (!sanitizeInstagramPositions(t.instagram_positions).length) {
+    t.instagram_positions = [...DEFAULT_TARGETING_PLACEMENTS.instagram_positions];
+  }
+  if (!t.targeting_automation || typeof t.targeting_automation !== 'object') {
+    t.targeting_automation = { advantage_audience: DEFAULT_ADVANTAGE_AUDIENCE };
+  }
+  return t;
+}
+
+/** LLM prompt text — keep in sync with sanitizeMetaTargeting + ad set preset editor. */
+export function buildTargetingFieldDocumentation(): string {
+  return `Demographics:
+- age_min, age_max: integers 13–65 (65 = 65+)
+- genders: [1] male, [2] female, [1,2] both; omit for all genders
+
+Geo:
+- geo_locations.countries: ISO 3166-1 alpha-2 codes (e.g. ["IN"], ["US"])
+
+Locales:
+- locales: array of Meta locale ID numbers (e.g. 6 = English US)
+
+Devices & publishers (REQUIRED — never leave empty):
+- device_platforms: one or more of ${DEVICE_PLATFORM_OPTIONS.join(', ')}. Default: ${JSON.stringify(DEFAULT_TARGETING_PLACEMENTS.device_platforms)}. Use ["desktop"] or ["mobile","desktop"] only if the user asks for desktop.
+- publisher_platforms: one or more of ${PUBLISHER_PLATFORM_OPTIONS.join(', ')}. Default: ${JSON.stringify(DEFAULT_TARGETING_PLACEMENTS.publisher_platforms)}. Add messenger/audience_network only when the user wants those placements.
+
+Placement positions (REQUIRED for facebook_positions and instagram_positions — never leave empty):
+- facebook_positions: subset of ${FACEBOOK_POSITION_OPTIONS.join(', ')}. Default: ${JSON.stringify(DEFAULT_TARGETING_PLACEMENTS.facebook_positions)}. Never use "reels" on Facebook; use video_feeds for video surfaces.
+- instagram_positions: subset of ${INSTAGRAM_POSITION_OPTIONS.join(', ')}. Default: ${JSON.stringify(DEFAULT_TARGETING_PLACEMENTS.instagram_positions)}.
+- audience_network_positions: ${AUDIENCE_NETWORK_POSITION_OPTIONS.join(', ')} — optional; omit unless user wants Audience Network
+- messenger_positions: ${MESSENGER_POSITION_OPTIONS.join(', ')} — optional; omit unless user wants Messenger
+
+Whenever you set or update adset.targeting, ALWAYS include device_platforms, publisher_platforms, facebook_positions, and instagram_positions with valid values (use defaults above unless the user specifies otherwise).
+
+Audiences:
+- flexible_spec: [{ interests: [{ id: "<META_INTEREST_ID>", name?: "label" }] }]
+- custom_audiences: [{ id: "<AUDIENCE_ID>", name?: "label" }] — only when user provides IDs
+- exclusions: { custom_audiences: [{ id: "<AUDIENCE_ID>" }] } — excluded custom audiences
+
+Automation (required on ad set create):
+- targeting_automation.advantage_audience: 1 (Advantage+ on) or 0 (off); default 1
+
+Do NOT use legacy keys detailed_targeting or excluded_custom_audiences (stripped on save).
+When changing targeting, return only the subfields to update; they merge into the current draft.`;
 }

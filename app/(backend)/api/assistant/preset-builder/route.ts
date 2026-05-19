@@ -74,10 +74,9 @@ export async function POST(req: Request) {
         : `${userBase}\n\nPrevious JSON failed validation:\n${lastZodError}\nFix and return valid JSON only.`;
 
     const content = await completeJsonChat({
-      model: 'gpt-4o-mini',
+      model: 'gpt-5.5',
       system,
       user,
-      maxTokens: 1400,
     });
 
     raw = parseJson(content);

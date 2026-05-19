@@ -1,4 +1,5 @@
 import type { AdsetPreset, CampaignPreset } from '@/app/components/manager/presets/types';
+import { ensureTargetingPlacements } from '@/lib/meta/targeting';
 
 import type { AdsetPresetPatch, CampaignPresetPatch } from './schemas';
 
@@ -30,6 +31,9 @@ export function mergeCampaignPresetPatch(
 
 export function mergeAdsetPresetPatch(draft: AdsetPreset, patch: Partial<AdsetPresetPatch>): AdsetPreset {
   const merged = deepMerge(draft as unknown as Record<string, unknown>, patch as Record<string, unknown>);
+  if (merged.targeting && typeof merged.targeting === 'object') {
+    merged.targeting = ensureTargetingPlacements(merged.targeting as Record<string, unknown>);
+  }
   return merged as unknown as AdsetPreset;
 }
 

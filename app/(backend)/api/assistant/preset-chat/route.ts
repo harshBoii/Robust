@@ -22,6 +22,7 @@ type Body = {
   messages?: unknown;
   adType?: unknown;
   tone?: unknown;
+  presetTarget?: unknown;
   currentCampaignDraft?: unknown;
   currentAdsetDraft?: unknown;
 };
@@ -75,9 +76,15 @@ export async function POST(req: Request) {
   );
   const tone = resolvePresetChatTone(typeof body.tone === 'string' ? body.tone : null);
 
-  const system = buildPresetChatSystemPrompt();
+  const presetTarget =
+    body.presetTarget === 'adset' || body.presetTarget === 'campaign'
+      ? body.presetTarget
+      : 'campaign';
+
+  const system = buildPresetChatSystemPrompt(presetTarget);
   const apiMessages = buildPresetChatMessagesForApi({
     messages,
+    presetTarget,
     adType,
     tone,
     currentCampaignDraft: body.currentCampaignDraft,
@@ -99,10 +106,9 @@ export async function POST(req: Request) {
         : apiMessages;
 
     const content = await completeJsonChatWithHistory({
-      model: 'gpt-4o-mini',
+      model: 'gpt-5.5',
       system,
       messages: msgs,
-      maxTokens: 1600,
     });
 
     const raw = parseJson(content);

@@ -51,9 +51,51 @@ model Company {
   notifications      Notification[]
   adPublishJobs      AdPublishJob[]
   assistantCreativeUsage AssistantCreativeUsage[]
+  adChatSessions     AdChatSession[]
 
   @@index([slug])
   @@map("companies")
+}
+
+// ================================================================
+// AD CHAT (conversational ad posting)
+// ================================================================
+
+model AdChatSession {
+  id              String              @id @default(cuid())
+  companyId       String
+  createdByUserId String?             @db.VarChar(255)
+  title           String              @default("New chat") @db.VarChar(500)
+  status          AdChatSessionStatus @default(ACTIVE)
+  currentStep     String              @default("intent") @db.VarChar(64)
+  workflowState   Json                @default("{}")
+  bulkUploadId    String?
+  campaignId      String?
+  createdAt       DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime            @updatedAt @db.Timestamptz(3)
+
+  company  Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  messages AdChatMessage[]
+
+  @@index([companyId])
+  @@index([companyId, updatedAt(sort: Desc)])
+  @@map("ad_chat_sessions")
+}
+
+model AdChatMessage {
+  id            String            @id @default(cuid())
+  sessionId     String
+  role          AdChatMessageRole
+  content       String?
+  widgetType    String?           @db.VarChar(64)
+  widgetPayload Json?
+  createdAt     DateTime          @default(now()) @db.Timestamptz(3)
+
+  session AdChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
+  @@index([sessionId, createdAt])
+  @@map("ad_chat_messages")
 }
 
 /// Per-company daily counter for vision creative-suggest API
@@ -824,4 +866,16 @@ enum StreamQueuePriority {
   LOW
   NORMAL
   HIGH
+}
+
+enum AdChatSessionStatus {
+  ACTIVE
+  COMPLETED
+  ARCHIVED
+}
+
+enum AdChatMessageRole {
+  USER
+  ASSISTANT
+  SYSTEM
 }

@@ -1,4 +1,5 @@
 import { BILLING_EVENT_OPTIONS, OPTIMIZATION_GOAL_OPTIONS } from '@/lib/meta/adset-preset-meta';
+import { buildTargetingFieldDocumentation } from '@/lib/meta/targeting';
 
 import {
   BID_STRATEGY_OPTIONS,
@@ -14,8 +15,8 @@ export function buildPresetBuilderSystemPrompt(): string {
   return `You are Miss Robusta — a Meta Ads setup assistant for Robust SaaS.
 Return ONLY valid JSON matching this shape:
 {
-  "campaign": { optional campaign preset fields },
-  "adset": { optional adset preset fields },
+  "campaign": { campaign preset fields },
+  "adset": { adset preset fields },
   "explanation": "short friendly summary for the user"
 }
 
@@ -33,11 +34,16 @@ Allowed adset fields: name, dailyBudget, lifetimeBudget, scheduleDuration, sched
 - optimizationGoal: one of ${OPTIMIZATION_GOAL_OPTIONS.map((o) => o.value).join(', ')}
 - destinationType: one of ${DESTINATION_TYPE_OPTIONS.join(', ')} or null
 - pacingType: one of ${PACING_TYPE_OPTIONS.join(', ')} or null
-- targeting: Meta targeting object; default geo countries ["IN"], mobile, facebook+instagram
+- targeting: Meta Marketing API targeting object. You may read and write ALL of these subfields:
+${buildTargetingFieldDocumentation().replace(/^/gm, '  ')}
 
+Make sure that the fields are valid and combo is consitent as per meta docs.
+Keep in mind the field that are available in the campaign and adset presets and make sure that the fields are valid and combo is consitent as per meta docs.
 Align optimizationGoal and billingEvent with the user's ad type (objective).
 Match the user's tone (aggressive scale = higher budgets, broader age; conservative = lower budgets, tighter targeting).
-Never invent pixel IDs. Use PAUSED campaign status unless user asks for ACTIVE.`;
+Never invent pixel IDs. Use PAUSED campaign status unless user asks for ACTIVE.
+Every adset.targeting you output MUST include non-empty device_platforms, publisher_platforms, facebook_positions, and instagram_positions (see targeting defaults in the field list above). Do not omit these four keys.`;
+
 }
 
 export function buildPresetBuilderUserPrompt(input: {

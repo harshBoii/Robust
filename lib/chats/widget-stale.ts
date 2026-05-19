@@ -1,0 +1,52 @@
+import type { ChatWorkflowStep } from './types';
+
+/** Widget types that may only render while the session is on a matching step. */
+const WIDGET_STEP: Record<string, ChatWorkflowStep[]> = {
+  mediaSource: ['intent', 'mediaSource'],
+  mediaUpload: ['mediaUpload'],
+  mediaPick: ['mediaPick'],
+  mediaAnalyzing: ['mediaAnalyze'],
+  campaignChoice: ['campaignChoice'],
+  pixelQuestion: ['pixelSetup'],
+  campaignObjective: ['campaignObjective'],
+  campaignPicker: ['campaignSelect'],
+  campaignPreset: ['campaignPreset', 'campaignApprove'],
+  presetPreview: ['campaignApprove', 'adsetApprove'],
+  adsetChoice: ['adsetChoice'],
+  adsetPicker: ['adsetSelect'],
+  adsetPreset: ['adsetPreset', 'adsetApprove'],
+  creativeMode: ['creativeMode'],
+  creativeCsv: ['creativeCsv'],
+  creativeBuilding: ['creativeBuild'],
+  adPreview: ['preview'],
+  publishSchedule: ['publishChoice'],
+  done: ['done'],
+  stepNav: [
+    'intent',
+    'mediaSource',
+    'mediaUpload',
+    'mediaPick',
+    'mediaAnalyze',
+    'campaignChoice',
+    'pixelSetup',
+    'campaignObjective',
+    'campaignSelect',
+    'campaignPreset',
+    'campaignApprove',
+    'adsetChoice',
+    'adsetSelect',
+    'adsetPreset',
+    'adsetApprove',
+    'creativeMode',
+    'creativeCsv',
+    'creativeBuild',
+    'preview',
+    'publishChoice',
+  ],
+};
+
+export function isWidgetActive(widgetType: string, currentStep: string): boolean {
+  const allowed = WIDGET_STEP[widgetType];
+  if (!allowed) return true;
+  return allowed.includes(currentStep as ChatWorkflowStep);
+}

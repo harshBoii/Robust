@@ -240,3 +240,79 @@ export async function processPublishJobs(input: {
 
   return { processed };
 }
+
+export type BulkPublishGroup = {
+  bucketId: string | null;
+  assetIds: string[];
+  adSetId: string;
+  headline: string;
+  primaryText: string;
+  description?: string | null;
+  landingUrl: string;
+  ctaType: string;
+  pixelId?: string | null;
+  assetCreatives?: Record<string, string>;
+};
+
+export async function enqueueBulkPublish(input: {
+  companyId: string;
+  campaignId: string;
+  scheduledAt?: string;
+  groups: BulkPublishGroup[];
+}): Promise<string[]> {
+  const scheduledAt = input.scheduledAt ? new Date(input.scheduledAt) : null;
+  if (scheduledAt && !Number.isFinite(scheduledAt.getTime())) {
+    throw new Error('Invalid scheduledAt');
+  }
+
+  const integration = await prisma.metaIntegration.findUnique({
+    where: { companyId: input.companyId },
+    select: { id: true },
+  });
+  if (!integration) throw new Error('Meta not connected');
+
+  const campaign = await prisma.metaCampaign.findFirst({
+    where: { id: input.campaignId, metaIntegrationId: integration.id },
+    select: { id: true },
+  });
+  if (!campaign) throw new Error('Campaign not found');
+
+  const schedule =
+    scheduledAt != null
+      ? await prisma.adSchedule.create({
+          data: {
+            companyId: input.companyId,
+            scheduledAt,
+            status: 'PENDING',
+          },
+          select: { id: true },
+        })
+      : null;
+
+  const allJobData = input.groups.flatMap((g) =>
+    g.assetIds.map((assetId) => ({
+      companyId: input.companyId,
+      metaIntegrationId: integration.id,
+      campaignId: campaign.id,
+      adSetId: g.adSetId,
+      assetId,
+      metaCreativeDbId: g.assetCreatives?.[assetId] ?? null,
+      scheduleId: schedule?.id ?? null,
+      scheduledAt,
+      status: 'QUEUED' as const,
+      headlineOverride: g.headline,
+      primaryTextOverride: g.primaryText || g.headline,
+      descriptionOverride: g.description ?? null,
+      landingUrlOverride: g.landingUrl,
+      ctaTypeOverride: g.ctaType,
+      pixelIdOverride: g.pixelId ?? null,
+      groupKey: g.bucketId,
+    })),
+  );
+
+  const jobs = await prisma.$transaction(
+    allJobData.map((data) => prisma.adPublishJob.create({ data, select: { id: true } })),
+  );
+
+  return jobs.map((j) => j.id);
+}

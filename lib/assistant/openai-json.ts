@@ -12,8 +12,8 @@ export async function completeJsonChat(params: {
 }): Promise<string> {
   const res = await openai.chat.completions.create({
     model: params.model,
-    max_tokens: params.maxTokens ?? 1200,
-    temperature: 0.6,
+    // max_tokens: params.maxTokens ?? 1200,
+    // temperature: 0.6,
     response_format: { type: 'json_object' },
     messages: [
       { role: 'system', content: params.system },
@@ -31,8 +31,8 @@ export async function completeJsonChatWithHistory(params: {
 }): Promise<string> {
   const res = await openai.chat.completions.create({
     model: params.model,
-    max_tokens: params.maxTokens ?? 1200,
-    temperature: 0.6,
+    // max_tokens: params.maxTokens ?? 1200,
+    // temperature: 0.6,
     response_format: { type: 'json_object' },
     messages: [
       { role: 'system', content: params.system },
@@ -59,14 +59,9 @@ export async function completeVisionJsonChat(params: {
   ];
 
   const res = await openai.chat.completions.create({
-    model: 'gpt-4o',
-    max_tokens: params.maxTokens ?? 800,
-    temperature: 0.7,
+    model: 'gpt-5.5',
     response_format: { type: 'json_object' },
-    messages: [
-      { role: 'system', content: params.system },
-      { role: 'user', content },
-    ],
+    messages: [{ role: 'system', content: params.system }, { role: 'user', content }],
   });
   return res.choices[0]?.message?.content ?? '{}';
 }
