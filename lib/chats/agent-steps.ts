@@ -1,6 +1,7 @@
 import type { CampaignPreset } from '@/app/components/manager/presets/types';
 
 import { buildGuidedReply } from './guided-replies';
+import { getStepResumePrompt } from './step-prompts';
 import type { ChatWorkflowStep, WidgetType, WorkflowState } from './types';
 
 /** High-level actionable step the agent must pick every turn (shown as widget + persisted). */
@@ -110,6 +111,119 @@ export type ResolvedAgentStepUi = {
   widgetPayload?: Record<string, unknown>;
   stepLabel: string;
 };
+
+/** Widget + step from actual workflow position (after auto-advance or silent actions). */
+export function resolveWorkflowStepUi(
+  workflowStep: ChatWorkflowStep,
+  state: WorkflowState,
+  opts?: { ranPresetBuild?: boolean; builtPresetAdset?: boolean },
+): ResolvedAgentStepUi {
+  const campaign = state.draftCampaign as CampaignPreset | undefined;
+  const adset = state.draftAdset;
+
+  if (opts?.ranPresetBuild) {
+    const target = opts.builtPresetAdset ? 'adset' : 'campaign';
+    return {
+      focusStep: target === 'adset' ? 'adsetApprove' : 'campaignApprove',
+      widgetType: 'presetPreview',
+      widgetPayload: {
+        target,
+        campaign: campaign ?? null,
+        adset: opts.builtPresetAdset ? adset : null,
+      },
+      stepLabel: 'Review preset draft',
+    };
+  }
+
+  const { widgetType } = getStepResumePrompt(workflowStep);
+  const base: ResolvedAgentStepUi = {
+    focusStep: workflowStep,
+    widgetType: widgetType ?? 'mediaSource',
+    stepLabel: workflowStep,
+  };
+
+  switch (workflowStep) {
+    case 'pixelSetup':
+      return { ...base, widgetPayload: { hasPixel: state.hasPixel } };
+    case 'campaignObjective':
+      return { ...base, widgetPayload: { hasPixel: state.hasPixel } };
+    case 'campaignPreset':
+      return {
+        ...base,
+        widgetPayload: {
+          objective: campaign?.objective ?? state.adType,
+          hasPixel: state.hasPixel,
+        },
+      };
+    case 'campaignApprove':
+      return {
+        ...base,
+        widgetType: 'presetPreview',
+        widgetPayload: { target: 'campaign', campaign: campaign ?? null, adset: null },
+      };
+    case 'adsetChoice':
+      return { ...base, widgetPayload: { campaignId: state.campaignId } };
+    case 'adsetApprove':
+      return {
+        ...base,
+        widgetType: 'presetPreview',
+        widgetPayload: {
+          target: 'adset',
+          campaign: campaign ?? null,
+          adset: adset ?? null,
+        },
+      };
+    case 'campaignSelect':
+      return { ...base, widgetPayload: { mode: 'campaign' } };
+    case 'adsetSelect':
+      return { ...base, widgetPayload: { campaignId: state.campaignId } };
+    case 'preview':
+      return { ...base, widgetPayload: { groups: state.groups } };
+    default:
+      return base;
+  }
+}
+
+export function workflowStepToAgentNextStep(
+  workflowStep: ChatWorkflowStep,
+  _state: WorkflowState,
+): AgentActionableStep {
+  switch (workflowStep) {
+    case 'mediaSource':
+    case 'mediaUpload':
+    case 'mediaPick':
+    case 'mediaAnalyze':
+      return 'choose_media';
+    case 'campaignChoice':
+      return 'setup_campaign';
+    case 'pixelSetup':
+      return 'confirm_pixel';
+    case 'campaignObjective':
+      return 'pick_objective';
+    case 'campaignPreset':
+      return 'create_preset';
+    case 'campaignApprove':
+      return 'review_preset';
+    case 'adsetChoice':
+      return 'choose_adset';
+    case 'adsetPreset':
+      return 'create_adset_preset';
+    case 'adsetApprove':
+      return 'review_adset';
+    case 'creativeMode':
+      return 'choose_creative_mode';
+    case 'creativeBuild':
+      return 'analyze_ads';
+    case 'creativeCsv':
+      return 'choose_creative_mode';
+    case 'preview':
+      return 'preview_ads';
+    case 'publishChoice':
+      return 'publish';
+    default:
+      return 'choose_media';
+  }
+}
 
 export function resolveAgentNextStepUi(
   nextStep: AgentActionableStep,

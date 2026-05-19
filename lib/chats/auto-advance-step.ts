@@ -14,6 +14,36 @@ function planHasAction(actions: AgentAction[], name: string): boolean {
   return actions.some((a) => a.action === name);
 }
 
+/** Media source from typed text — runs even if the model picked the wrong nextStep. */
+export function inferMediaSourceAutoAction(
+  state: WorkflowState,
+  userText: string,
+  actionsInPlan: AgentAction[],
+): ConfidentAutoAction | null {
+  if (state.groups?.length || state.bulkUploadId) return null;
+  if (planHasAction(actionsInPlan, 'media.source')) return null;
+
+  const t = userText.trim().toLowerCase();
+  if (!t) return null;
+
+  if (
+    /pick from gallery|from gallery|use gallery|gallery|existing assets|existing creatives/.test(t)
+  ) {
+    return {
+      action: 'media.source',
+      payload: { source: 'gallery' },
+      reason: 'User chose gallery (typed)',
+    };
+  }
+  if (/upload here|^upload$|drop (files|images)|from my computer|upload images|upload videos/.test(t)) {
+    return { action: 'media.source', payload: { source: 'upload' }, reason: 'User chose upload' };
+  }
+  if (/bulk upload|^bulk$/.test(t)) {
+    return { action: 'media.source', payload: { source: 'bulk' }, reason: 'User chose bulk' };
+  }
+  return null;
+}
+
 /**
  * When the user message (or state) makes the next step obvious, run exactly ONE
  * workflow action on their behalf before showing the reply widget.
@@ -52,25 +82,8 @@ export function inferConfidentAutoAction(input: {
     }
   }
 
-  if (
-    input.nextStep === 'choose_media' &&
-    !planHasAction(actionsInPlan, 'media.source') &&
-    !(state.groups?.length || state.bulkUploadId)
-  ) {
-    if (/upload here|upload|drop (files|images)|from my computer/.test(t)) {
-      return { action: 'media.source', payload: { source: 'upload' }, reason: 'User chose upload' };
-    }
-    if (/gallery|pick from|existing (assets|creatives)/.test(t)) {
-      return {
-        action: 'media.source',
-        payload: { source: 'gallery' },
-        reason: 'User chose gallery',
-      };
-    }
-    if (/bulk/.test(t)) {
-      return { action: 'media.source', payload: { source: 'bulk' }, reason: 'User chose bulk' };
-    }
-  }
+  const mediaAuto = inferMediaSourceAutoAction(state, input.userText, actionsInPlan);
+  if (mediaAuto) return mediaAuto;
 
   if (input.nextStep === 'setup_campaign' && !planHasAction(actionsInPlan, 'campaign.choice')) {
     if (/^existing$|existing campaign|use existing|current campaign/.test(t)) {

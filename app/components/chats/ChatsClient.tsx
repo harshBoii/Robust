@@ -62,12 +62,20 @@ export default function ChatsClient({
     [dispatchAction, session?.currentStep],
   );
 
+  const latestWidgetMessageId = (() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const m = messages[i];
+      if (m.role !== 'user' && m.widgetType) return m.id;
+    }
+    return null;
+  })();
+
   const threadMessages: ThreadMessage[] = messages.map((m: SerializedMessage) => ({
     id: m.id,
     role: m.role === 'user' ? 'user' : 'assistant',
     content: m.content ?? undefined,
     children:
-      m.role !== 'user' && m.widgetType ? (
+      m.role !== 'user' && m.widgetType && m.id === latestWidgetMessageId ? (
         <div className="rounded-xl border border-border/30 bg-muted/20 p-3">
           <ChatWidgetRenderer
             widgetType={m.widgetType}

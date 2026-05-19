@@ -20,7 +20,9 @@ import { enrichAgentReply } from './guided-replies';
 import {
   isAgentActionableStep,
   resolveAgentNextStepUi,
+  resolveWorkflowStepUi,
   suggestAgentNextStep,
+  workflowStepToAgentNextStep,
 } from './agent-steps';
 import { parseWorkflowState, serializeMessage, serializeSession } from './serialize';
 import type {
@@ -203,6 +205,7 @@ export async function executeAgentPlan(input: {
   const actionErrors: string[] = [];
   let ranPresetBuild = false;
   let builtPresetAdset = false;
+  let ranWorkflowAction = false;
 
   const { actions: normalizedActions, rejectReason } = normalizePresetBuildOrder(
     plan.actions ?? [],
@@ -263,6 +266,7 @@ export async function executeAgentPlan(input: {
     );
     state = ran.state;
     step = ran.step;
+    ranWorkflowAction = true;
     session = (await getChatSession(input.sessionId, input.companyId))!;
   }
 
@@ -286,23 +290,34 @@ export async function executeAgentPlan(input: {
     );
     state = ran.state;
     step = ran.step;
-    nextStep = suggestAgentNextStep(state);
+    ranWorkflowAction = true;
+    nextStep = workflowStepToAgentNextStep(step, state);
     session = (await getChatSession(input.sessionId, input.companyId))!;
   }
 
-  const ui = resolveAgentNextStepUi(nextStep, state, {
-    ranPresetBuild,
-    builtPresetAdset,
-  });
+  const ui =
+    ranWorkflowAction || ranPresetBuild
+      ? resolveWorkflowStepUi(step, state, { ranPresetBuild, builtPresetAdset })
+      : resolveAgentNextStepUi(nextStep, state, { ranPresetBuild, builtPresetAdset });
 
-  step = plan.focusStep ?? ui.focusStep;
+  step = ranWorkflowAction ? step : (plan.focusStep ?? ui.focusStep);
+  if (!ranWorkflowAction && !ranPresetBuild) {
+    // keep agent nextStep from plan
+  } else if (!isAgentActionableStep(plan.nextStep) || ranWorkflowAction) {
+    nextStep = workflowStepToAgentNextStep(step, state);
+  }
   state = {
     ...state,
     agentNextStep: nextStep,
     ...(plan.memory?.trim() ? { agentMemory: plan.memory.trim() } : {}),
   };
 
-  let replyText = enrichAgentReply(plan.reply, nextStep, state);
+  let replyText = enrichAgentReply(
+    plan.reply,
+    nextStep,
+    state,
+    ranWorkflowAction ? step : undefined,
+  );
   if (actionErrors.length > 0) {
     replyText = `${replyText}\n\n_(Note: ${actionErrors.join(' ')})_`;
   }

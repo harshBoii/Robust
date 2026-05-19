@@ -1,7 +1,7 @@
 import 'server-only';
 
 import type { AgentActionableStep } from './agent-steps';
-import type { WorkflowState } from './types';
+import type { ChatWorkflowStep, WorkflowState } from './types';
 
 function groupCount(state: WorkflowState): number {
   return state.groups?.filter((g) => g.included !== false).length ?? state.groups?.length ?? 0;
@@ -29,7 +29,7 @@ export function buildGuidedReply(
       if (n > 0) {
         return `You have **${n}** creative group${n === 1 ? '' : 's'} ready. Next we'll connect them to a Meta campaign and ad set${mem}. Use the options below to add more creatives if needed, or continue once you're happy with the set.`;
       }
-      return `Let's get your Mother's Day / tier-2 India campaign started${mem}. **Step 1 is creatives** — upload images and videos, pick from your gallery, or bulk-upload. Once we have assets, we'll draft your **campaign** (budget, objective) and **ad set** (Tamil Nadu / tier-2 targeting). Choose how you'd like to add creatives below.`;
+      return `Let's get your campaign started${mem}. **Step 1 is creatives** — upload images and videos, pick from your gallery, or bulk-upload. Once we have assets, we'll set up your **campaign** and **ad set**. Choose how you'd like to add creatives below.`;
 
     case 'setup_campaign':
       return n > 0
@@ -82,13 +82,32 @@ const GENERIC_REPLY_PATTERNS = [
   /^what would you like to do next/i,
   /^use the options below/i,
   /^here's what to do next$/i,
+  /please use the (gallery|upload) widget below/i,
 ];
+
+export function buildGuidedReplyForWorkflowStep(
+  workflowStep: ChatWorkflowStep,
+  state: WorkflowState,
+): string | null {
+  switch (workflowStep) {
+    case 'mediaPick':
+      return `Opening your **gallery** — pick a bulk folder or the creatives you want below. Images and videos both work; we'll group them for your ads.`;
+    case 'mediaUpload':
+      return `Use the **upload** area below to drop your images and videos. We'll group them automatically when processing finishes.`;
+    default:
+      return null;
+  }
+}
 
 export function enrichAgentReply(
   reply: string,
   nextStep: AgentActionableStep,
   state: WorkflowState,
+  workflowStep?: ChatWorkflowStep,
 ): string {
+  const stepGuided =
+    workflowStep != null ? buildGuidedReplyForWorkflowStep(workflowStep, state) : null;
+  if (stepGuided) return stepGuided;
   const trimmed = reply.trim();
   const tooShort = trimmed.length < 100;
   const generic = GENERIC_REPLY_PATTERNS.some((p) => p.test(trimmed));

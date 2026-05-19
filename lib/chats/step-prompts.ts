@@ -10,6 +10,16 @@ export function getStepResumePrompt(step: ChatWorkflowStep): {
         content: 'How would you like to add or change your creatives?',
         widgetType: 'mediaSource',
       };
+    case 'mediaUpload':
+      return {
+        content: 'Drop your images and videos here.',
+        widgetType: 'mediaUpload',
+      };
+    case 'mediaPick':
+      return {
+        content: 'Pick a bulk folder or creatives from your gallery.',
+        widgetType: 'mediaPick',
+      };
     case 'campaignChoice':
       return {
         content: 'Do you want to use an existing campaign or create a new one?',
