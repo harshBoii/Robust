@@ -45,6 +45,8 @@ export type WorkflowState = {
   pixelId?: string | null;
   /** Default ad set goal when campaign is OUTCOME_TRAFFIC without pixel. */
   trafficOptimizationGoal?: 'LINK_CLICKS' | 'LANDING_PAGE_VIEWS';
+  /** Agent notes from conversation (not sent to Meta). */
+  intentNotes?: string;
   /** Shown in UI thinking panel only — not inline in messages. */
   lastOperationError?: string | null;
 };

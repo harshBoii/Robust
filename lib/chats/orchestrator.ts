@@ -1,20 +1,20 @@
 import 'server-only';
 
 import type { AdsetPreset, CampaignPreset } from '@/app/components/manager/presets/types';
-import { resolvePresetChatAdType, resolvePresetChatTone } from '@/lib/assistant/preset-chat-prompt';
 import { prisma } from '@/lib/prisma';
 import { enqueueBulkPublish } from '@/lib/meta/process-publish-jobs';
 
+import { runAdAgentTurn } from './agent-turn';
 import { approveAdsetWithRecovery, approveCampaignWithRecovery } from './approve-with-recovery';
 import { resolveActionUserMessage } from './action-user-message';
 import { isCampaignObjectiveAllowed } from './campaign-objective-rules';
+import { executeAgentPlan } from './execute-agent-plan';
 import {
   buildAdsetDraftFromCampaign,
   defaultAdsetDraft,
   defaultCampaignDraft,
   workflowHasPixel,
 } from './preset-drafts';
-import { runPresetChatTurn } from './preset-chat-turn';
 import { getStepResumePrompt } from './step-prompts';
 import {
   applyGoBackStateReset,
@@ -39,88 +39,6 @@ import type {
   WidgetType,
   WorkflowState,
 } from './types';
-
-function matchNaturalLanguageAction(
-  step: ChatWorkflowStep,
-  text: string,
-): { action: import('./types').ChatActionType; payload: Record<string, unknown> } | null {
-  const t = text.trim().toLowerCase();
-  if (step === 'mediaSource') {
-    if (/upload|drop|files|here/.test(t)) return { action: 'media.source', payload: { source: 'upload' } };
-    if (/gallery|existing|folder|pick/.test(t)) return { action: 'media.source', payload: { source: 'gallery' } };
-    if (/bulk/.test(t)) return { action: 'media.source', payload: { source: 'bulk' } };
-  }
-  if (step === 'campaignChoice') {
-    if (/existing|current|already|use existing/.test(t)) {
-      return { action: 'campaign.choice', payload: { choice: 'existing' } };
-    }
-    if (/new campaign|create new|from scratch|^new$|^create$|create a new/.test(t)) {
-      return { action: 'campaign.choice', payload: { choice: 'new' } };
-    }
-  }
-  if (step === 'adsetChoice') {
-    if (/existing|current|already|use existing/.test(t)) {
-      return { action: 'adset.choice', payload: { choice: 'existing' } };
-    }
-    if (/new ad set|create new|from scratch|^new$|^create$|create a new/.test(t)) {
-      return { action: 'adset.choice', payload: { choice: 'new' } };
-    }
-  }
-  if (step === 'campaignApprove') {
-    if (/approve|looks good|yes|go ahead|confirm/.test(t)) {
-      return { action: 'campaign.approved', payload: {} };
-    }
-  }
-  if (step === 'adsetApprove') {
-    if (/approve|looks good|yes|go ahead|confirm/.test(t)) {
-      return { action: 'adset.approved', payload: {} };
-    }
-  }
-  if (step === 'creativeMode') {
-    if (/ai|generate|write/.test(t)) return { action: 'creative.mode', payload: { mode: 'ai' } };
-    if (/csv|spreadsheet|upload/.test(t)) return { action: 'creative.mode', payload: { mode: 'csv' } };
-  }
-  if (step === 'preview') {
-    if (/approve|looks good|publish|ship|go/.test(t)) return { action: 'preview.approved', payload: {} };
-    if (/change|edit|fix|redo/.test(t)) return { action: 'preview.changes', payload: {} };
-  }
-  return null;
-}
-
-function matchGoBackIntent(
-  step: ChatWorkflowStep,
-  text: string,
-  state: WorkflowState,
-): { action: 'workflow.goBack'; payload: { step?: ChatWorkflowStep } } | null {
-  const t = text.trim().toLowerCase();
-  if (!/go back|previous step|start over|change (media|creatives|campaign|ad ?set)|redo (media|campaign)/.test(t)) {
-    return null;
-  }
-  const options = getBackStepOptions(step, state);
-  if (options.length === 0) return null;
-
-  if (/media|creative|upload|gallery/.test(t)) {
-    const hit = options.find((o) => o.step === 'mediaSource');
-    if (hit) return { action: 'workflow.goBack', payload: { step: hit.step } };
-  }
-  if (/campaign/.test(t) && !/ad ?set/.test(t)) {
-    const hit = options.find((o) => o.step === 'campaignChoice');
-    if (hit) return { action: 'workflow.goBack', payload: { step: hit.step } };
-  }
-  if (/ad ?set/.test(t)) {
-    const hit = options.find((o) => o.step === 'adsetChoice');
-    if (hit) return { action: 'workflow.goBack', payload: { step: hit.step } };
-  }
-  if (/copy|creative/.test(t)) {
-    const hit = options.find((o) => o.step === 'creativeMode');
-    if (hit) return { action: 'workflow.goBack', payload: { step: hit.step } };
-  }
-
-  if (options.length === 1) {
-    return { action: 'workflow.goBack', payload: { step: options[0].step } };
-  }
-  return { action: 'workflow.goBack', payload: {} };
-}
 
 function hasCreativesReady(state: WorkflowState): boolean {
   return Boolean(state.bulkUploadId || (state.groups?.length ?? 0) > 0);
@@ -239,111 +157,28 @@ export async function handleChatMessage(
 
   const state = parseWorkflowState(session.workflowState);
   const step = session.currentStep as ChatWorkflowStep;
-  const newMessages: SerializedMessage[] = [];
+  const priorMessages = (session.messages ?? []).map(serializeMessage);
+
+  if (!session.title || session.title === 'New chat') {
+    const title = text.trim().slice(0, 80) || 'Ad chat';
+    await updateChatSession(sessionId, companyId, { title });
+  }
 
   const userRow = await userMsg(sessionId, text);
-  newMessages.push(userRow);
 
-  const nlAction = matchNaturalLanguageAction(step, text);
-  if (nlAction) {
-    const result = await handleChatAction(sessionId, companyId, nlAction.action, nlAction.payload);
-    return { ...result, newMessages: [userRow, ...result.newMessages] };
-  }
+  const plan = await runAdAgentTurn({
+    userText: text,
+    state,
+    currentStep: step,
+    priorMessages,
+  });
 
-  const backAction = matchGoBackIntent(step, text, state);
-  if (backAction) {
-    const result = await handleChatAction(sessionId, companyId, backAction.action, backAction.payload);
-    return { ...result, newMessages: [userRow, ...result.newMessages] };
-  }
-
-  let nextStep = step;
-  let nextState = { ...state };
-
-  // Media is only chosen once at the start (intent). Never re-ask after groups exist.
-  if (step === 'intent') {
-    if (!session.title || session.title === 'New chat') {
-      const title = text.trim().slice(0, 80) || 'Ad chat';
-      await updateChatSession(sessionId, companyId, { title });
-      session.title = title;
-    }
-    if (hasCreativesReady(nextState)) {
-      nextStep = 'campaignChoice';
-      newMessages.push(
-        await assistantMsg(
-          sessionId,
-          "Your creatives are already in — let's set up your campaign.",
-          'campaignChoice',
-        ),
-      );
-    } else {
-      nextStep = 'mediaSource';
-      newMessages.push(
-        await assistantMsg(
-          sessionId,
-          "Sounds good — we'll get this live on Meta together. How do you want to bring in your creatives?",
-          'mediaSource',
-        ),
-      );
-    }
-  } else if (step === 'campaignPreset' || step === 'adsetPreset' || step === 'campaignApprove' || step === 'adsetApprove') {
-    const target =
-      step === 'campaignPreset' || step === 'campaignApprove' ? 'campaign' : 'adset';
-    const messages = [...(state.presetChatMessages ?? []), { role: 'user' as const, content: text }];
-    nextState.presetChatMessages = messages;
-    nextState.presetTarget = target;
-
-    const draftCampaign =
-      (nextState.draftCampaign as CampaignPreset | undefined) ?? defaultCampaignDraft();
-    const draftAdset = (nextState.draftAdset as AdsetPreset | undefined) ?? defaultAdsetDraft();
-
-    const turn = await runPresetChatTurn({
-      target,
-      userText: text,
-      state: { ...nextState, presetChatMessages: state.presetChatMessages },
-    });
-    nextState.draftCampaign = turn.draftCampaign;
-    nextState.draftAdset = turn.draftAdset;
-    nextState.presetChatMessages = turn.presetChatMessages;
-    nextState.adType = resolvePresetChatAdType(nextState.adType ?? null, turn.draftCampaign);
-    nextState.tone = resolvePresetChatTone(nextState.tone ?? null);
-    delete nextState.lastOperationError;
-
-    const replyText = turn.reply;
-
-    const approveHint =
-      '\n\nIf this looks right, say **approve** or use the button below.';
-    const previewCampaign = nextState.draftCampaign as CampaignPreset | undefined;
-    const previewAdset = nextState.draftAdset as AdsetPreset | undefined;
-    const am = await assistantMsg(sessionId, replyText + approveHint, 'presetPreview', {
-      target,
-      campaign: target === 'campaign' ? previewCampaign : previewCampaign ?? null,
-      adset: target === 'adset' ? previewAdset : null,
-    });
-    newMessages.push(am);
-    nextStep =
-      step === 'campaignPreset' || step === 'campaignApprove'
-        ? 'campaignApprove'
-        : 'adsetApprove';
-  } else if (step === 'preview') {
-    nextStep = 'creativeBuild';
-    const am = await assistantMsg(
-      sessionId,
-      "Got it — I'll adjust the copy. Regenerating creatives for your groups…",
-      'creativeBuilding',
-    );
-    newMessages.push(am);
-  } else {
-    const am = await assistantMsg(
-      sessionId,
-      'Use the options in the card above to continue, or tell me what you want to change.',
-    );
-    newMessages.push(am);
-  }
-
-  await persistSession(session, nextStep, nextState);
-  const refreshed = await getChatSession(sessionId, companyId);
-  const serialized = serializeSession(refreshed!);
-  return packageOrchestratorResult(serialized, nextStep, nextState, newMessages);
+  return executeAgentPlan({
+    sessionId,
+    companyId,
+    plan,
+    userRow,
+  });
 }
 
 export async function handleChatAction(
