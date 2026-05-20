@@ -11,6 +11,7 @@ import {
   Play, PauseCircle, PlusCircle, CalendarClock,
   SlidersHorizontal, Megaphone, History,
   ShieldCheck, ScrollText, MessageSquare,
+  User,
   X,
 } from 'lucide-react';
 import ChatsHistoryList from '@/app/components/chats/ChatsHistoryList';
@@ -80,6 +81,8 @@ const MAIN_SECTIONS: MainSection[] = [
   { id: 'manager',   label: 'Manager',   icon: IconManager, hasSecondary: true },
   // { id: 'createAd',  label: 'Create Ad', icon: PlusCircle,  hasSecondary: false },
   { id: 'gallery',   label: 'Gallery',   icon: IconGallery, hasSecondary: true },
+  { id: 'report',    label: 'Report',    icon: BarChart3,   hasSecondary: true },
+  { id: 'profile',   label: 'Profile',   icon: User,        hasSecondary: false },
   { id: 'workspace', label: 'Workspace', icon: Settings,    hasSecondary: true, hidden: true },
 ];
 
@@ -357,6 +360,7 @@ const SecondarySidebarContent = ({
 }) => {
   switch (activeSection) {
     case 'home':
+    case 'report':
       return <NotificationsPanel />;
 
     case 'chats':
@@ -456,6 +460,8 @@ export default function AppSidebar({ companyId }: { companyId: string }) {
       case 'manager':   return '/manager/post';
       // case 'createAd':  return '/create-ad';
       case 'gallery':   return '/gallery';
+      case 'report':    return '/report';
+      case 'profile':   return '/profile';
       case 'workspace': return '/workspace/settings';
       default:          return '/';
     }
@@ -500,6 +506,10 @@ export default function AppSidebar({ companyId }: { companyId: string }) {
     else if (pathname?.startsWith('/create-ad')) setActiveSection('createAd');
     // eslint-disable-next-line react-hooks/set-state-in-effect
     else if (pathname?.startsWith('/gallery'))   setActiveSection('gallery');
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    else if (pathname?.startsWith('/report'))    setActiveSection('report');
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    else if (pathname?.startsWith('/profile'))   setActiveSection('profile');
     // eslint-disable-next-line react-hooks/set-state-in-effect
     else if (pathname?.startsWith('/workspace')) setActiveSection('workspace');
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -559,6 +569,7 @@ export default function AppSidebar({ companyId }: { companyId: string }) {
           <SidebarDivider />
           <div className="mt-2" />
 
+
           {/* Workspace / Settings */}
           {/* <div className="flex w-full flex-col items-center select-none">
             <button
@@ -587,7 +598,7 @@ export default function AppSidebar({ companyId }: { companyId: string }) {
           {/* Help */}
           <div className="flex w-full flex-col items-center select-none">
             <Link
-              href="/help"
+              href="/chats"
               title="Help"
               className="sidebar-icon w-10 h-10 rounded-xl flex items-center justify-center transition-colors text-muted-foreground/60 hover:text-foreground hover:bg-[var(--glass-hover)]"
             >

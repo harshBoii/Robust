@@ -13,6 +13,8 @@ import {
 } from 'react-icons/hi2';
 import { AiOutlineLoading } from 'react-icons/ai';
 
+import { buildAssistantContext } from '@/lib/dashboard/assistant-context';
+
 type RuleType =
   | 'AUTO_PAUSE'
   | 'FATIGUE_ALERT'
@@ -54,25 +56,20 @@ const WELCOME: Message = {
 };
 
 function buildContext(rows: AssistantRow[]) {
-  const sorted = [...rows].sort((a, b) => b.spendToday - a.spendToday);
-  const totalSpendToday = rows.reduce((s, r) => s + r.spendToday, 0);
-  const activeAds = rows.filter((r) => (r.status ?? '').toUpperCase() === 'ACTIVE').length;
-
-  return {
-    ads: sorted.map((r) => ({
+  return buildAssistantContext(
+    rows.map((r) => ({
+      adId: r.adId,
       name: r.name,
       status: r.status,
+      thumbnailUrl: null,
       spendToday: r.spendToday,
       spendTotal: r.spendTotal,
       cpi: r.cpi,
       ctr: r.ctr,
       hookRate: r.hookRate,
-      signal: null as string | null,
+      statusSignal: null,
     })),
-    totalSpendToday,
-    totalAds: rows.length,
-    activeAds,
-  };
+  );
 }
 
 /* ── Typing indicator (static — no bounce) ── */
