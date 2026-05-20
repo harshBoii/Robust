@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 
 import { AUTH_COOKIE_NAME } from "@/lib/auth/constants";
-import { verifySessionToken } from "@/lib/auth/jwt";
+import { resolveSessionFromToken } from "@/lib/auth/resolve-session-from-token";
 
 const PUBLIC_PATH_PREFIXES = [
   "/login",
@@ -12,6 +12,7 @@ const PUBLIC_PATH_PREFIXES = [
   "/api/signup",
   "/api/logout",
   "/api/auth/logout",
+  "/api/auth/2fa/verify",
   "/api/auth/callback",
   "/api/mcpServer",
   /** Stream queue reconcile (Bearer STREAM_QUEUE_RECONCILE_SECRET outside development). */
@@ -24,39 +25,40 @@ function isPublicPath(pathname: string): boolean {
   );
 }
 
+function clearSessionCookie(response: NextResponse) {
+  response.cookies.delete(AUTH_COOKIE_NAME);
+  return response;
+}
+
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
+  const token = request.cookies.get(AUTH_COOKIE_NAME)?.value;
 
   if (isPublicPath(pathname)) {
     if (pathname === "/login" || pathname === "/signup") {
-      const token = request.cookies.get(AUTH_COOKIE_NAME)?.value;
       if (token) {
-        try {
-          await verifySessionToken(token);
+        const session = await resolveSessionFromToken(token);
+        if (session) {
           return NextResponse.redirect(new URL("/home", request.url));
-        } catch {
-          const res = NextResponse.next();
-          res.cookies.delete(AUTH_COOKIE_NAME);
-          return res;
         }
+        return clearSessionCookie(NextResponse.next());
       }
     }
     return NextResponse.next();
   }
 
-  const token = request.cookies.get(AUTH_COOKIE_NAME)?.value;
   if (!token) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
-  try {
-    await verifySessionToken(token);
-    return NextResponse.next();
-  } catch {
-    const res = NextResponse.redirect(new URL("/login", request.url));
-    res.cookies.delete(AUTH_COOKIE_NAME);
-    return res;
+  const session = await resolveSessionFromToken(token);
+  if (!session) {
+    return clearSessionCookie(
+      NextResponse.redirect(new URL("/login", request.url)),
+    );
   }
+
+  return NextResponse.next();
 }
 
 export const config = {

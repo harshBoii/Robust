@@ -5,6 +5,7 @@ const JWT_ISS = "robust";
 export type SessionJwtPayload = JWTPayload & {
   userName?: string;
   slug?: string;
+  jti?: string;
 };
 
 function getJwtSecretKey() {
@@ -26,6 +27,7 @@ export async function signSessionToken(args: {
   companyId: string;
   userName: string;
   slug: string;
+  sessionId: string;
 }): Promise<string> {
   const key = getJwtSecretKey();
   const token = await new SignJWT({
@@ -34,6 +36,7 @@ export async function signSessionToken(args: {
   })
     .setProtectedHeader({ alg: "HS256" })
     .setSubject(args.companyId)
+    .setJti(args.sessionId)
     .setIssuer(JWT_ISS)
     .setIssuedAt()
     .setExpirationTime(`${expirySeconds()}s`)

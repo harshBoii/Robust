@@ -78,6 +78,7 @@ export function createServer(options?: CreateMcpServerOptions): McpServer {
           companyId: company.id,
           userName: company.userName,
           slug: company.slug,
+          sessionId: crypto.randomUUID(),
         });
         const url = `${appBaseUrl()}/api/mcp/session?t=${encodeURIComponent(token)}&next=${encodeURIComponent("/create-ad")}`;
         return {

@@ -1,6 +1,8 @@
 import 'server-only';
 
 import { isUserMetaOAuthToken } from '@/lib/meta/integration-token';
+import { getMyAdAccounts, getMyPages, getPageInstagramUsername } from '@/lib/meta/client';
+import { countActiveSessions } from '@/lib/auth/session-store';
 import { prisma } from '@/lib/prisma';
 
 export type CompanyProfile = {
@@ -13,6 +15,9 @@ export type CompanyProfile = {
   domain: string | null;
   email: string | null;
   userName: string | null;
+  displayName: string;
+  emailVerified: boolean;
+  twoFactorEnabled: boolean;
   subscriptionStatus: string;
   subscriptionCreatedAt: string | null;
   subscriptionUpdatedAt: string | null;
@@ -24,17 +29,56 @@ export type CompanyProfile = {
     adPresets: number;
     notifications: number;
   };
+  security: {
+    activeSessions: number;
+  };
   meta: {
     adAccountId: string | null;
+    adAccountName: string | null;
     fbPageId: string | null;
+    fbPageName: string | null;
+    instagramHandle: string | null;
     contextBuiltAt: string | null;
     hasBrandVoice: boolean;
     avgWinningCtr: number | null;
     hasUserOAuth: boolean;
     connectedAt: string;
     updatedAt: string;
+    lastSyncedAt: string;
   } | null;
 };
+
+async function resolveMetaExtras(
+  companyId: string,
+  meta: {
+    adAccountId: string | null;
+    fbPageId: string | null;
+  },
+): Promise<{
+  adAccountName: string | null;
+  fbPageName: string | null;
+  instagramHandle: string | null;
+}> {
+  try {
+    const [accounts, pages] = await Promise.all([
+      getMyAdAccounts({ companyId }),
+      getMyPages({ companyId }),
+    ]);
+    const adAccountName =
+      meta.adAccountId != null
+        ? accounts.find((a) => a.id === meta.adAccountId)?.name ?? null
+        : null;
+    const page = meta.fbPageId != null ? pages.find((p) => p.id === meta.fbPageId) : null;
+    const fbPageName = page?.name ?? null;
+    let instagramHandle: string | null = null;
+    if (meta.fbPageId) {
+      instagramHandle = await getPageInstagramUsername(meta.fbPageId, { companyId });
+    }
+    return { adAccountName, fbPageName, instagramHandle };
+  } catch {
+    return { adAccountName: null, fbPageName: null, instagramHandle: null };
+  }
+}
 
 export async function getCompanyProfile(companyId: string): Promise<CompanyProfile | null> {
   const company = await prisma.company.findUnique({
@@ -49,6 +93,8 @@ export async function getCompanyProfile(companyId: string): Promise<CompanyProfi
       domain: true,
       email: true,
       userName: true,
+      emailVerifiedAt: true,
+      twoFactorEnabled: true,
       subscriptionStatus: true,
       subscriptionCreatedAt: true,
       subscriptionUpdatedAt: true,
@@ -80,25 +126,42 @@ export async function getCompanyProfile(companyId: string): Promise<CompanyProfi
   if (!company) return null;
 
   const { metaIntegration, _count, ...rest } = company;
+  const displayName = rest.userName ?? rest.name;
+
+  let metaBlock: CompanyProfile['meta'] = null;
+  if (metaIntegration) {
+    const extras = await resolveMetaExtras(companyId, {
+      adAccountId: metaIntegration.adAccountId,
+      fbPageId: metaIntegration.fbPageId,
+    });
+    metaBlock = {
+      adAccountId: metaIntegration.adAccountId,
+      adAccountName: extras.adAccountName,
+      fbPageId: metaIntegration.fbPageId,
+      fbPageName: extras.fbPageName,
+      instagramHandle: extras.instagramHandle,
+      contextBuiltAt: metaIntegration.contextBuiltAt?.toISOString() ?? null,
+      hasBrandVoice: Boolean(metaIntegration.brandVoice),
+      avgWinningCtr: metaIntegration.avgWinningCtr,
+      hasUserOAuth: isUserMetaOAuthToken(metaIntegration.accessToken),
+      connectedAt: metaIntegration.createdAt.toISOString(),
+      updatedAt: metaIntegration.updatedAt.toISOString(),
+      lastSyncedAt: metaIntegration.updatedAt.toISOString(),
+    };
+  }
+
+  const activeSessions = await countActiveSessions(companyId);
 
   return {
     ...rest,
+    displayName,
+    emailVerified: Boolean(rest.emailVerifiedAt),
     subscriptionCreatedAt: rest.subscriptionCreatedAt?.toISOString() ?? null,
     subscriptionUpdatedAt: rest.subscriptionUpdatedAt?.toISOString() ?? null,
     createdAt: rest.createdAt.toISOString(),
     updatedAt: rest.updatedAt.toISOString(),
     stats: _count,
-    meta: metaIntegration
-      ? {
-          adAccountId: metaIntegration.adAccountId,
-          fbPageId: metaIntegration.fbPageId,
-          contextBuiltAt: metaIntegration.contextBuiltAt?.toISOString() ?? null,
-          hasBrandVoice: Boolean(metaIntegration.brandVoice),
-          avgWinningCtr: metaIntegration.avgWinningCtr,
-          hasUserOAuth: isUserMetaOAuthToken(metaIntegration.accessToken),
-          connectedAt: metaIntegration.createdAt.toISOString(),
-          updatedAt: metaIntegration.updatedAt.toISOString(),
-        }
-      : null,
+    security: { activeSessions },
+    meta: metaBlock,
   };
 }

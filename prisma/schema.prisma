@@ -28,6 +28,10 @@ model Company {
   userName    String? @unique @db.VarChar(255)
   password    String? @db.VarChar(255)
 
+  emailVerifiedAt   DateTime? @map("email_verified_at") @db.Timestamptz(3)
+  twoFactorEnabled  Boolean   @default(false) @map("two_factor_enabled")
+  twoFactorSecret   String?   @map("two_factor_secret") @db.Text
+
   // Subscription
   subscriptionId        String?            @map("subscription_id")
   subscriptionStatus    SubscriptionStatus @default(PENDING) @map("subscription_status")
@@ -52,9 +56,44 @@ model Company {
   adPublishJobs      AdPublishJob[]
   assistantCreativeUsage AssistantCreativeUsage[]
   adChatSessions     AdChatSession[]
+  authSessions       AuthSession[]
+  loginActivities    LoginActivity[]
 
   @@index([slug])
   @@map("companies")
+}
+
+model AuthSession {
+  id         String    @id @default(cuid())
+  companyId  String
+  userAgent  String?   @db.VarChar(500)
+  ipAddress  String?   @db.VarChar(64)
+  createdAt  DateTime  @default(now()) @db.Timestamptz(3)
+  lastSeenAt DateTime  @default(now()) @db.Timestamptz(3)
+  expiresAt  DateTime  @db.Timestamptz(3)
+  revokedAt  DateTime? @db.Timestamptz(3)
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@index([companyId, revokedAt])
+  @@index([expiresAt])
+  @@map("auth_sessions")
+}
+
+model LoginActivity {
+  id        String   @id @default(cuid())
+  companyId String?
+  success   Boolean
+  ipAddress String?  @db.VarChar(64)
+  userAgent String?  @db.VarChar(500)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  company Company? @relation(fields: [companyId], references: [id], onDelete: SetNull)
+
+  @@index([companyId])
+  @@index([companyId, createdAt(sort: Desc)])
+  @@map("login_activities")
 }
 
 // ================================================================

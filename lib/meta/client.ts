@@ -314,6 +314,29 @@ export async function getMyPages(opts?: MetaGraphAuth): Promise<MetaPage[]> {
   return resp.data ?? [];
 }
 
+/** Instagram business account linked to a Facebook page. */
+export async function getPageInstagramUsername(
+  pageId: string,
+  opts?: MetaGraphAuth,
+): Promise<string | null> {
+  try {
+    const resp = await metaFetch<{
+      connected_instagram_account?: { username?: string };
+    }>(`/${pageId}`, {
+      method: 'GET',
+      companyId: opts?.companyId,
+      accessToken: opts?.accessToken,
+      searchParams: {
+        fields: 'connected_instagram_account{username}',
+      },
+    });
+    const username = resp.connected_instagram_account?.username?.trim();
+    return username ? `@${username.replace(/^@/, '')}` : null;
+  } catch {
+    return null;
+  }
+}
+
 export type MetaAdPixel = {
   id: string;
   name?: string;

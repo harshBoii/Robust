@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 
-import { AUTH_COOKIE_NAME } from "@/lib/auth/constants";
-import { authCookieMaxAge, signSessionToken } from "@/lib/auth/jwt";
+import { establishSessionResponse } from "@/lib/auth/establish-session";
+import { signPendingLoginToken } from "@/lib/auth/pending-login";
 import { verifyPassword } from "@/lib/auth/password";
+import { getRequestIp, getRequestUserAgent } from "@/lib/auth/request-meta";
+import { logLoginActivity } from "@/lib/auth/session-store";
 import { prisma } from "@/lib/prisma";
 
 type LoginBody = {
@@ -21,6 +23,8 @@ export async function POST(request: Request) {
   const userName =
     typeof body.userName === "string" ? body.userName.trim() : "";
   const password = typeof body.password === "string" ? body.password : "";
+  const ipAddress = getRequestIp(request);
+  const userAgent = getRequestUserAgent(request);
 
   if (!userName || !password) {
     return NextResponse.json(
@@ -45,11 +49,18 @@ export async function POST(request: Request) {
       logoUrl: true,
       subscriptionStatus: true,
       createdAt: true,
+      twoFactorEnabled: true,
     },
   });
 
   const passwordHash = company?.password ?? null;
   if (!company || !passwordHash) {
+    await logLoginActivity({
+      companyId: company?.id ?? null,
+      success: false,
+      ipAddress,
+      userAgent,
+    });
     return NextResponse.json(
       { error: "Invalid username or password" },
       { status: 401 },
@@ -58,18 +69,66 @@ export async function POST(request: Request) {
 
   const ok = await verifyPassword(password, passwordHash);
   if (!ok) {
+    await logLoginActivity({
+      companyId: company.id,
+      success: false,
+      ipAddress,
+      userAgent,
+    });
     return NextResponse.json(
       { error: "Invalid username or password" },
       { status: 401 },
     );
   }
 
-  let token: string;
+  const resolvedUserName = company.userName ?? userName;
+
+  if (company.twoFactorEnabled) {
+    try {
+      const pendingToken = await signPendingLoginToken({
+        companyId: company.id,
+        userName: resolvedUserName,
+        slug: company.slug,
+      });
+      return NextResponse.json({
+        requires2fa: true,
+        pendingToken,
+      });
+    } catch (err) {
+      console.error(err);
+      return NextResponse.json(
+        { error: "Authentication is not configured correctly" },
+        { status: 500 },
+      );
+    }
+  }
+
+  await logLoginActivity({
+    companyId: company.id,
+    success: true,
+    ipAddress,
+    userAgent,
+  });
+
   try {
-    token = await signSessionToken({
+    return await establishSessionResponse({
       companyId: company.id,
-      userName: company.userName ?? userName,
+      userName: resolvedUserName,
       slug: company.slug,
+      userAgent,
+      ipAddress,
+      body: {
+        company: {
+          id: company.id,
+          name: company.name,
+          slug: company.slug,
+          userName: company.userName,
+          email: company.email,
+          logoUrl: company.logoUrl,
+          subscriptionStatus: company.subscriptionStatus,
+          createdAt: company.createdAt,
+        },
+      },
     });
   } catch (err) {
     console.error(err);
@@ -78,27 +137,4 @@ export async function POST(request: Request) {
       { status: 500 },
     );
   }
-
-  const res = NextResponse.json({
-    company: {
-      id: company.id,
-      name: company.name,
-      slug: company.slug,
-      userName: company.userName,
-      email: company.email,
-      logoUrl: company.logoUrl,
-      subscriptionStatus: company.subscriptionStatus,
-      createdAt: company.createdAt,
-    },
-  });
-
-  res.cookies.set(AUTH_COOKIE_NAME, token, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    path: "/",
-    maxAge: authCookieMaxAge(),
-  });
-
-  return res;
 }

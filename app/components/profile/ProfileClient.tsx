@@ -1,246 +1,579 @@
 'use client';
 
-import Image from 'next/image';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { useState } from 'react';
 import {
-  Building2,
-  Calendar,
-  Globe,
-  Link2,
-  Mail,
-  Shield,
-  User,
   BarChart3,
-  MessageSquare,
+  Calendar,
+  Check,
+  ChevronRight,
+  Copy,
+  Crown,
   ImageIcon,
-  Bell,
-  SlidersHorizontal,
+  Lock,
+  MessageSquare,
+  MoreHorizontal,
+  Pencil,
+  Sparkles,
+  User,
+  AlertCircle,
 } from 'lucide-react';
 import { SiMeta } from 'react-icons/si';
 
+import {
+  EditProfileModal,
+  LoginActivityModal,
+  PasswordModal,
+  SessionsModal,
+  TwoFactorModal,
+  type ProfileModal,
+} from '@/app/components/profile/ProfileModals';
+import {
+  formatProfileDateShort,
+  formatRelativeTime,
+  profileInitials,
+} from '@/app/components/profile/profile-utils';
 import type { CompanyProfile } from '@/lib/profile/company-profile';
 
 type ProfileClientProps = {
   profile: CompanyProfile;
 };
 
-function Panel({ children, className = '' }: { children: React.ReactNode; className?: string }) {
+const profileCard =
+  'overflow-hidden rounded-xl border border-black/[0.06] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04)]';
+
+function ProfileSectionCard({
+  title,
+  icon: Icon,
+  iconClassName = 'text-primary',
+  action,
+  children,
+  className = '',
+  bodyClassName = '',
+}: {
+  title: string;
+  icon: React.ComponentType<{ className?: string }>;
+  iconClassName?: string;
+  action?: React.ReactNode;
+  children: React.ReactNode;
+  className?: string;
+  bodyClassName?: string;
+}) {
   return (
-    <div
-      className={`rounded-2xl border border-[var(--glass-border-subtle)] bg-[var(--glass-bg-solid)] shadow-[var(--glass-shadow)] ${className}`}
+    <div className={`${profileCard} flex min-h-0 flex-col ${className}`}>
+      <div className="flex shrink-0 items-center justify-between border-b border-black/[0.05] px-3 py-2">
+        <div className="flex items-center gap-2">
+          <Icon className={`h-3.5 w-3.5 ${iconClassName}`} />
+          <h2 className="font-display text-[13px] font-semibold text-foreground">{title}</h2>
+        </div>
+        {action}
+      </div>
+      <div className={`min-h-0 flex-1 px-3 py-2 ${bodyClassName}`}>{children}</div>
+    </div>
+  );
+}
+
+function StatusBadge({
+  label,
+  tone = 'neutral',
+}: {
+  label: string;
+  tone?: 'success' | 'warning' | 'neutral';
+}) {
+  const tones = {
+    success: 'bg-emerald-50 text-emerald-600',
+    warning: 'bg-amber-50 text-amber-600',
+    neutral: 'bg-gray-100 text-gray-500',
+  };
+  return (
+    <span
+      className={`inline-flex shrink-0 items-center gap-0.5 rounded px-1.5 py-px font-ui text-[9px] font-semibold ${tones[tone]}`}
     >
-      {children}
+      {tone === 'success' && <Check className="h-2.5 w-2.5 stroke-[2.5]" />}
+      {tone === 'warning' && <AlertCircle className="h-2.5 w-2.5 stroke-[2.5]" />}
+      {label}
+    </span>
+  );
+}
+
+function InfoFieldRow({
+  label,
+  value,
+  badge,
+}: {
+  label: string;
+  value: React.ReactNode;
+  badge?: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-2 border-b border-black/[0.04] py-1.5 last:border-b-0">
+      <span className="shrink-0 font-ui text-[9px] font-bold uppercase tracking-wide text-muted-foreground/75">
+        {label}
+      </span>
+      <div className="flex min-w-0 items-center justify-end gap-1.5 text-right">
+        <span className="truncate font-body text-[11px] font-medium text-foreground">{value}</span>
+        {badge}
+      </div>
     </div>
   );
 }
 
-function SectionTitle({ icon: Icon, label }: { icon: React.ComponentType<{ className?: string }>; label: string }) {
+function CopyableSlug({ slug }: { slug: string }) {
+  const [copied, setCopied] = useState(false);
   return (
-    <div className="mb-3 flex items-center gap-2">
-      <Icon className="h-4 w-4 text-primary" />
-      <h2 className="font-display text-sm font-semibold text-foreground">{label}</h2>
-    </div>
-  );
-}
-
-function InfoRow({ label, value, href }: { label: string; value: string | null | undefined; href?: string }) {
-  const display = value?.trim() || '—';
-  return (
-    <div className="flex flex-col gap-0.5 border-b border-[var(--glass-border)] py-2.5 last:border-b-0 sm:flex-row sm:items-center sm:justify-between">
-      <span className="font-ui text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{label}</span>
-      {href && value ? (
-        <a
-          href={href}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="font-body text-[13px] text-primary hover:underline"
-        >
-          {display}
-        </a>
+    <button
+      type="button"
+      className="inline-flex max-w-[140px] items-center gap-1 truncate font-body text-[11px] font-medium text-foreground hover:text-primary"
+      onClick={() => {
+        void navigator.clipboard.writeText(slug);
+        setCopied(true);
+        window.setTimeout(() => setCopied(false), 2000);
+      }}
+    >
+      <span className="truncate">{slug}</span>
+      {copied ? (
+        <Check className="h-3 w-3 shrink-0 text-emerald-500" />
       ) : (
-        <span className="font-body text-[13px] text-foreground">{display}</span>
+        <Copy className="h-3 w-3 shrink-0 text-muted-foreground/50" />
       )}
+    </button>
+  );
+}
+
+function SecurityRow({
+  label,
+  value,
+  onClick,
+}: {
+  label: string;
+  value: React.ReactNode;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex w-full items-center justify-between gap-2 border-b border-black/[0.04] py-2 text-left transition-colors last:border-b-0 hover:bg-black/[0.015]"
+    >
+      <span className="font-body text-[11px] font-medium text-foreground">{label}</span>
+      <div className="flex items-center gap-1">
+        <div className="text-[11px] text-muted-foreground">{value}</div>
+        <ChevronRight className="h-3 w-3 shrink-0 text-muted-foreground/40" />
+      </div>
+    </button>
+  );
+}
+
+function StatCard({
+  icon: Icon,
+  value,
+  label,
+  iconBg,
+  iconColor,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  value: string;
+  label: string;
+  iconBg: string;
+  iconColor: string;
+}) {
+  return (
+    <div className={`${profileCard} flex items-center gap-2.5 px-2.5 py-2`}>
+      <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${iconBg}`}>
+        <Icon className={`h-3.5 w-3.5 ${iconColor}`} />
+      </div>
+      <div className="min-w-0">
+        <p className="truncate font-display text-[13px] font-semibold leading-none text-foreground">
+          {value}
+        </p>
+        <p className="mt-0.5 truncate font-ui text-[9px] text-muted-foreground">{label}</p>
+      </div>
     </div>
   );
 }
 
-function formatDate(iso: string | null | undefined) {
-  if (!iso) return '—';
-  return new Intl.DateTimeFormat(undefined, {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  }).format(new Date(iso));
-}
-
-function subscriptionLabel(status: string) {
-  return status.charAt(0) + status.slice(1).toLowerCase().replace(/_/g, ' ');
-}
-
-function subscriptionTone(status: string) {
-  switch (status) {
-    case 'ACTIVE':
-      return 'text-emerald-500';
-    case 'PENDING':
-      return 'text-amber-500';
-    case 'FAILED':
-    case 'EXPIRED':
-    case 'CANCELLED':
-    case 'ON_HOLD':
-      return 'text-destructive';
-    default:
-      return 'text-muted-foreground';
-  }
-}
-
-function initials(name: string) {
-  return name
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase() ?? '')
-    .join('');
+function MetaRow({
+  label,
+  value,
+  connected,
+  warn,
+}: {
+  label: string;
+  value: string;
+  connected: boolean;
+  warn?: boolean;
+}) {
+  return (
+    <li className="flex items-center justify-between gap-2 border-b border-black/[0.04] py-1.5 last:border-b-0">
+      <div className="min-w-0 flex-1">
+        <span className="font-ui text-[9px] font-bold uppercase tracking-wide text-muted-foreground/75">
+          {label}
+        </span>
+        <p className="mt-0.5 truncate font-body text-[11px] text-foreground">{value || '—'}</p>
+      </div>
+      {warn ? (
+        <StatusBadge label="No" tone="warning" />
+      ) : connected ? (
+        <StatusBadge label="Connected" tone="success" />
+      ) : (
+        <StatusBadge label="Not linked" tone="neutral" />
+      )}
+    </li>
+  );
 }
 
 export default function ProfileClient({ profile }: ProfileClientProps) {
+  const router = useRouter();
+  const [modal, setModal] = useState<ProfileModal>(null);
+
   const metaConnected = Boolean(profile.meta?.adAccountId && profile.meta?.fbPageId);
+  const initials = profileInitials(profile.displayName);
+
+  const metaAdLine = [profile.meta?.adAccountName, profile.meta?.adAccountId]
+    .filter(Boolean)
+    .join(' · ');
+  const metaPageLine = [profile.meta?.fbPageName, profile.meta?.fbPageId]
+    .filter(Boolean)
+    .join(' · ');
 
   return (
-    <div className="mx-auto flex w-full max-w-4xl flex-col gap-5">
-      <div>
-        <h1 className="font-heading text-3xl font-semibold tracking-tight">Profile</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Your account, company, and workspace details.
-        </p>
-      </div>
+    <div className="flex h-full min-h-0 w-full flex-col gap-2 overflow-hidden">
+      {/* Hero header */}
+      <div className={`${profileCard} relative shrink-0 overflow-hidden`}>
+        <div
+          className="pointer-events-none absolute inset-0"
+          style={{
+            background:
+              'linear-gradient(135deg, rgba(255,228,225,0.9) 0%, rgba(255,245,242,0.5) 50%, transparent 100%)',
+          }}
+        />
+        <svg
+          className="pointer-events-none absolute inset-0 h-full w-full opacity-30"
+          viewBox="0 0 1200 80"
+          preserveAspectRatio="none"
+          aria-hidden
+        >
+          <path
+            fill="none"
+            stroke="rgba(255,180,170,0.35)"
+            strokeWidth="1"
+            d="M0,50 Q300,30 600,45 T1200,40"
+          />
+        </svg>
 
-      <Panel className="overflow-hidden">
-        <div className="relative h-24 bg-gradient-to-r from-primary/15 via-primary/5 to-transparent" />
-        <div className="relative px-5 pb-5">
-          <div className="-mt-10 mb-4 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-            <div className="flex items-end gap-4">
-              <div className="relative h-20 w-20 overflow-hidden rounded-2xl border-4 border-[var(--glass-bg-solid)] bg-[var(--glass-hover)] shadow-md">
+        <div className="relative flex items-center justify-between gap-3 px-3 py-2.5">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="relative h-12 w-12 shrink-0">
+              <div className="relative h-full w-full overflow-hidden rounded-xl bg-[#fde8e4]">
                 {profile.logoUrl ? (
-                  <Image src={profile.logoUrl} alt={profile.name} fill className="object-cover" sizes="80px" />
+                  // User-provided URL — may be any host; avoid next/image domain allowlist.
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={profile.logoUrl}
+                    alt={profile.displayName}
+                    className="h-full w-full object-cover"
+                  />
                 ) : (
-                  <div className="flex h-full w-full items-center justify-center bg-primary/10 font-display text-2xl font-semibold text-primary">
-                    {initials(profile.name)}
+                  <div className="flex h-full w-full items-center justify-center font-display text-lg font-bold text-[#e07a5f]">
+                    {initials}
                   </div>
                 )}
               </div>
-              <div className="min-w-0 pb-1">
-                <h2 className="font-display truncate text-xl font-semibold text-foreground">{profile.name}</h2>
-                <p className="font-body text-sm text-muted-foreground">
-                  @{profile.userName ?? profile.slug}
-                </p>
+              <button
+                type="button"
+                title="Edit profile"
+                onClick={() => setModal('edit')}
+                className="absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full border border-black/[0.08] bg-white shadow-sm"
+              >
+                <Pencil className="h-2.5 w-2.5" />
+              </button>
+            </div>
+
+            <div className="min-w-0">
+              <h1 className="truncate font-heading text-lg font-semibold leading-tight text-foreground">
+                {profile.displayName}
+              </h1>
+              <p className="truncate font-body text-[11px] text-muted-foreground">
+                @{profile.userName ?? profile.slug}
+                {profile.email ? ` · ${profile.email}` : ''}
+              </p>
+              <div className="mt-1.5 flex flex-wrap gap-1">
+                {metaConnected && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-1.5 py-px font-ui text-[9px] font-semibold text-emerald-600">
+                    <SiMeta className="h-2.5 w-2.5" />
+                    Meta Connected
+                  </span>
+                )}
+                <span className="inline-flex items-center gap-1 rounded-full bg-violet-50 px-1.5 py-px font-ui text-[9px] font-semibold text-violet-600">
+                  <Sparkles className="h-2.5 w-2.5" />
+                  AI Enabled
+                </span>
+                <span className="inline-flex items-center gap-1 rounded-full bg-orange-50 px-1.5 py-px font-ui text-[9px] font-semibold text-orange-600">
+                  <Crown className="h-2.5 w-2.5" />
+                  Workspace Owner
+                </span>
               </div>
             </div>
+          </div>
+
+          <div className="flex shrink-0 items-center gap-1.5">
             <Link
               href="/manager/meta"
-              className="glass-button inline-flex items-center gap-2 self-start rounded-lg px-3 py-2 font-ui text-[12px] text-foreground transition-colors hover:text-primary sm:self-auto"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-2.5 py-1.5 text-[11px] font-semibold text-primary-foreground"
             >
-              <SiMeta className="h-3.5 w-3.5" />
-              {metaConnected ? 'Manage Meta' : 'Connect Meta'}
+              <SiMeta className="h-3 w-3" />
+              Manage Meta
             </Link>
+            <button
+              type="button"
+              onClick={() => setModal('edit')}
+              className="inline-flex items-center gap-1 rounded-lg border border-black/[0.08] bg-white px-2.5 py-1.5 text-[11px] font-medium"
+            >
+              <Pencil className="h-3 w-3" />
+              Edit
+            </button>
+            <button
+              type="button"
+              className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-black/[0.08] bg-white"
+              aria-label="More options"
+            >
+              <MoreHorizontal className="h-3.5 w-3.5 text-muted-foreground" />
+            </button>
           </div>
-
-          {profile.description ? (
-            <p className="font-body text-sm leading-relaxed text-muted-foreground">{profile.description}</p>
-          ) : null}
         </div>
-      </Panel>
-
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {[
-          { label: 'Creatives', value: profile.stats.assets, icon: ImageIcon },
-          { label: 'Chats', value: profile.stats.adChatSessions, icon: MessageSquare },
-          { label: 'Ad presets', value: profile.stats.adPresets, icon: SlidersHorizontal },
-          { label: 'Notifications', value: profile.stats.notifications, icon: Bell },
-        ].map(({ label, value, icon: Icon }) => (
-          <Panel key={label} className="flex items-center gap-3 p-4">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10">
-              <Icon className="h-4 w-4 text-primary" />
-            </div>
-            <div>
-              <p className="font-ui text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
-              <p className="font-display text-lg font-semibold text-foreground">{value.toLocaleString()}</p>
-            </div>
-          </Panel>
-        ))}
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Panel className="p-5">
-          <SectionTitle icon={User} label="Account" />
-          <InfoRow label="Username" value={profile.userName} />
-          <InfoRow label="Email" value={profile.email} />
-          <InfoRow label="Company slug" value={profile.slug} />
-          <InfoRow label="Member since" value={formatDate(profile.createdAt)} />
-          <InfoRow label="Last updated" value={formatDate(profile.updatedAt)} />
-        </Panel>
+      {/* Stats row */}
+      <div className="grid shrink-0 grid-cols-2 gap-2 lg:grid-cols-4">
+        <StatCard
+          icon={ImageIcon}
+          value={profile.stats.assets.toLocaleString('en-US')}
+          label="Creatives Uploaded"
+          iconBg="bg-red-50"
+          iconColor="text-red-500"
+        />
+        <StatCard
+          icon={MessageSquare}
+          value={profile.stats.adChatSessions.toLocaleString('en-US')}
+          label="Chats"
+          iconBg="bg-violet-50"
+          iconColor="text-violet-500"
+        />
+        <StatCard
+          icon={SiMeta}
+          value={
+            profile.meta && metaConnected
+              ? formatRelativeTime(profile.meta.lastSyncedAt)
+              : 'Not connected'
+          }
+          label="Meta · Last OAuth"
+          iconBg="bg-emerald-50"
+          iconColor="text-emerald-600"
+        />
+        <StatCard
+          icon={Calendar}
+          value={formatProfileDateShort(profile.createdAt)}
+          label="Member Since"
+          iconBg="bg-orange-50"
+          iconColor="text-orange-500"
+        />
+      </div>
 
-        <Panel className="p-5">
-          <SectionTitle icon={Building2} label="Company" />
-          <InfoRow label="Company name" value={profile.name} />
-          <InfoRow label="Domain" value={profile.domain} />
-          <InfoRow
-            label="Website"
-            value={profile.website}
-            href={profile.website?.startsWith('http') ? profile.website : profile.website ? `https://${profile.website}` : undefined}
-          />
-          <InfoRow label="Description" value={profile.description} />
-        </Panel>
-
-        <Panel className="p-5">
-          <SectionTitle icon={Shield} label="Subscription" />
-          <div className="flex flex-col gap-0.5 border-b border-[var(--glass-border)] py-2.5 sm:flex-row sm:items-center sm:justify-between">
-            <span className="font-ui text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Status</span>
-            <span className={`font-body text-[13px] font-medium ${subscriptionTone(profile.subscriptionStatus)}`}>
-              {subscriptionLabel(profile.subscriptionStatus)}
-            </span>
-          </div>
-          <InfoRow label="Started" value={formatDate(profile.subscriptionCreatedAt)} />
-          <InfoRow label="Last changed" value={formatDate(profile.subscriptionUpdatedAt)} />
-        </Panel>
-
-        <Panel className="p-5">
-          <SectionTitle icon={SiMeta} label="Meta integration" />
-          {profile.meta ? (
-            <>
-              <InfoRow label="Ad account" value={profile.meta.adAccountId} />
-              <InfoRow label="Facebook page" value={profile.meta.fbPageId} />
-              <InfoRow label="OAuth connected" value={profile.meta.hasUserOAuth ? 'Yes' : 'No'} />
-              <InfoRow label="Brand voice built" value={profile.meta.hasBrandVoice ? 'Yes' : 'No'} />
-              <InfoRow
-                label="Avg winning CTR"
-                value={profile.meta.avgWinningCtr != null ? `${profile.meta.avgWinningCtr.toFixed(2)}%` : null}
+      {/* Main body — fills remaining height */}
+      <div className="grid min-h-0 flex-1 grid-cols-1 gap-2 lg:grid-cols-12 lg:grid-rows-2">
+        {/* Workspace Information */}
+        <ProfileSectionCard
+          className="lg:col-span-8 lg:row-span-1"
+          bodyClassName="overflow-hidden"
+          title="Workspace Information"
+          icon={User}
+          action={
+            <button
+              type="button"
+              onClick={() => setModal('edit')}
+              className="font-ui text-[10px] font-medium text-muted-foreground hover:text-primary"
+            >
+              Edit
+            </button>
+          }
+        >
+          <div className="grid h-full grid-cols-2 gap-x-4">
+            <div>
+              <p className="mb-0.5 font-ui text-[9px] font-bold uppercase tracking-wide text-muted-foreground/60">
+                Personal
+              </p>
+              <InfoFieldRow label="Username" value={profile.userName ?? '—'} />
+              <InfoFieldRow
+                label="Email"
+                value={profile.email ?? '—'}
+                badge={
+                  profile.email && profile.emailVerified ? (
+                    <StatusBadge label="Verified" tone="success" />
+                  ) : null
+                }
               />
-              <InfoRow label="Context built" value={formatDate(profile.meta.contextBuiltAt)} />
-              <InfoRow label="Connected" value={formatDate(profile.meta.connectedAt)} />
-            </>
+              <InfoFieldRow label="Slug" value={<CopyableSlug slug={profile.slug} />} />
+              <InfoFieldRow
+                label="Member Since"
+                value={formatProfileDateShort(profile.createdAt)}
+              />
+              <InfoFieldRow
+                label="Updated"
+                value={formatProfileDateShort(profile.updatedAt)}
+              />
+            </div>
+            <div>
+              <p className="mb-0.5 font-ui text-[9px] font-bold uppercase tracking-wide text-muted-foreground/60">
+                Company
+              </p>
+              <InfoFieldRow label="Name" value={profile.name} />
+              <InfoFieldRow label="Domain" value={profile.domain ?? '—'} />
+              <InfoFieldRow label="Website" value={profile.website ?? '—'} />
+              <InfoFieldRow label="Description" value={profile.description ?? '—'} />
+            </div>
+          </div>
+        </ProfileSectionCard>
+
+        {/* Workspace Status */}
+        <ProfileSectionCard
+          className="lg:col-span-4 lg:row-span-1"
+          title="Workspace Status"
+          icon={BarChart3}
+        >
+          <ul>
+            {[
+              {
+                label: 'Meta Connection',
+                value: (
+                  <StatusBadge
+                    label={metaConnected ? 'Connected' : 'Not connected'}
+                    tone={metaConnected ? 'success' : 'neutral'}
+                  />
+                ),
+              },
+              {
+                label: 'Last OAuth',
+                value: profile.meta ? formatRelativeTime(profile.meta.lastSyncedAt) : '—',
+              },
+              { label: 'Creatives', value: profile.stats.assets },
+              { label: 'Chats', value: profile.stats.adChatSessions },
+              { label: 'Ad Presets', value: profile.stats.adPresets },
+              { label: 'Notifications', value: profile.stats.notifications },
+            ].map(({ label, value }) => (
+              <li
+                key={label}
+                className="flex items-center justify-between gap-2 border-b border-black/[0.04] py-1.5 last:border-b-0"
+              >
+                <span className="text-[11px] text-muted-foreground">{label}</span>
+                <span className="text-[11px] font-medium text-foreground">{value}</span>
+              </li>
+            ))}
+          </ul>
+        </ProfileSectionCard>
+
+        {/* Meta Integration */}
+        <ProfileSectionCard
+          className="lg:col-span-6 lg:row-span-1"
+          bodyClassName="overflow-y-auto"
+          title="Meta Integration"
+          icon={SiMeta}
+          iconClassName="text-[#0081FB]"
+          action={
+            <Link
+              href="/manager/meta"
+              className="font-ui text-[10px] font-medium text-muted-foreground hover:text-primary"
+            >
+              Manage
+            </Link>
+          }
+        >
+          {profile.meta ? (
+            <ul>
+              <MetaRow
+                label="Ad Account"
+                value={metaAdLine}
+                connected={Boolean(profile.meta.adAccountId)}
+              />
+              <MetaRow
+                label="Facebook Page"
+                value={metaPageLine}
+                connected={Boolean(profile.meta.fbPageId)}
+              />
+              <MetaRow
+                label="Instagram"
+                value={profile.meta.instagramHandle ?? '—'}
+                connected={Boolean(profile.meta.instagramHandle)}
+              />
+              <MetaRow
+                label="Brand Voice"
+                value={profile.meta.hasBrandVoice ? 'Yes' : 'No'}
+                connected={profile.meta.hasBrandVoice}
+                warn={!profile.meta.hasBrandVoice}
+              />
+              <MetaRow
+                label="Context"
+                value={
+                  profile.meta.contextBuiltAt
+                    ? formatProfileDateShort(profile.meta.contextBuiltAt)
+                    : 'No'
+                }
+                connected={Boolean(profile.meta.contextBuiltAt)}
+                warn={!profile.meta.contextBuiltAt}
+              />
+            </ul>
           ) : (
-            <p className="font-body text-sm text-muted-foreground">
-              Meta is not connected yet.{' '}
+            <p className="text-[11px] text-muted-foreground">
+              Not connected.{' '}
               <Link href="/manager/meta" className="text-primary hover:underline">
-                Connect your account
+                Connect
               </Link>
             </p>
           )}
-        </Panel>
+        </ProfileSectionCard>
+
+        {/* Security */}
+        <ProfileSectionCard className="lg:col-span-6 lg:row-span-1" title="Security & Access" icon={Lock}>
+          <SecurityRow label="Password" value="••••••••" onClick={() => setModal('password')} />
+          <SecurityRow
+            label="Two-Factor Authentication"
+            value={
+              profile.twoFactorEnabled ? (
+                <StatusBadge label="Enabled" tone="success" />
+              ) : (
+                'Not enabled'
+              )
+            }
+            onClick={() => setModal('2fa')}
+          />
+          <SecurityRow
+            label="Active Sessions"
+            value={
+              <span className="font-semibold text-emerald-600">
+                {profile.security.activeSessions}
+              </span>
+            }
+            onClick={() => setModal('sessions')}
+          />
+          <SecurityRow
+            label="Login Activity"
+            value="View sign-ins"
+            onClick={() => setModal('login-activity')}
+          />
+        </ProfileSectionCard>
       </div>
 
-      <div className="flex items-center gap-2 px-1 text-muted-foreground/50">
-        <Calendar className="h-3.5 w-3.5" />
-        <span className="font-ui text-[10px]">
-          Profile ID: {profile.id}
-        </span>
-        {profile.email ? (
-          <>
-            <span aria-hidden>·</span>
-            <Mail className="h-3.5 w-3.5" />
-            <span className="font-ui text-[10px]">{profile.email}</span>
-          </>
-        ) : null}
-      </div>
+      {modal === 'edit' && <EditProfileModal profile={profile} onClose={() => setModal(null)} />}
+      {modal === 'password' && <PasswordModal onClose={() => setModal(null)} />}
+      {modal === '2fa' && (
+        <TwoFactorModal
+          enabled={profile.twoFactorEnabled}
+          onClose={() => setModal(null)}
+          onChanged={() => router.refresh()}
+        />
+      )}
+      {modal === 'sessions' && <SessionsModal onClose={() => setModal(null)} />}
+      {modal === 'login-activity' && <LoginActivityModal onClose={() => setModal(null)} />}
     </div>
   );
 }

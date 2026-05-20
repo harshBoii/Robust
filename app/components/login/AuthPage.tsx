@@ -52,12 +52,18 @@ export default function AuthPage({ initialMode }: { initialMode: Mode }) {
   const [loading,         setLoading]         = useState(false);
   const [error,           setError]           = useState('');
   const [success,         setSuccess]         = useState('');
+  const [twoFactorStep,   setTwoFactorStep]   = useState(false);
+  const [pendingToken,    setPendingToken]    = useState('');
+  const [totpCode,        setTotpCode]        = useState('');
 
 
   const toggleMode = () => {
     setMode((m) => (m === 'login' ? 'signup' : 'login'));
     setError('');
     setSuccess('');
+    setTwoFactorStep(false);
+    setPendingToken('');
+    setTotpCode('');
   };
 
 
@@ -71,8 +77,40 @@ export default function AuthPage({ initialMode }: { initialMode: Mode }) {
         body: JSON.stringify({ userName, password }),
         credentials: 'include',
       });
-      const data = (await res.json()) as { error?: string; company?: { id: string } };
+      const data = (await res.json()) as {
+        error?: string;
+        company?: { id: string };
+        requires2fa?: boolean;
+        pendingToken?: string;
+      };
       if (!res.ok) { setError(data.error ?? 'Login failed'); return; }
+      if (data.requires2fa && data.pendingToken) {
+        setPendingToken(data.pendingToken);
+        setTwoFactorStep(true);
+        setSuccess('Enter the code from your authenticator app.');
+        return;
+      }
+      setSuccess('Signed in!');
+      router.push('/home'); router.refresh();
+    } catch (err) {
+      console.error(err);
+      setError('Something went wrong, please try again.');
+    } finally { setLoading(false); }
+  };
+
+
+  const handleTwoFactorVerify = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(''); setSuccess(''); setLoading(true);
+    try {
+      const res = await fetch('/api/auth/2fa/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pendingToken, code: totpCode }),
+        credentials: 'include',
+      });
+      const data = (await res.json()) as { error?: string };
+      if (!res.ok) { setError(data.error ?? 'Verification failed'); return; }
       setSuccess('Signed in!');
       router.push('/home'); router.refresh();
     } catch (err) {
@@ -274,7 +312,9 @@ export default function AuthPage({ initialMode }: { initialMode: Mode }) {
           {/* Subtitle */}
           <p className="mb-6 text-center font-body text-[0.875rem] leading-relaxed text-muted-foreground">
             {mode === 'login'
-              ? 'Sign in to your Robust workspace.'
+              ? twoFactorStep
+                ? 'Two-factor authentication is enabled on this account.'
+                : 'Sign in to your Robust workspace.'
               : 'Set up your brand workspace and connect Meta in seconds.'}
           </p>
 
@@ -305,6 +345,52 @@ export default function AuthPage({ initialMode }: { initialMode: Mode }) {
           {/* Forms */}
           <AnimatePresence mode="wait">
             {mode === 'login' ? (
+              twoFactorStep ? (
+                <motion.form
+                  key="2fa"
+                  initial={{ opacity: 0, x: -16 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 16 }}
+                  transition={{ duration: 0.25 }}
+                  onSubmit={handleTwoFactorVerify}
+                  className="space-y-4"
+                >
+                  <div>
+                    <label className="mb-1.5 block font-ui text-[0.8rem] font-medium tracking-wide text-muted-foreground">
+                      Authenticator code
+                    </label>
+                    <input
+                      value={totpCode}
+                      onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                      placeholder="000000"
+                      inputMode="numeric"
+                      autoComplete="one-time-code"
+                      required
+                      maxLength={6}
+                      className={inputClass}
+                    />
+                  </div>
+                  <motion.button
+                    type="submit"
+                    disabled={loading || totpCode.length !== 6}
+                    whileHover={{ scale: 1.01, y: -1 }} whileTap={{ scale: 0.99 }}
+                    className={AUTH_SUBMIT_CLASS}
+                  >
+                    {loading ? 'Verifying…' : 'Verify & sign in'}
+                  </motion.button>
+                  <button
+                    type="button"
+                    className="w-full text-center font-ui text-[0.8rem] text-muted-foreground hover:text-foreground"
+                    onClick={() => {
+                      setTwoFactorStep(false);
+                      setPendingToken('');
+                      setTotpCode('');
+                      setError('');
+                      setSuccess('');
+                    }}
+                  >
+                    Back to sign in
+                  </button>
+                </motion.form>
+              ) : (
               <motion.form
                 key="login"
                 initial={{ opacity: 0, x: -16 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 16 }}
@@ -342,6 +428,7 @@ export default function AuthPage({ initialMode }: { initialMode: Mode }) {
                   {loading ? 'Signing in…' : 'Sign in'}
                 </motion.button>
               </motion.form>
+              )
             ) : (
               <motion.form
                 key="signup"

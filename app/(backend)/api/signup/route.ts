@@ -98,7 +98,7 @@ export async function POST(request: Request) {
         slug,
         userName,
         password: passwordHashed,
-        ...(email ? { email } : {}),
+        ...(email ? { email, emailVerifiedAt: new Date() } : {}),
       },
       select: {
         id: true,

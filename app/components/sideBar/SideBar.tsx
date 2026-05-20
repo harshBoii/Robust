@@ -444,9 +444,50 @@ const SidebarDivider = () => (
 );
 
 /* ============================================
+   SIDEBAR PROFILE AVATAR
+============================================ */
+function SidebarProfileAvatar({
+  logoUrl,
+  displayName,
+}: {
+  logoUrl?: string | null;
+  displayName: string;
+}) {
+  const [logoFailed, setLogoFailed] = useState(false);
+  const initial = displayName.charAt(0).toUpperCase();
+
+  if (logoUrl && !logoFailed) {
+    return (
+      // User-provided logo URL — may be any host.
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={logoUrl}
+        alt={displayName}
+        className="h-8 w-8 rounded-lg object-cover"
+        onError={() => setLogoFailed(true)}
+      />
+    );
+  }
+
+  return (
+    <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#fde8e4] font-display text-xs font-bold text-[#e07a5f]">
+      {initial}
+    </span>
+  );
+}
+
+/* ============================================
    MAIN APP SIDEBAR
 ============================================ */
-export default function AppSidebar({ companyId }: { companyId: string }) {
+export default function AppSidebar({
+  companyId,
+  displayName,
+  logoUrl,
+}: {
+  companyId: string;
+  displayName?: string;
+  logoUrl?: string | null;
+}) {
   const pathname = usePathname();
   const router   = useRouter();
   const [activeSection,    setActiveSection]    = useState('home');
@@ -636,6 +677,30 @@ export default function AppSidebar({ companyId }: { companyId: string }) {
               Terms
             </span>
           </div>
+
+          {/* Profile chip */}
+          {displayName ? (
+            <div className="mb-1 flex w-full flex-col items-center select-none">
+              <Link
+                href="/profile"
+                title={displayName}
+                className={`flex h-10 w-10 items-center justify-center rounded-xl transition-colors ${
+                  activeSection === 'profile'
+                    ? 'bg-[color-mix(in_srgb,var(--primary)_12%,transparent)]'
+                    : 'hover:bg-[var(--glass-hover)]'
+                }`}
+              >
+                <SidebarProfileAvatar logoUrl={logoUrl} displayName={displayName} />
+              </Link>
+              <span
+                className={`font-ui mt-0.5 max-w-[52px] truncate text-[9px] leading-none ${
+                  activeSection === 'profile' ? 'font-semibold text-primary' : 'text-muted-foreground/40'
+                }`}
+              >
+                {displayName.split(/\s+/)[0]}
+              </span>
+            </div>
+          ) : null}
 
           {/* Log out */}
           <div className="flex w-full flex-col items-center select-none">
