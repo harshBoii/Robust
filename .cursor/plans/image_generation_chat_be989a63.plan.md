@@ -34,10 +34,10 @@ Path B is **entirely absent**: no classifiers, no `gpt-image-1`, no image-gen wi
 ```mermaid
 flowchart TD
   FirstMsg["First user message"]
-  TopClassifier["Top classifier\ngpt-4.5-nano"]
+  TopClassifier["Top classifier\ngpt-5.4-nano"]
   PathA["Path A: existing ads FSM\nrunAdAgentTurn"]
   PathB["Path B: image-gen FSM\nimage-gen orchestrator"]
-  SubClassifier["Subpath classifier\ngpt-4.5-nano"]
+  SubClassifier["Subpath classifier\ngpt-5.4-nano"]
   SP1["Subpath 1: Product Ad Creator"]
   SP2["Subpath 2: Ad Copy Variant Generator"]
   SP3["Subpath 3: Product on Model"]
@@ -87,7 +87,7 @@ Path B uses the **same** message/action API surface ([`POST .../messages`](app/(
 
 | File | Responsibility |
 |------|----------------|
-| `models.ts` | `CLASSIFIER_MODEL = 'gpt-4.5-nano'`, `COLLECTOR_MODEL = 'gpt-4.5-mini'`, `PROMPT_MODEL = 'gpt-4.5'`, `IMAGE_MODEL = 'gpt-image-1'` |
+| `models.ts` | `CLASSIFIER_MODEL = 'gpt-5.4-nano'`, `COLLECTOR_MODEL = 'gpt-5.4-mini'`, `PROMPT_MODEL = 'gpt-5.4'`, `IMAGE_MODEL = 'gpt-image-1'` |
 | `classify-top-level.ts` | `{ path: 'ads' \| 'imageGen' }` from first message |
 | `classify-subpath.ts` | `{ subpath: 'productAd' \| 'variantGen' \| 'productOnModel' }` |
 | `collect-fields-agent.ts` | Multi-turn JSON agent; max 6 assistant questions; required fields: product image, description, brand tone, copy count, aspect ratio (optional) |
@@ -276,9 +276,9 @@ Extend [`app/(backend)/api/chats/[id]/actions/route.ts`](app/(backend)/api/chats
 Add to [`lib/assistant/models.ts`](lib/assistant/models.ts) (or `lib/image-gen/models.ts`):
 
 ```ts
-export const CLASSIFIER_MODEL = 'gpt-4.5-nano';
-export const IMAGE_COLLECTOR_MODEL = 'gpt-4.5-mini';
-export const VARIANT_PROMPT_MODEL = 'gpt-4.5';
+export const CLASSIFIER_MODEL = 'gpt-5.4-nano';
+export const IMAGE_COLLECTOR_MODEL = 'gpt-5.4-mini';
+export const VARIANT_PROMPT_MODEL = 'gpt-5.4';
 export const IMAGE_GENERATION_MODEL = 'gpt-image-1';
 ```
 
