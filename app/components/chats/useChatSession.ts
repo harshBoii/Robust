@@ -1,9 +1,14 @@
 'use client';
 
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { resolveActionUserMessage } from '@/lib/chats/action-user-message';
+import { shouldSkipActionUserBubble } from '@/lib/chats/user-message-policy';
 
+import {
+  hasInitialSendLock,
+  setInitialSendLock,
+} from './chat-pending-storage';
 import { resolveChatBusyTone, type ChatBusyTone } from './chat-busy-tone';
 import type { SerializedMessage } from '@/lib/chats/types';
 import type { WorkflowState } from '@/lib/chats/types';
@@ -22,16 +27,53 @@ export type ChatSessionData = {
   messages: SerializedMessage[];
 };
 
-export function useChatSession(sessionId: string) {
-  const [session, setSession] = useState<ChatSessionData | null>(null);
-  const [messages, setMessages] = useState<SerializedMessage[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [busy, setBusy] = useState(false);
+export type UseChatSessionOptions = {
+  initialMessage?: string | null;
+  initialTitle?: string | null;
+};
+
+function stubSession(sessionId: string, title: string): ChatSessionData {
+  return {
+    id: sessionId,
+    title,
+    status: 'ACTIVE',
+    currentStep: 'intent',
+    workflowState: {},
+    bulkUploadId: null,
+    campaignId: null,
+    messages: [],
+  };
+}
+
+function optimisticUserMessage(text: string, id: string): SerializedMessage {
+  return {
+    id,
+    role: 'user',
+    content: text,
+    createdAt: new Date().toISOString(),
+  };
+}
+
+export function useChatSession(sessionId: string, options?: UseChatSessionOptions) {
+  const initialText = options?.initialMessage?.trim() ?? '';
+  const hasInitialSend = Boolean(initialText);
+  const initialTitle = options?.initialTitle?.trim() || initialText.slice(0, 80) || 'New chat';
+  const initialOptimisticId = `pending-user-initial-${sessionId}`;
+
+  const [session, setSession] = useState<ChatSessionData | null>(() =>
+    hasInitialSend ? stubSession(sessionId, initialTitle) : null,
+  );
+  const [messages, setMessages] = useState<SerializedMessage[]>(() =>
+    hasInitialSend ? [optimisticUserMessage(initialText, initialOptimisticId)] : [],
+  );
+  const [loading, setLoading] = useState(!hasInitialSend);
+  const [busy, setBusy] = useState(hasInitialSend);
   const [busyTone, setBusyTone] = useState<ChatBusyTone>('thinking');
   const [error, setError] = useState<string | null>(null);
   const [operationError, setOperationError] = useState<string | null>(null);
   const operationErrorRef = useRef<string | null>(null);
   operationErrorRef.current = operationError;
+  const initialSendStarted = useRef(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -92,7 +134,11 @@ export function useChatSession(sessionId: string) {
   );
 
   const sendMessage = useCallback(
-    async (text: string, currentStep?: string) => {
+    async (
+      text: string,
+      currentStep?: string,
+      opts?: { skipOptimistic?: boolean; optimisticId?: string },
+    ) => {
       const trimmed = text.trim();
       if (!trimmed) return;
 
@@ -101,15 +147,19 @@ export function useChatSession(sessionId: string) {
         hadOperationError: Boolean(operationErrorRef.current),
       });
 
-      const optimisticId = `pending-user-${Date.now()}`;
-      const optimistic: SerializedMessage = {
-        id: optimisticId,
-        role: 'user',
-        content: trimmed,
-        createdAt: new Date().toISOString(),
-      };
+      const optimisticId =
+        opts?.optimisticId ?? `pending-user-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 
-      setMessages((prev) => [...prev, optimistic]);
+      if (!opts?.skipOptimistic) {
+        const optimistic: SerializedMessage = {
+          id: optimisticId,
+          role: 'user',
+          content: trimmed,
+          createdAt: new Date().toISOString(),
+        };
+        setMessages((prev) => [...prev, optimistic]);
+      }
+
       beginBusy(tone);
 
       try {
@@ -133,6 +183,27 @@ export function useChatSession(sessionId: string) {
     },
     [sessionId, session?.currentStep, applyResult, beginBusy],
   );
+
+  useEffect(() => {
+    if (!hasInitialSend) {
+      void load();
+      return;
+    }
+    if (initialSendStarted.current) return;
+    initialSendStarted.current = true;
+
+    if (hasInitialSendLock(sessionId)) {
+      void load();
+      return;
+    }
+    setInitialSendLock(sessionId);
+
+    void sendMessage(initialText, 'intent', {
+      skipOptimistic: true,
+      optimisticId: initialOptimisticId,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- fire once on mount for landing handoff
+  }, [hasInitialSend]);
 
   const appendOptimisticUser = useCallback((text: string) => {
     const optimistic: SerializedMessage = {
@@ -162,8 +233,11 @@ export function useChatSession(sessionId: string) {
         hadOperationError: Boolean(operationErrorRef.current),
       });
 
+      const skipUserBubble =
+        Boolean(displayText) && shouldSkipActionUserBubble(messages, action);
+
       let optimisticId: string | null = null;
-      if (!silent && displayText) {
+      if (!silent && displayText && !skipUserBubble) {
         optimisticId = appendOptimisticUser(displayText);
       }
       if (!silent) beginBusy(tone);

@@ -125,6 +125,8 @@ export default function HomeOverviewClient({ displayName }: HomeOverviewClientPr
     metrics,
     busyAdIds,
     loading,
+    bootstrapping,
+    lastRefreshedAt,
     error,
     currency,
     setCurrency,
@@ -132,6 +134,9 @@ export default function HomeOverviewClient({ displayName }: HomeOverviewClientPr
     toggleStatus,
     autoPause,
   } = useDashboardData();
+
+  const showPlaceholder = bootstrapping && !rows.length;
+  const isBackgroundSync = loading && rows.length > 0;
 
   const kpis = useMemo(() => computeHomeKpis(rows, currency), [rows, currency]);
   const signalMix = useMemo(() => computeSignalMix(rows), [rows]);
@@ -185,14 +190,17 @@ export default function HomeOverviewClient({ displayName }: HomeOverviewClientPr
           </div>
           <button
             type="button"
-            onClick={refresh}
-            disabled={loading}
-            className={['glass-button-primary inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold', loading ? 'opacity-70' : ''].join(' ')}
+            onClick={() => void refresh()}
+            disabled={loading || bootstrapping}
+            className={[
+              'glass-button-primary inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold',
+              loading || bootstrapping ? 'opacity-70' : '',
+            ].join(' ')}
           >
             {loading ? (
               <>
                 <AiOutlineLoading className="h-4 w-4 animate-spin" />
-                Refreshing…
+                {isBackgroundSync ? 'Syncing…' : 'Refreshing…'}
               </>
             ) : (
               <>
@@ -201,6 +209,11 @@ export default function HomeOverviewClient({ displayName }: HomeOverviewClientPr
               </>
             )}
           </button>
+          {lastRefreshedAt && !bootstrapping ? (
+            <p className="w-full text-[11px] text-muted-foreground sm:w-auto">
+              {isBackgroundSync ? 'Updating from Meta…' : `Data as of ${new Date(lastRefreshedAt).toLocaleString()}`}
+            </p>
+          ) : null}
         </div>
       </div>
 
@@ -214,15 +227,15 @@ export default function HomeOverviewClient({ displayName }: HomeOverviewClientPr
       <div className="grid shrink-0 grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-6">
         <StatCard
           label="Spend Today"
-          value={loading && !rows.length ? '—' : kpis.spendToday}
-          hint={rows.length ? `${rows.length} ads tracked` : 'Refresh to load'}
+          value={showPlaceholder ? '—' : kpis.spendToday}
+          hint={rows.length ? `${rows.length} ads tracked` : 'Hit Refresh to sync from Meta'}
           hintClass="text-muted-foreground"
           sparkColor="oklch(0.65 0.18 25)"
           sparkData={spendSpark}
         />
         <StatCard
           label="Active Ads"
-          value={loading && !rows.length ? '—' : String(kpis.activeAds)}
+          value={showPlaceholder ? '—' : String(kpis.activeAds)}
           hint={`${rows.length} total ads`}
           hintClass="text-muted-foreground"
           sparkColor="#22c55e"
@@ -230,7 +243,7 @@ export default function HomeOverviewClient({ displayName }: HomeOverviewClientPr
         />
         <StatCard
           label="Winning Ads"
-          value={loading && !rows.length ? '—' : String(kpis.winningAds)}
+          value={showPlaceholder ? '—' : String(kpis.winningAds)}
           hint={kpis.winningRate !== '0.0%' ? `${kpis.winningRate} winning rate` : 'No winners yet'}
           hintClass="text-emerald-600"
           sparkColor="#eab308"
@@ -238,7 +251,7 @@ export default function HomeOverviewClient({ displayName }: HomeOverviewClientPr
         />
         <StatCard
           label="CTR (Avg)"
-          value={loading && !rows.length ? '—' : kpis.avgCtr}
+          value={showPlaceholder ? '—' : kpis.avgCtr}
           hint="Across loaded ads"
           hintClass="text-muted-foreground"
           sparkColor="#a855f7"
@@ -246,7 +259,7 @@ export default function HomeOverviewClient({ displayName }: HomeOverviewClientPr
         />
         <StatCard
           label="CPI (Avg)"
-          value={loading && !rows.length ? '—' : kpis.avgCpi}
+          value={showPlaceholder ? '—' : kpis.avgCpi}
           hint="Across ads with CPI"
           hintClass="text-muted-foreground"
           sparkColor="#3b82f6"
@@ -257,7 +270,7 @@ export default function HomeOverviewClient({ displayName }: HomeOverviewClientPr
             <div>
               <p className="font-ui text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Alerts</p>
               <p className="font-display mt-0.5 text-lg font-semibold">
-                {loading && !rows.length ? '—' : kpis.alertCount}
+                {showPlaceholder ? '—' : kpis.alertCount}
               </p>
             </div>
             <TriangleAlert className="h-5 w-5 text-destructive" />
@@ -280,7 +293,7 @@ export default function HomeOverviewClient({ displayName }: HomeOverviewClientPr
           />
         </div>
         <div className="min-h-0 max-h-[220px] lg:col-span-3 lg:max-h-full">
-          <RightRail rows={rows} dashboardLoading={loading} />
+          <RightRail rows={rows} dashboardLoading={bootstrapping || loading} />
         </div>
       </div>
 
@@ -301,7 +314,7 @@ export default function HomeOverviewClient({ displayName }: HomeOverviewClientPr
           <div className="min-h-0 flex-1">
             {performanceChartData.length === 0 ? (
               <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
-                {loading ? 'Loading metrics…' : 'No chart data — hit Refresh'}
+                {bootstrapping ? 'Loading metrics…' : 'No chart data — hit Refresh'}
               </div>
             ) : (
               <ResponsiveContainer width="100%" height="100%">
@@ -335,7 +348,7 @@ export default function HomeOverviewClient({ displayName }: HomeOverviewClientPr
           <div className="flex min-h-0 flex-1 gap-3">
             {signalMix.length === 0 ? (
               <div className="flex flex-1 items-center justify-center text-xs text-muted-foreground">
-                {loading ? 'Loading…' : 'No signal data'}
+                {bootstrapping ? 'Loading…' : 'No signal data'}
               </div>
             ) : (
               <>

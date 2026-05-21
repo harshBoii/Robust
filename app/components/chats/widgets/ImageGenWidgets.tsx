@@ -127,9 +127,19 @@ export function ShopifyProductPickerWidget({ onAction }: { onAction: ChatWidgetD
   if (loading) return <p className="text-[13px] text-muted-foreground">Loading products…</p>;
   if (!products.length) {
     return (
-      <p className="text-[13px] text-muted-foreground">
-        No Shopify products synced. Connect Shopify or use custom upload.
-      </p>
+      <div className="space-y-2 rounded-xl border border-amber-500/25 bg-amber-500/5 p-3">
+        <p className="text-[13px] text-foreground">
+          No Shopify products synced. Upload a custom image below, or type in chat if you want to go back
+          to product source.
+        </p>
+        <button
+          type="button"
+          onClick={() => void onAction('imageGen.source', { source: 'custom' }, 'Upload image')}
+          className="rounded-full border border-border/50 bg-background/80 px-3.5 py-1.5 text-[13px] font-medium"
+        >
+          Upload image
+        </button>
+      </div>
     );
   }
 
@@ -140,7 +150,7 @@ export function ShopifyProductPickerWidget({ onAction }: { onAction: ChatWidgetD
           key={p.id}
           type="button"
           onClick={() =>
-            void onAction('imageGen.shopifySelected', { productId: p.id }, `Product: ${p.title}`)
+            void onAction('imageGen.shopifySelected', { productId: p.id, title: p.title })
           }
           className="flex flex-col overflow-hidden rounded-lg border border-border/50 text-left transition hover:border-primary/40"
         >

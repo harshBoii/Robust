@@ -1,15 +1,14 @@
-/** Rotating assistant status lines while waiting for a chat reply. */
+/**
+ * Default Path A (Meta ads) status lines.
+ * Prefer `resolveChatStatusMessages()` — picks pools per step / image-gen subpath.
+ */
 export const CHAT_ASSISTANT_STATUS_MESSAGES = [
+  'Working on your ads…',
   'Drafting your campaign…',
   'Brewing ideas…',
-  'Becoming the Picasso of ad sets (a newbie Picasso, ofc XD)…',
   'Sharpening your targeting…',
   "Negotiating with Meta's API…",
   'Sprinkling conversion magic…',
-  'Assembling budget atoms…',
   'Teaching robots about ROAS…',
-  'Warming up the creative studio…',
-  'Polishing preset fields…',
-  'Consulting the algorithm oracle…',
   'Almost there — hang tight…',
 ] as const;

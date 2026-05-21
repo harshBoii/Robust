@@ -79,7 +79,9 @@ export function resolveActionUserMessage(
     case 'imageGen.source':
       return payload.source === 'shopify' ? 'Shopify product' : 'Custom upload';
     case 'imageGen.shopifySelected':
-      return typeof payload.title === 'string' ? payload.title : 'Selected product';
+      return typeof payload.title === 'string' && payload.title.trim()
+        ? payload.title.trim()
+        : 'Selected product';
     case 'imageGen.uploaded':
       return 'Uploaded product image';
     case 'imageGen.artistSettings': {

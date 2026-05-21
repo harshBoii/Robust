@@ -1,5 +1,12 @@
 import { NextResponse } from 'next/server';
 
+import {
+  asNumber,
+  computeCpi,
+  computeHookRateFromVideo,
+  daysBetweenUtc,
+  type MetaActionRow,
+} from '@/lib/dashboard/row-metrics';
 import { getAdsWithInsights } from '@/lib/meta/client';
 import { getSession } from '@/lib/auth/session';
 import { requireMetaAdAccountId } from '@/lib/meta/integration-token';
@@ -20,60 +27,11 @@ type RuleRow = {
   requiresApproval: boolean;
 };
 
-function asNumber(v: string | undefined): number {
-  const n = v ? Number(v) : 0;
-  return Number.isFinite(n) ? n : 0;
-}
-
-function sumActionValue(
-  actions: Array<{ action_type?: string; value?: string }> | undefined,
-  match: string,
-) {
-  if (!actions?.length) return 0;
-  return actions.reduce((acc, a) => {
-    if (a.action_type === match) return acc + asNumber(a.value);
-    return acc;
-  }, 0);
-}
-
-function computeCpi(input: {
-  spend: number;
-  actions?: Array<{ action_type?: string; value?: string }>;
-  clicks?: number;
-}) {
-  const installs = sumActionValue(input.actions, 'mobile_app_install');
-  if (installs > 0) return input.spend / installs;
-  const clicks = input.clicks ?? 0;
-  if (clicks > 0) return input.spend / clicks;
-  return null;
-}
-
-function computeHookRate(input: {
-  impressions: number;
-  video2s?: Array<{ action_type?: string; value?: string }>;
-}) {
-  if (input.impressions <= 0) return null;
-  // Meta returns this as an array; sum values regardless of action_type label.
-  const views2s = (input.video2s ?? []).reduce(
-    (acc, x) => acc + asNumber(x.value),
-    0,
-  );
-  if (views2s <= 0) return null;
-  return views2s / input.impressions;
-}
-
 function ymd(d: Date) {
   const yyyy = d.getUTCFullYear();
   const mm = String(d.getUTCMonth() + 1).padStart(2, '0');
   const dd = String(d.getUTCDate()).padStart(2, '0');
   return `${yyyy}-${mm}-${dd}`;
-}
-
-function daysBetweenUtc(a: Date, b: Date) {
-  const msPerDay = 24 * 60 * 60 * 1000;
-  const start = Date.UTC(a.getUTCFullYear(), a.getUTCMonth(), a.getUTCDate());
-  const end = Date.UTC(b.getUTCFullYear(), b.getUTCMonth(), b.getUTCDate());
-  return Math.max(0, Math.floor((end - start) / msPerDay));
 }
 
 function getRule(
@@ -201,17 +159,21 @@ export async function POST() {
     const impressions = Math.trunc(asNumber(maxRow?.impressions || tRow?.impressions));
     const clicks = Math.trunc(asNumber(maxRow?.clicks || tRow?.clicks));
     const ctr = asNumber(maxRow?.ctr || tRow?.ctr);
-    const cpi = computeCpi({ spend: spendTotal, actions: maxRow?.actions, clicks });
+    const cpi = computeCpi({
+      spend: spendTotal,
+      actions: maxRow?.actions as MetaActionRow[] | undefined,
+      clicks,
+    });
 
     // Hook rate is only present for video ads; sometimes maximum omits video actions.
     const hookRate =
-      computeHookRate({
+      computeHookRateFromVideo({
         impressions: Math.trunc(asNumber(maxRow?.impressions)),
-        video2s: maxRow?.video_continuous_2_sec_watched_actions,
+        video2s: maxRow?.video_continuous_2_sec_watched_actions as MetaActionRow[] | undefined,
       }) ??
-      computeHookRate({
+      computeHookRateFromVideo({
         impressions: Math.trunc(asNumber(tRow?.impressions)),
-        video2s: tRow?.video_continuous_2_sec_watched_actions,
+        video2s: tRow?.video_continuous_2_sec_watched_actions as MetaActionRow[] | undefined,
       });
 
     const l7 = v.last7d?.insights?.data?.[0];

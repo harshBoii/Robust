@@ -142,6 +142,17 @@ export function MediaPickWidget({ onAction }: { onAction: ChatWidgetDispatch }) 
 
   if (loading) return <p className="mt-2 text-xs text-muted-foreground">Loading gallery…</p>;
 
+  if (!bulks.length) {
+    return (
+      <div className="mt-2 space-y-3 rounded-xl border border-amber-500/25 bg-amber-500/5 p-3">
+        <p className="text-[13px] text-foreground">
+          Your gallery has no folders with assets yet. Upload creatives here, or type in chat if you want
+          to go back and choose another option.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="mt-2 grid max-h-48 gap-2 overflow-y-auto sm:grid-cols-2">
       {bulks.map((b) => (
@@ -399,6 +410,16 @@ export function CampaignPickerWidget({
       );
   }, []);
 
+  if (!campaigns.length) {
+    return (
+      <div className="mt-2 space-y-3 rounded-xl border border-amber-500/25 bg-amber-500/5 p-3">
+        <p className="text-[13px] text-foreground">
+          No Meta campaigns found. Create a new campaign, or type in chat if you want to go back.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="mt-2 grid max-h-56 gap-2 overflow-y-auto sm:grid-cols-2">
       {campaigns.map((c) => (
@@ -463,7 +484,8 @@ export function AdSetPickerWidget({
     return (
       <div className="mt-2 space-y-3 rounded-xl border border-amber-500/25 bg-amber-500/5 p-3">
         <p className="text-[13px] text-foreground">
-          This campaign has no ad sets yet. Create one from a preset to continue.
+          This campaign has no ad sets yet. Create one from a preset, or type in chat if you want to go
+          back (e.g. change campaign).
         </p>
         <button
           type="button"

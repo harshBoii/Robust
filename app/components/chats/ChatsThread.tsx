@@ -1,10 +1,15 @@
 'use client';
 
+import { motion } from 'framer-motion';
 import { useEffect, useRef, type ReactNode } from 'react';
 
+import type { WorkflowState } from '@/lib/chats/types';
+import {
+  resolveChatStatusLabel,
+  resolveChatStatusMessages,
+} from '@/lib/chats/resolve-status-messages';
+
 import type { ChatBusyTone } from './chat-busy-tone';
-import { CHAT_FIXING_STATUS_MESSAGES } from './chat-fixing-status-messages';
-import { CHAT_ASSISTANT_STATUS_MESSAGES } from './chat-status-messages';
 import { ChatsComposer, type ChatsComposerProps } from './ChatsComposer';
 import { ChatsMessage, type ChatsMessageProps } from './ChatsMessage';
 import { useRotatingStatus } from './useRotatingStatus';
@@ -18,6 +23,9 @@ export function ChatsThread({
   loading,
   operationError,
   busyTone = 'thinking',
+  currentStep = 'intent',
+  workflowState = {},
+  composerLayoutId,
 }: {
   messages: ThreadMessage[];
   composer: ChatsComposerProps;
@@ -25,16 +33,30 @@ export function ChatsThread({
   loading?: boolean;
   operationError?: string | null;
   busyTone?: ChatBusyTone;
+  currentStep?: string;
+  workflowState?: WorkflowState;
+  /** Shared with landing page for layout morph into the bottom composer. */
+  composerLayoutId?: string;
 }) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const showEmpty = messages.length === 0 && emptyState;
   const hasOperationError = Boolean(operationError?.trim());
-  const isFixing = busyTone === 'fixing' || hasOperationError;
-  const statusPool = isFixing ? CHAT_FIXING_STATUS_MESSAGES : CHAT_ASSISTANT_STATUS_MESSAGES;
+  const effectiveTone: ChatBusyTone =
+    busyTone === 'fixing' || hasOperationError ? 'fixing' : busyTone;
+  const statusCtx = {
+    busyTone: effectiveTone,
+    currentStep,
+    workflowState,
+  };
+  const statusPool = resolveChatStatusMessages(statusCtx);
   const statusActive = Boolean(loading);
   const statusText = useRotatingStatus(statusPool, statusActive);
   const showStatusPanel = Boolean(loading || hasOperationError);
-  const statusLabel = loading ? (isFixing ? 'Fixing…' : 'Thinking…') : isFixing ? 'Fixing…' : undefined;
+  const statusLabel = loading
+    ? resolveChatStatusLabel(statusCtx)
+    : hasOperationError
+      ? 'Fixing…'
+      : undefined;
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -69,7 +91,13 @@ export function ChatsThread({
           aria-hidden
         />
         <div className="relative border-t border-border/15 bg-background/95 backdrop-blur-md supports-[backdrop-filter]:bg-background/80">
-          <ChatsComposer {...composer} sticky />
+          {composerLayoutId ? (
+            <motion.div layoutId={composerLayoutId} transition={{ type: 'spring', stiffness: 380, damping: 34 }}>
+              <ChatsComposer {...composer} sticky />
+            </motion.div>
+          ) : (
+            <ChatsComposer {...composer} sticky />
+          )}
         </div>
       </footer>
     </div>

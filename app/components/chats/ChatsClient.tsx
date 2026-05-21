@@ -1,18 +1,23 @@
 'use client';
 
+import { motion } from 'framer-motion';
 import Link from 'next/link';
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useRef } from 'react';
 
 import type { SerializedMessage } from '@/lib/chats/types';
 
+import { getPendingChatStart } from './chat-pending-storage';
 import { ChatMessageMediaPreview, messageHasMediaPreview } from './ChatMessageMediaPreview';
 import { ChatWidgetRenderer } from './ChatWidgetRenderer';
+import { CHAT_COMPOSER_LAYOUT_ID } from './ChatsRouteTransition';
 import { ChatsThread, type ThreadMessage } from './ChatsThread';
 import { composerSuggestions as agentComposerSuggestions } from '@/lib/chats/composer-suggestions';
 import { getBackStepOptions } from '@/lib/chats/workflow-navigation';
 import type { ChatWorkflowStep, WorkflowState } from '@/lib/chats/types';
 
 import { useChatSession } from './useChatSession';
+
+const ease = [0.22, 1, 0.36, 1] as const;
 
 function stepSuggestions(
   step: string | undefined,
@@ -39,6 +44,12 @@ export default function ChatsClient({
   userName: string;
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
+  const pendingRef = useRef<ReturnType<typeof getPendingChatStart>>(undefined);
+  if (pendingRef.current === undefined) {
+    pendingRef.current = getPendingChatStart(sessionId);
+  }
+  const pending = pendingRef.current;
+
   const {
     session,
     messages,
@@ -47,14 +58,12 @@ export default function ChatsClient({
     busyTone,
     error,
     operationError,
-    load,
     sendMessage,
     dispatchAction,
-  } = useChatSession(sessionId);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
+  } = useChatSession(sessionId, {
+    initialMessage: pending?.text ?? null,
+    initialTitle: pending?.title ?? null,
+  });
 
   const handleAction = useCallback(
     async (action: string, payload?: Record<string, unknown>, userMessage?: string) => {
@@ -121,15 +130,34 @@ export default function ChatsClient({
 
   if (loading) {
     return (
-      <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        className="flex h-full flex-1 flex-col items-center justify-center gap-2 text-sm text-muted-foreground"
+      >
+        <motion.span
+          className="h-1.5 w-1.5 rounded-full bg-muted-foreground/50"
+          animate={{ opacity: [0.35, 1, 0.35] }}
+          transition={{ duration: 1.1, repeat: Infinity, ease: 'easeInOut' }}
+        />
         Loading conversation…
-      </div>
+      </motion.div>
     );
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden">
-      <header className="shrink-0 border-b border-border/20 bg-background/80 px-4 py-2.5 backdrop-blur-sm">
+    <motion.div
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.32, ease }}
+      className="flex h-full min-h-0 flex-1 flex-col overflow-hidden"
+    >
+      <motion.header
+        initial={{ opacity: 0, y: -6 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.28, delay: 0.06, ease }}
+        className="shrink-0 border-b border-border/20 bg-background/80 px-4 py-2.5 backdrop-blur-sm"
+      >
         <div className="mx-auto flex max-w-3xl items-center justify-between gap-3">
           <h1 className="truncate font-display text-[15px] font-semibold text-foreground">
             {session?.title ?? 'New chat'}
@@ -141,7 +169,7 @@ export default function ChatsClient({
             New chat
           </Link>
         </div>
-      </header>
+      </motion.header>
 
       {error && !operationError ? (
         <div className="mx-auto mt-2 max-w-3xl rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
@@ -166,6 +194,9 @@ export default function ChatsClient({
           loading={busy}
           operationError={operationError}
           busyTone={busyTone}
+          currentStep={session?.currentStep ?? 'intent'}
+          workflowState={session?.workflowState ?? {}}
+          composerLayoutId={CHAT_COMPOSER_LAYOUT_ID}
           composer={{
             onSend: (text) => {
               const trimmed = text.trim();
@@ -198,6 +229,6 @@ export default function ChatsClient({
           }}
         />
       </div>
-    </div>
+    </motion.div>
   );
 }

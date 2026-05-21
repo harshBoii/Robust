@@ -8,6 +8,7 @@ import {
   type DbChatSession,
 } from '@/lib/chats/repository';
 import { loadGroupsForBulk } from '@/lib/chats/load-groups';
+import { shouldSkipActionUserBubble } from '@/lib/chats/user-message-policy';
 import { parseWorkflowState, serializeMessage, serializeSession } from '@/lib/chats/serialize';
 import type { OrchestratorResult, SerializedMessage, WorkflowState } from '@/lib/chats/types';
 
@@ -18,6 +19,7 @@ import {
   POST_RESULT_NEXT_OPTIONS,
   type PostResultNextRoute,
 } from './classify-post-result-next';
+import { tryHandleImageGenEmptyPickerTurn } from '@/lib/chats/handle-empty-picker-turn';
 import { classifyImageGenSubpath } from './classify-subpath';
 import { runCollectorTurn } from './collect-fields-agent';
 import { findBackground, findModel, findPose, getCatalogForWidget } from './catalog';
@@ -208,6 +210,10 @@ export async function handleImageGenMessage(
 
   const workflowState = parseWorkflowState(session.workflowState);
   let ig = getIg(workflowState);
+
+  const emptyPickerResult = await tryHandleImageGenEmptyPickerTurn(sessionId, companyId, text);
+  if (emptyPickerResult) return emptyPickerResult;
+
   const newMessages: SerializedMessage[] = [];
   newMessages.push(await userMsg(sessionId, text));
 
@@ -787,7 +793,9 @@ export async function handleImageGenAction(
   const newMessages: SerializedMessage[] = [];
 
   const displayText = userMessage?.trim();
-  if (displayText) newMessages.push(await userMsg(sessionId, displayText));
+  if (displayText && !shouldSkipActionUserBubble(session.messages, action)) {
+    newMessages.push(await userMsg(sessionId, displayText));
+  }
 
   switch (action) {
     case 'imageGen.source': {

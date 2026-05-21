@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 
 import { getSession } from '@/lib/auth/session';
+import { isDashboardSnapshotStale } from '@/lib/dashboard/constants';
+import { loadDashboardSnapshot } from '@/lib/dashboard/load-snapshot';
+import { ensureDefaultAutomationRules } from '@/lib/dashboard/seed-automation-rules';
 import { prisma } from '@/lib/prisma';
 
 export const dynamic = 'force-dynamic';
@@ -20,6 +23,8 @@ export async function GET() {
       contextBuiltAt: true,
     },
   });
+
+  await ensureDefaultAutomationRules(session.companyId);
 
   const rules = await prisma.adAutomationRule.findMany({
     where: { companyId: session.companyId },
@@ -88,11 +93,18 @@ export async function GET() {
         })
       : [];
 
+  const snapshot = metaIntegration
+    ? await loadDashboardSnapshot(metaIntegration.id)
+    : { rows: [], lastRefreshedAt: null };
+
   return NextResponse.json({
     metaIntegration,
     metrics,
     rules,
     notifications,
+    rows: snapshot.rows,
+    lastRefreshedAt: snapshot.lastRefreshedAt,
+    snapshotStale: isDashboardSnapshotStale(snapshot.lastRefreshedAt),
   });
 }
 

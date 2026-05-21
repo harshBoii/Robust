@@ -1,10 +1,11 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import type { DashboardRow } from '@/app/components/dashboard/AdPerformanceTable';
 import type { AutomationRule } from '@/app/components/dashboard/AutomationControls';
 import type { Currency } from '@/lib/currency';
+import { isDashboardSnapshotStale } from '@/lib/dashboard/constants';
 
 export type DashboardMetric = {
   metaAdId: string;
@@ -18,6 +19,9 @@ export type DashboardMetric = {
 type DashboardGetResponse = {
   rules: AutomationRule[];
   metrics?: DashboardMetric[];
+  rows?: DashboardRow[];
+  lastRefreshedAt?: string | null;
+  snapshotStale?: boolean;
 };
 
 type RefreshResponse = { rows: DashboardRow[] };
@@ -35,47 +39,74 @@ export function useDashboardData() {
   const [rows, setRows] = useState<DashboardRow[]>([]);
   const [rules, setRules] = useState<AutomationRule[]>([]);
   const [metrics, setMetrics] = useState<DashboardMetric[]>([]);
+  const [lastRefreshedAt, setLastRefreshedAt] = useState<string | null>(null);
   const [busyAdIds, setBusyAdIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
+  const [bootstrapping, setBootstrapping] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [currency, setCurrency] = useState<Currency>('INR');
+  const backgroundRefreshStarted = useRef(false);
 
-  const loadDashboardCache = useCallback(async () => {
+  const loadDashboard = useCallback(async () => {
     const data = await dashboardJson<DashboardGetResponse>(await fetch('/api/dashboard'));
     setRules(data.rules ?? []);
     setMetrics(data.metrics ?? []);
+    setRows(data.rows ?? []);
+    setLastRefreshedAt(data.lastRefreshedAt ?? null);
+    return data;
   }, []);
 
-  const refresh = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const seeded = await dashboardJson<{ rules: AutomationRule[] }>(
-        await fetch('/api/dashboard/automation', { method: 'POST' }),
-      );
-      setRules(seeded.rules);
-      const data = await dashboardJson<RefreshResponse>(
-        await fetch('/api/dashboard/refresh', { method: 'POST' }),
-      );
-      setRows(data.rows ?? []);
-      await loadDashboardCache();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to refresh');
-    } finally {
-      setLoading(false);
-    }
-  }, [loadDashboardCache]);
+  const refresh = useCallback(
+    async (opts?: { background?: boolean }) => {
+      if (!opts?.background) {
+        setLoading(true);
+      }
+      setError(null);
+      try {
+        const data = await dashboardJson<RefreshResponse>(
+          await fetch('/api/dashboard/refresh', { method: 'POST' }),
+        );
+        setRows(data.rows ?? []);
+        const cached = await loadDashboard();
+        setLastRefreshedAt(cached.lastRefreshedAt ?? new Date().toISOString());
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Failed to refresh');
+      } finally {
+        setLoading(false);
+      }
+    },
+    [loadDashboard],
+  );
 
   useEffect(() => {
+    let cancelled = false;
+
     void (async () => {
+      setBootstrapping(true);
+      setError(null);
       try {
-        await loadDashboardCache();
-      } catch {
-        /* ignored */
+        const data = await loadDashboard();
+        if (cancelled) return;
+
+        const stale =
+          data.snapshotStale ?? isDashboardSnapshotStale(data.lastRefreshedAt);
+        if (stale && !backgroundRefreshStarted.current) {
+          backgroundRefreshStarted.current = true;
+          void refresh({ background: true });
+        }
+      } catch (e) {
+        if (!cancelled) {
+          setError(e instanceof Error ? e.message : 'Failed to load dashboard');
+        }
+      } finally {
+        if (!cancelled) setBootstrapping(false);
       }
-      await refresh();
     })();
-  }, [loadDashboardCache, refresh]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [loadDashboard, refresh]);
 
   const toggleStatus = useCallback(async (adId: string, nextStatus: 'ACTIVE' | 'PAUSED') => {
     setBusyAdIds((prev) => new Set(prev).add(adId));
@@ -115,8 +146,10 @@ export function useDashboardData() {
     rows,
     rules,
     metrics,
+    lastRefreshedAt,
     busyAdIds,
     loading,
+    bootstrapping,
     error,
     currency,
     setCurrency,

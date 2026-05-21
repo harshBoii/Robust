@@ -18,7 +18,9 @@ import { runAdAgentTurn } from './agent-turn';
 import { buildGuidedReply } from './guided-replies';
 import { approveAdsetWithRecovery, approveCampaignWithRecovery } from './approve-with-recovery';
 import { resolveActionUserMessage } from './action-user-message';
+import { shouldSkipActionUserBubble } from './user-message-policy';
 import { isCampaignObjectiveAllowed } from './campaign-objective-rules';
+import { tryHandleAdsEmptyPickerTurn } from './handle-empty-picker-turn';
 import { executeAgentPlan } from './execute-agent-plan';
 import {
   buildAdsetDraftFromCampaign,
@@ -188,8 +190,6 @@ export async function handleChatMessage(
     return handleImageGenMessage(sessionId, companyId, text);
   }
 
-  const userRow = await userMsg(sessionId, text);
-
   if (pathType === null && step === 'intent') {
     const route = await classifyTopLevelPath(text);
     if (route === 'imageGen') {
@@ -201,6 +201,11 @@ export async function handleChatMessage(
     }
     await updateChatSession(sessionId, companyId, { pathType: 'ADS' });
   }
+
+  const emptyPickerResult = await tryHandleAdsEmptyPickerTurn(sessionId, companyId, text);
+  if (emptyPickerResult) return emptyPickerResult;
+
+  const userRow = await userMsg(sessionId, text);
 
   const plan = await runAdAgentTurn({
     userText: text,
@@ -256,7 +261,12 @@ export async function handleChatAction(
 
   const displayUserText =
     userMessage?.trim() || resolveActionUserMessage(action, payload) || null;
-  if (displayUserText && action !== 'creative.aiDone' && !options?.silent) {
+  if (
+    displayUserText &&
+    action !== 'creative.aiDone' &&
+    !options?.silent &&
+    !shouldSkipActionUserBubble(session.messages, action)
+  ) {
     newMessages.push(await userMsg(sessionId, displayUserText));
   }
 

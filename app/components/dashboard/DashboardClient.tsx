@@ -19,6 +19,7 @@ export default function DashboardClient() {
     metrics,
     busyAdIds,
     loading,
+    bootstrapping,
     error,
     currency,
     setCurrency,
@@ -91,8 +92,8 @@ export default function DashboardClient() {
 
           <button
             type="button"
-            onClick={refresh}
-            disabled={loading}
+            onClick={() => void refresh()}
+            disabled={loading || bootstrapping}
             className={['glass-button-primary px-5 py-2 text-sm font-semibold', loading ? 'opacity-70' : ''].join(' ')}
           >
             {loading ? (
