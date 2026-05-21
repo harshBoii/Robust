@@ -68,6 +68,14 @@ export function ChatWidgetRenderer({
     return <MediaAnalyzingWidget groups={groups} isActive={active} />;
   }
 
+  /** Image previews persist via ChatMessageMediaPreview; here only interactive controls. */
+  if (
+    !active &&
+    (widgetType === 'imageGenSingleResult' || widgetType === 'imageGenVariantGrid')
+  ) {
+    return null;
+  }
+
   if (!active) return null;
 
   switch (widgetType) {

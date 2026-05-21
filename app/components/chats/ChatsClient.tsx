@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef } from 'react';
 
 import type { SerializedMessage } from '@/lib/chats/types';
 
+import { ChatMessageMediaPreview, messageHasMediaPreview } from './ChatMessageMediaPreview';
 import { ChatWidgetRenderer } from './ChatWidgetRenderer';
 import { ChatsThread, type ThreadMessage } from './ChatsThread';
 import { composerSuggestions as agentComposerSuggestions } from '@/lib/chats/composer-suggestions';
@@ -70,25 +71,53 @@ export default function ChatsClient({
     return null;
   })();
 
-  const threadMessages: ThreadMessage[] = messages.map((m: SerializedMessage) => ({
-    id: m.id,
-    role: m.role === 'user' ? 'user' : 'assistant',
-    content: m.content ?? undefined,
-    children:
-      m.role !== 'user' && m.widgetType && m.id === latestWidgetMessageId ? (
-        <div className="rounded-xl border border-border/30 bg-muted/20 p-3">
-          <ChatWidgetRenderer
-            widgetType={m.widgetType}
-            widgetPayload={m.widgetPayload}
-            workflowState={session?.workflowState ?? {}}
-            currentStep={session?.currentStep ?? 'intent'}
-            companyId={companyId}
-            sessionId={sessionId}
-            onAction={handleAction}
-          />
+  const threadMessages: ThreadMessage[] = messages.map((m: SerializedMessage) => {
+    const isLatestWidget =
+      m.role !== 'user' && Boolean(m.widgetType) && m.id === latestWidgetMessageId;
+    const showMediaPreview =
+      m.role !== 'user' &&
+      messageHasMediaPreview(m.widgetType, m.widgetPayload) &&
+      !isLatestWidget;
+
+    if (!isLatestWidget && !showMediaPreview) {
+      return {
+        id: m.id,
+        role: m.role === 'user' ? 'user' : 'assistant',
+        content: m.content ?? undefined,
+      };
+    }
+
+    return {
+      id: m.id,
+      role: m.role === 'user' ? 'user' : 'assistant',
+      content: m.content ?? undefined,
+      children: (
+        <div className="space-y-2">
+          {showMediaPreview ? (
+            <div className="rounded-xl border border-border/30 bg-muted/20 p-3">
+              <ChatMessageMediaPreview
+                widgetType={m.widgetType}
+                widgetPayload={m.widgetPayload}
+              />
+            </div>
+          ) : null}
+          {isLatestWidget ? (
+            <div className="rounded-xl border border-border/30 bg-muted/20 p-3">
+              <ChatWidgetRenderer
+                widgetType={m.widgetType}
+                widgetPayload={m.widgetPayload}
+                workflowState={session?.workflowState ?? {}}
+                currentStep={session?.currentStep ?? 'intent'}
+                companyId={companyId}
+                sessionId={sessionId}
+                onAction={handleAction}
+              />
+            </div>
+          ) : null}
         </div>
-      ) : undefined,
-  }));
+      ),
+    };
+  });
 
   if (loading) {
     return (

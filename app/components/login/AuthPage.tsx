@@ -36,6 +36,15 @@ const AUTH_SUBMIT_CLASS =
 const inputClass =
   'glass-input w-full rounded-xl border-[var(--glass-border)] px-4 py-3 text-[0.9375rem] text-foreground placeholder:text-muted-foreground transition-all';
 
+const ERROR_BANNER_CLASS =
+  'mb-4 rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3 font-ui text-[0.8125rem] font-medium leading-snug text-red-600 dark:text-red-400';
+
+const SUCCESS_BANNER_CLASS =
+  'mb-4 rounded-xl border border-green-500/40 bg-green-500/10 px-4 py-3 font-ui text-[0.8125rem] font-medium leading-snug text-green-600 dark:text-green-400';
+
+const INFO_BANNER_CLASS =
+  'mb-4 rounded-xl border border-primary/25 bg-primary/10 px-4 py-3 font-ui text-[0.8125rem] leading-snug text-primary';
+
 
 export default function AuthPage({ initialMode }: { initialMode: Mode }) {
   const router = useRouter();
@@ -325,7 +334,8 @@ export default function AuthPage({ initialMode }: { initialMode: Mode }) {
               <motion.div
                 key="error"
                 initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}
-                className="mb-4 rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 font-ui text-[0.8125rem] leading-snug text-destructive"
+                className={ERROR_BANNER_CLASS}
+                role="alert"
               >
                 {error}
               </motion.div>
@@ -334,7 +344,12 @@ export default function AuthPage({ initialMode }: { initialMode: Mode }) {
               <motion.div
                 key="success"
                 initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}
-                className="mb-4 rounded-xl border border-primary/25 bg-primary/10 px-4 py-3 font-ui text-[0.8125rem] leading-snug text-primary"
+                className={
+                  /signed in/i.test(success) || /account created/i.test(success)
+                    ? SUCCESS_BANNER_CLASS
+                    : INFO_BANNER_CLASS
+                }
+                role="status"
               >
                 {success}
               </motion.div>
