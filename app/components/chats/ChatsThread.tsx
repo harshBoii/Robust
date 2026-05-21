@@ -59,9 +59,13 @@ export function ChatsThread({
   }, [messages, loading, statusText, operationError]);
 
   return (
-    <div className="relative flex h-0 min-h-0 flex-1 flex-col overflow-hidden bg-background">
-      <div className="custom-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain pb-2">
-        <div className="mx-auto w-full max-w-3xl px-4 py-6 pb-4">
+    <div className="relative grid h-full min-h-0 flex-1 grid-rows-[minmax(0,1fr)_auto] overflow-hidden bg-background">
+      <div
+        className="custom-scrollbar min-h-0 overflow-y-auto overscroll-contain"
+        role="log"
+        aria-live="polite"
+      >
+        <div className="mx-auto w-full max-w-3xl px-4 py-6 pb-6">
           {showEmpty ? emptyState : null}
           {messages.map((m) => (
             <ChatsMessage key={m.id} {...m} />
@@ -81,7 +85,7 @@ export function ChatsThread({
         </div>
       </div>
 
-      <footer className="relative z-20 mt-auto shrink-0 border-t border-border/15 bg-background/95 backdrop-blur-md supports-[backdrop-filter]:bg-background/80">
+      <footer className="relative z-20 shrink-0 border-t border-border/15 bg-background/95 backdrop-blur-md supports-[backdrop-filter]:bg-background/80">
         <div
           className="pointer-events-none absolute inset-x-0 -top-10 h-10 bg-gradient-to-t from-background via-background/90 to-transparent"
           aria-hidden

@@ -22,8 +22,8 @@ export default async function WorkspaceLayout({
             logoUrl={logoUrl}
           />
         </div>
-        <main className="relative z-0 flex min-h-0 min-w-0 flex-1 flex-col">
-          <div className="flex min-h-0 flex-1 flex-col p-3 sm:p-4 md:p-5">{children}</div>
+        <main className="relative z-0 flex h-full min-h-0 min-w-0 flex-1 flex-col">
+          <div className="flex h-full min-h-0 flex-1 flex-col p-3 sm:p-4 md:p-5">{children}</div>
         </main>
       </div>
     </ToastProvider>

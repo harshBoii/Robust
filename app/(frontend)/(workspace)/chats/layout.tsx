@@ -2,7 +2,7 @@ import { ChatsRouteTransition } from '@/app/components/chats/ChatsRouteTransitio
 
 export default function ChatsLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="-m-6 flex min-h-0 flex-1 flex-col overflow-hidden">
+    <div className="-m-6 flex h-full min-h-0 flex-1 flex-col overflow-hidden">
       <ChatsRouteTransition>{children}</ChatsRouteTransition>
     </div>
   );
