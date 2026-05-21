@@ -20,7 +20,7 @@ export function ChatsRouteTransition({ children }: { children: React.ReactNode }
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: isLanding ? 0.18 : 0.22, ease }}
-          className="flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden"
+          className="flex h-full min-h-0 flex-1 flex-col overflow-hidden"
         >
           {children}
         </motion.div>

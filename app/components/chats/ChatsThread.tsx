@@ -15,6 +15,13 @@ import { useRotatingStatus } from './useRotatingStatus';
 
 export type ThreadMessage = ChatsMessageProps;
 
+const IMAGE_GEN_GENERATING_STEPS = new Set([
+  'generateBase',
+  'generateOnModel',
+  'generateVariants',
+  'generateIdeas',
+]);
+
 export function ChatsThread({
   messages,
   composer,
@@ -34,7 +41,8 @@ export function ChatsThread({
   currentStep?: string;
   workflowState?: WorkflowState;
 }) {
-  const bottomRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const lastMessageCount = useRef(0);
   const showEmpty = messages.length === 0 && emptyState;
   const hasOperationError = Boolean(operationError?.trim());
   const effectiveTone: ChatBusyTone =
@@ -47,7 +55,13 @@ export function ChatsThread({
   const statusPool = resolveChatStatusMessages(statusCtx);
   const statusActive = Boolean(loading);
   const statusText = useRotatingStatus(statusPool, statusActive);
-  const showStatusPanel = Boolean(loading || hasOperationError);
+  const imageGenGenerating = Boolean(
+    workflowState.imageGen?.step &&
+      IMAGE_GEN_GENERATING_STEPS.has(workflowState.imageGen.step),
+  );
+  const showStatusPanel = Boolean(
+    hasOperationError || (loading && !imageGenGenerating),
+  );
   const statusLabel = loading
     ? resolveChatStatusLabel(statusCtx)
     : hasOperationError
@@ -55,17 +69,22 @@ export function ChatsThread({
       : undefined;
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-  }, [messages, loading, statusText, operationError]);
+    const el = scrollRef.current;
+    if (!el) return;
+    if (messages.length <= lastMessageCount.current) return;
+    lastMessageCount.current = messages.length;
+    requestAnimationFrame(() => {
+      el.scrollTop = el.scrollHeight;
+    });
+  }, [messages.length]);
 
   return (
-    <div className="relative grid h-full min-h-0 flex-1 grid-rows-[minmax(0,1fr)_auto] overflow-hidden bg-background">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background">
       <div
-        className="custom-scrollbar min-h-0 overflow-y-auto overscroll-contain"
-        role="log"
-        aria-live="polite"
+        ref={scrollRef}
+        className="custom-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-y-contain"
       >
-        <div className="mx-auto w-full max-w-3xl px-4 py-6 pb-6">
+        <div className="mx-auto w-full max-w-3xl px-4 py-6 pb-4">
           {showEmpty ? emptyState : null}
           {messages.map((m) => (
             <ChatsMessage key={m.id} {...m} />
@@ -81,7 +100,6 @@ export function ChatsThread({
               showThinkingDots={loading}
             />
           ) : null}
-          <div ref={bottomRef} className="h-px shrink-0" aria-hidden />
         </div>
       </div>
 

@@ -13,7 +13,7 @@ export default async function WorkspaceLayout({
 
   return (
     <ToastProvider>
-      <div className="flex min-h-screen w-full bg-background text-foreground">
+      <div className="flex h-screen w-full overflow-hidden bg-background text-foreground">
         {/* Stack above <main> so portaled/fixed UI from the sidebar (e.g. upload modal) is not painted under the gallery. */}
         <div className="relative z-50 flex shrink-0">
           <SideBar
