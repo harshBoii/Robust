@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import ChatsHistoryList from '@/app/components/chats/ChatsHistoryList';
 import GalleryUploadZone from '@/app/(frontend)/(workspace)/gallery/GalleryUploadZone';
-import { SiMeta } from 'react-icons/si';
+import { SiMeta, SiShopify } from 'react-icons/si';
 
 /* ============================================
    INLINE SVG ICONS
@@ -388,7 +388,11 @@ const SecondarySidebarContent = ({
           <SecondaryNavItem icon={SlidersHorizontal} label="Presets"          href="/manager/presets" />
 
           <SectionLabel label="Integrations" />
-          <SecondaryNavItem icon={SiMeta}            label="Meta Connection"  href="/manager/meta" />
+          <SecondaryNavItem icon={SiMeta}            label="Meta Connection"    href="/manager/meta" />
+          <SecondaryNavItem icon={SiShopify}         label="Shopify Connection" href="/manager/shopify" />
+
+          <SectionLabel label="Shop" />
+          <SecondaryNavItem icon={SiShopify}         label="Shop Products"      href="/shop/products" />
           {/* <DisabledSecondaryNavItem icon={LayoutDashboard} label="Google Ads" badge="Soon" /> */}
         </>
       );
@@ -542,7 +546,8 @@ export default function AppSidebar({
     // eslint-disable-next-line react-hooks/set-state-in-effect
     else if (pathname?.startsWith('/chats'))     setActiveSection('chats');
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    else if (pathname?.startsWith('/manager'))   setActiveSection('manager');
+    else if (pathname?.startsWith('/manager') || pathname?.startsWith('/shop'))
+      setActiveSection('manager');
     // eslint-disable-next-line react-hooks/set-state-in-effect
     else if (pathname?.startsWith('/create-ad')) setActiveSection('createAd');
     // eslint-disable-next-line react-hooks/set-state-in-effect

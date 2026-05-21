@@ -14,6 +14,8 @@ const PUBLIC_PATH_PREFIXES = [
   "/api/auth/logout",
   "/api/auth/2fa/verify",
   "/api/auth/callback",
+  "/shopify",
+  "/api/shopify",
   "/api/mcpServer",
   /** Stream queue reconcile (Bearer STREAM_QUEUE_RECONCILE_SECRET outside development). */
   "/api/public/stream-queue",

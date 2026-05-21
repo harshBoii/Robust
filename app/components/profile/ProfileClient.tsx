@@ -19,7 +19,7 @@ import {
   User,
   AlertCircle,
 } from 'lucide-react';
-import { SiMeta } from 'react-icons/si';
+import { SiMeta, SiShopify } from 'react-icons/si';
 
 import {
   EditProfileModal,
@@ -228,6 +228,7 @@ export default function ProfileClient({ profile }: ProfileClientProps) {
   const [modal, setModal] = useState<ProfileModal>(null);
 
   const metaConnected = Boolean(profile.meta?.adAccountId && profile.meta?.fbPageId);
+  const shopifyConnected = Boolean(profile.shopify?.connected);
   const initials = profileInitials(profile.displayName);
 
   const metaAdLine = [profile.meta?.adAccountName, profile.meta?.adAccountId]
@@ -305,6 +306,12 @@ export default function ProfileClient({ profile }: ProfileClientProps) {
                     Meta Connected
                   </span>
                 )}
+                {shopifyConnected && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-[#95bf47]/15 px-1.5 py-px font-ui text-[9px] font-semibold text-[#5e8e3e]">
+                    <SiShopify className="h-2.5 w-2.5" />
+                    Shopify Connected
+                  </span>
+                )}
                 <span className="inline-flex items-center gap-1 rounded-full bg-violet-50 px-1.5 py-px font-ui text-[9px] font-semibold text-violet-600">
                   <Sparkles className="h-2.5 w-2.5" />
                   AI Enabled
@@ -324,6 +331,13 @@ export default function ProfileClient({ profile }: ProfileClientProps) {
             >
               <SiMeta className="h-3 w-3" />
               Manage Meta
+            </Link>
+            <Link
+              href="/manager/shopify"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-black/[0.08] bg-white px-2.5 py-1.5 text-[11px] font-semibold"
+            >
+              <SiShopify className="h-3 w-3 text-[#5e8e3e]" />
+              Manage Shopify
             </Link>
             <button
               type="button"
@@ -453,8 +467,21 @@ export default function ProfileClient({ profile }: ProfileClientProps) {
                 ),
               },
               {
+                label: 'Shopify Connection',
+                value: (
+                  <StatusBadge
+                    label={shopifyConnected ? 'Connected' : 'Not connected'}
+                    tone={shopifyConnected ? 'success' : 'neutral'}
+                  />
+                ),
+              },
+              {
                 label: 'Last OAuth',
                 value: profile.meta ? formatRelativeTime(profile.meta.lastSyncedAt) : '—',
+              },
+              {
+                label: 'Shop Products',
+                value: profile.shopify?.productCount ?? 0,
               },
               { label: 'Creatives', value: profile.stats.assets },
               { label: 'Chats', value: profile.stats.adChatSessions },
@@ -526,6 +553,54 @@ export default function ProfileClient({ profile }: ProfileClientProps) {
             <p className="text-[11px] text-muted-foreground">
               Not connected.{' '}
               <Link href="/manager/meta" className="text-primary hover:underline">
+                Connect
+              </Link>
+            </p>
+          )}
+        </ProfileSectionCard>
+
+        {/* Shopify Integration */}
+        <ProfileSectionCard
+          className="lg:col-span-6 lg:row-span-1"
+          bodyClassName="overflow-y-auto"
+          title="Shopify Integration"
+          icon={SiShopify}
+          iconClassName="text-[#5e8e3e]"
+          action={
+            <Link
+              href="/manager/shopify"
+              className="font-ui text-[10px] font-medium text-muted-foreground hover:text-primary"
+            >
+              Manage
+            </Link>
+          }
+        >
+          {profile.shopify?.connected ? (
+            <ul>
+              <MetaRow
+                label="Store"
+                value={profile.shopify.shopDomain ?? '—'}
+                connected
+              />
+              <MetaRow
+                label="Products synced"
+                value={String(profile.shopify.productCount)}
+                connected={profile.shopify.productCount > 0}
+              />
+              <MetaRow
+                label="Last product sync"
+                value={
+                  profile.shopify.lastSyncedAt
+                    ? formatRelativeTime(profile.shopify.lastSyncedAt)
+                    : '—'
+                }
+                connected={Boolean(profile.shopify.lastSyncedAt)}
+              />
+            </ul>
+          ) : (
+            <p className="text-[11px] text-muted-foreground">
+              Not connected.{' '}
+              <Link href="/manager/shopify" className="text-primary hover:underline">
                 Connect
               </Link>
             </p>

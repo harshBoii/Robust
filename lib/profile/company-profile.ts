@@ -46,6 +46,13 @@ export type CompanyProfile = {
     updatedAt: string;
     lastSyncedAt: string;
   } | null;
+  shopify: {
+    connected: boolean;
+    shopDomain: string | null;
+    productCount: number;
+    lastSyncedAt: string | null;
+    connectedAt: string | null;
+  } | null;
 };
 
 async function resolveMetaExtras(
@@ -112,12 +119,22 @@ export async function getCompanyProfile(companyId: string): Promise<CompanyProfi
           updatedAt: true,
         },
       },
+      shopifyShops: {
+        where: { status: "installed" },
+        take: 1,
+        select: {
+          shopDomain: true,
+          updatedAt: true,
+          createdAt: true,
+        },
+      },
       _count: {
         select: {
           assets: true,
           adChatSessions: true,
           adPresets: true,
           notifications: true,
+          shopifyProducts: true,
         },
       },
     },
@@ -125,7 +142,7 @@ export async function getCompanyProfile(companyId: string): Promise<CompanyProfi
 
   if (!company) return null;
 
-  const { metaIntegration, _count, ...rest } = company;
+  const { metaIntegration, shopifyShops, _count, ...rest } = company;
   const displayName = rest.userName ?? rest.name;
 
   let metaBlock: CompanyProfile['meta'] = null;
@@ -150,6 +167,23 @@ export async function getCompanyProfile(companyId: string): Promise<CompanyProfi
     };
   }
 
+  const installedShop = shopifyShops[0] ?? null;
+  let shopifyBlock: CompanyProfile['shopify'] = null;
+  if (installedShop) {
+    const latestProduct = await prisma.shopifyProduct.findFirst({
+      where: { companyId },
+      orderBy: { shopifyUpdatedAt: 'desc' },
+      select: { shopifyUpdatedAt: true },
+    });
+    shopifyBlock = {
+      connected: true,
+      shopDomain: installedShop.shopDomain,
+      productCount: _count.shopifyProducts,
+      lastSyncedAt: latestProduct?.shopifyUpdatedAt?.toISOString() ?? null,
+      connectedAt: installedShop.createdAt.toISOString(),
+    };
+  }
+
   const activeSessions = await countActiveSessions(companyId);
 
   return {
@@ -163,5 +197,6 @@ export async function getCompanyProfile(companyId: string): Promise<CompanyProfi
     stats: _count,
     security: { activeSessions },
     meta: metaBlock,
+    shopify: shopifyBlock,
   };
 }

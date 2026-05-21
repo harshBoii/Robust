@@ -43,6 +43,9 @@ model Company {
 
   // Relations
   metaIntegration    MetaIntegration?
+  integrationCms     CompanyIntegrationCms[]
+  shopifyShops       ShopifyShop[]
+  shopifyProducts    ShopifyProduct[]
   assets             Asset[]
   bulkUploads        BulkUpload[]
   assetBuckets       AssetBucket[]
@@ -336,6 +339,80 @@ model MetaIntegration {
 
   @@index([companyId])
   @@map("meta_integrations")
+}
+
+// ================================================================
+// SHOPIFY INTEGRATION
+// ================================================================
+
+model CompanyIntegrationCms {
+  id                 String              @id @default(cuid())
+  companyId          String
+  provider           IntegrationProvider
+  apiKey             String?             @db.VarChar(255)
+  apiSecret          String?             @db.Text
+  scopes             String?             @db.Text
+  appUrl             String?             @db.VarChar(1000)
+  connectUrl         String?             @db.VarChar(1000)
+  expectedShopDomain String?             @unique @db.VarChar(255)
+  createdAt          DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime            @updatedAt @db.Timestamptz(3)
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, provider])
+  @@index([companyId])
+  @@map("company_integration_cms")
+}
+
+model ShopifyShop {
+  id            String    @id @default(cuid())
+  companyId     String
+  shopDomain    String    @unique @db.VarChar(255)
+  accessToken   String    @db.Text
+  scopes        String?   @db.Text
+  status        String    @default("installed") @db.VarChar(32)
+  uninstalledAt DateTime? @db.Timestamptz(3)
+  createdAt     DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime  @updatedAt @db.Timestamptz(3)
+
+  company  Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  products ShopifyProduct[]
+
+  @@index([companyId])
+  @@map("shopify_shops")
+}
+
+model ShopifyProduct {
+  id                  String    @id @default(cuid())
+  shopifyGid          String    @unique @db.VarChar(255)
+  shopId              String
+  companyId           String
+  title               String    @default("") @db.VarChar(500)
+  status              String?   @db.VarChar(64)
+  handle              String?   @db.VarChar(255)
+  totalInventory      Int?
+  onlineStoreUrl      String?   @db.VarChar(1000)
+  description         String?   @db.Text
+  featuredImageUrl    String?   @db.VarChar(1000)
+  featuredImageAltText String?  @db.VarChar(500)
+  featuredImageWidth  Int?
+  featuredImageHeight Int?
+  priceMinAmount      Decimal?  @db.Decimal(18, 4)
+  priceMaxAmount      Decimal?  @db.Decimal(18, 4)
+  currencyCode        String?   @db.VarChar(16)
+  shopifyCreatedAt    DateTime? @db.Timestamptz(3)
+  shopifyUpdatedAt    DateTime? @db.Timestamptz(3)
+  createdAt           DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime  @updatedAt @db.Timestamptz(3)
+
+  shop    ShopifyShop @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  company Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@index([shopId])
+  @@index([companyId, shopifyUpdatedAt(sort: Desc)])
+  @@map("shopify_products")
 }
 
 model MetaMedia {
@@ -917,4 +994,8 @@ enum AdChatMessageRole {
   USER
   ASSISTANT
   SYSTEM
+}
+
+enum IntegrationProvider {
+  Shopify
 }
