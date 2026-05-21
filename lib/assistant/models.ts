@@ -8,3 +8,11 @@ export const PRESET_BUILD_MODEL = 'gpt-5.5';
 
 /** Creative copy from video/image analysis (creative-suggest, vision). */
 export const CREATIVE_ANALYSIS_MODEL = 'gpt-5.5';
+
+/** Re-export image-gen models for discoverability. */
+export {
+  CLASSIFIER_MODEL,
+  IMAGE_COLLECTOR_MODEL,
+  VARIANT_PROMPT_MODEL,
+  IMAGE_GENERATION_MODEL,
+} from '@/lib/image-gen/models';

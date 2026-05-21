@@ -25,6 +25,21 @@ import {
 } from './widgets/ChatWidgets';
 
 import type { ChatWidgetDispatch } from './widgets/ChatWidgets';
+import {
+  ImageGenBackgroundGalleryWidget,
+  ImageGenExistingAdPickerWidget,
+  ImageGenGeneratingWidget,
+  ImageGenModelGalleryWidget,
+  ImageGenPoseGalleryWidget,
+  ImageGenPushToAdsWidget,
+  ImageGenSingleResultWidget,
+  ImageGenSourceChoiceWidget,
+  ImageGenUploadWidget,
+  ImageGenVariantGridWidget,
+  ImageGenVariantSourceWidget,
+  ImageGenIdeaReviewWidget,
+  ShopifyProductPickerWidget,
+} from './widgets/ImageGenWidgets';
 
 export function ChatWidgetRenderer({
   widgetType,
@@ -162,6 +177,43 @@ export function ChatWidgetRenderer({
       return <PublishScheduleWidget onAction={onAction} />;
     case 'done':
       return <DoneWidget jobIds={payload.jobIds as string[] | undefined} />;
+    case 'imageGenSourceChoice':
+      return (
+        <ImageGenSourceChoiceWidget
+          onAction={onAction}
+          mode={payload.mode as string | undefined}
+        />
+      );
+    case 'shopifyProductPicker':
+      return <ShopifyProductPickerWidget onAction={onAction} />;
+    case 'imageGenUpload':
+      return <ImageGenUploadWidget companyId={companyId} onAction={onAction} />;
+    case 'imageGenGenerating':
+      return <ImageGenGeneratingWidget />;
+    case 'imageGenSingleResult':
+      return <ImageGenSingleResultWidget payload={payload} onAction={onAction} />;
+    case 'imageGenVariantSource':
+      return <ImageGenVariantSourceWidget onAction={onAction} />;
+    case 'imageGenExistingAdPicker':
+      return <ImageGenExistingAdPickerWidget onAction={onAction} />;
+    case 'imageGenIdeaReview':
+      return <ImageGenIdeaReviewWidget payload={payload} onAction={onAction} />;
+    case 'imageGenVariantGrid':
+      return <ImageGenVariantGridWidget payload={payload} onAction={onAction} />;
+    case 'imageGenModelGallery':
+      return <ImageGenModelGalleryWidget payload={payload} onAction={onAction} />;
+    case 'imageGenBackgroundGallery':
+      return <ImageGenBackgroundGalleryWidget payload={payload} onAction={onAction} />;
+    case 'imageGenPoseGallery':
+      return <ImageGenPoseGalleryWidget payload={payload} onAction={onAction} />;
+    case 'imageGenPushToAds':
+      return (
+        <ImageGenPushToAdsWidget
+          payload={payload}
+          workflowState={workflowState}
+          onAction={onAction}
+        />
+      );
     default:
       return null;
   }

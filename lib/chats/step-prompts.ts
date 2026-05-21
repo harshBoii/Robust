@@ -1,10 +1,12 @@
-import type { ChatWorkflowStep, WidgetType } from './types';
+import type { AdWidgetType, ChatWorkflowStep } from './types';
 
 export function getStepResumePrompt(step: ChatWorkflowStep): {
   content: string;
-  widgetType: WidgetType | null;
+  widgetType: AdWidgetType | null;
 } {
   switch (step) {
+    case 'imageGen':
+      return { content: 'Image generation in progress.', widgetType: null };
     case 'mediaSource':
       return {
         content: 'How would you like to add or change your creatives?',

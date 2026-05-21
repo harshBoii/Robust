@@ -29,6 +29,22 @@ const ACTIONS: ChatActionType[] = [
   'preview.changes',
   'publish.submit',
   'workflow.goBack',
+  'imageGen.source',
+  'imageGen.shopifySelected',
+  'imageGen.uploaded',
+  'imageGen.variantSource',
+  'imageGen.existingAdSelected',
+  'imageGen.baseAccepted',
+  'imageGen.baseRejected',
+  'imageGen.ideasAccepted',
+  'imageGen.ideasChanged',
+  'imageGen.variantRegenerate',
+  'imageGen.modelSelected',
+  'imageGen.backgroundSelected',
+  'imageGen.poseSelected',
+  'imageGen.onModelAccepted',
+  'imageGen.onModelRejected',
+  'imageGen.pushToAds',
 ];
 
 export async function POST(

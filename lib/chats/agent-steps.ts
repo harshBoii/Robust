@@ -2,7 +2,31 @@ import type { CampaignPreset } from '@/app/components/manager/presets/types';
 
 import { buildGuidedReply } from './guided-replies';
 import { getStepResumePrompt } from './step-prompts';
-import type { ChatWorkflowStep, WidgetType, WorkflowState } from './types';
+import type { AdWidgetType, ChatWorkflowStep, WorkflowState } from './types';
+
+const AD_WORKFLOW_STEPS = new Set<ChatWorkflowStep>([
+  'intent',
+  'mediaSource',
+  'mediaUpload',
+  'mediaPick',
+  'mediaAnalyze',
+  'campaignChoice',
+  'pixelSetup',
+  'campaignObjective',
+  'campaignSelect',
+  'campaignPreset',
+  'campaignApprove',
+  'adsetChoice',
+  'adsetSelect',
+  'adsetPreset',
+  'adsetApprove',
+  'creativeMode',
+  'creativeBuild',
+  'creativeCsv',
+  'preview',
+  'publishChoice',
+  'done',
+]);
 
 /** High-level actionable step the agent must pick every turn (shown as widget + persisted). */
 export const AGENT_ACTIONABLE_STEPS = [
@@ -88,10 +112,12 @@ export function normalizeAgentPlan(
     if (Array.isArray(o.actions)) actions = o.actions as import('./agent-schema').AgentAction[];
     if (typeof o.memory === 'string') memory = o.memory;
     if (isAgentActionableStep(o.nextStep)) nextStep = o.nextStep;
-    if (typeof o.focusStep === 'string') focusStep = o.focusStep as ChatWorkflowStep;
+    if (typeof o.focusStep === 'string' && AD_WORKFLOW_STEPS.has(o.focusStep as ChatWorkflowStep)) {
+      focusStep = o.focusStep as ChatWorkflowStep;
+    }
     if (o.widget && typeof o.widget === 'object' && o.widget !== null) {
       const w = o.widget as { type?: string; payload?: Record<string, unknown> };
-      if (w.type) widget = { type: w.type as WidgetType, payload: w.payload };
+      if (w.type) widget = { type: w.type as AdWidgetType, payload: w.payload };
     }
   }
 
@@ -107,7 +133,7 @@ export function normalizeAgentPlan(
 
 export type ResolvedAgentStepUi = {
   focusStep: ChatWorkflowStep;
-  widgetType: WidgetType;
+  widgetType: AdWidgetType;
   widgetPayload?: Record<string, unknown>;
   stepLabel: string;
 };
@@ -179,6 +205,8 @@ export function resolveWorkflowStepUi(
       return { ...base, widgetPayload: { campaignId: state.campaignId } };
     case 'preview':
       return { ...base, widgetPayload: { groups: state.groups } };
+    case 'imageGen':
+      return { ...base, widgetType: 'mediaSource' };
     default:
       return base;
   }
@@ -220,6 +248,8 @@ export function workflowStepToAgentNextStep(
       return 'preview_ads';
     case 'publishChoice':
       return 'publish';
+    case 'imageGen':
+      return 'choose_media';
     default:
       return 'choose_media';
   }

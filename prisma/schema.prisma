@@ -109,6 +109,7 @@ model AdChatSession {
   createdByUserId String?             @db.VarChar(255)
   title           String              @default("New chat") @db.VarChar(500)
   status          AdChatSessionStatus @default(ACTIVE)
+  pathType        ChatPathType?
   currentStep     String              @default("intent") @db.VarChar(64)
   workflowState   Json                @default("{}")
   bulkUploadId    String?
@@ -911,6 +912,12 @@ enum UploadSource {
   GOOGLE_DRIVE
   DROPBOX
   URL
+  GENERATED
+}
+
+enum ChatPathType {
+  ADS
+  IMAGE_GEN
 }
 
 enum BulkUploadStatus {

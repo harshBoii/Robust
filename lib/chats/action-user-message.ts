@@ -76,6 +76,32 @@ export function resolveActionUserMessage(
           : 'Go back';
     case 'creative.csvParsed':
       return 'Applied CSV copy';
+    case 'imageGen.source':
+      return payload.source === 'shopify' ? 'Shopify product' : 'Custom upload';
+    case 'imageGen.shopifySelected':
+      return typeof payload.title === 'string' ? payload.title : 'Selected product';
+    case 'imageGen.uploaded':
+      return 'Uploaded product image';
+    case 'imageGen.variantSource':
+      return payload.source === 'existing' ? 'Existing ads' : 'Upload image';
+    case 'imageGen.existingAdSelected':
+      return 'Selected existing ad';
+    case 'imageGen.baseAccepted':
+      return 'Accept — create variants';
+    case 'imageGen.baseRejected':
+      return 'Request changes';
+    case 'imageGen.ideasAccepted':
+      return 'Accept all ideas';
+    case 'imageGen.ideasChanged':
+      return 'Update ideas';
+    case 'imageGen.variantRegenerate':
+      return 'Regenerate variant';
+    case 'imageGen.modelSelected':
+    case 'imageGen.backgroundSelected':
+    case 'imageGen.poseSelected':
+      return typeof payload.label === 'string' ? payload.label : null;
+    case 'imageGen.pushToAds':
+      return 'Post to ads';
     default:
       return null;
   }

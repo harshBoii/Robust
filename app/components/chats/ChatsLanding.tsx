@@ -5,7 +5,12 @@ import { useState } from 'react';
 
 import { ChatsComposer } from './ChatsComposer';
 
-const SUGGESTIONS = ['Post an ad', 'New campaign ad', 'Upload creatives and launch'];
+const SUGGESTIONS = [
+  'Post an ad',
+  'Create product ad images',
+  'Generate ad variants',
+  'Product on model photoshoot',
+];
 
 export default function ChatsLanding({ userName }: { userName: string; companyId: string }) {
   const router = useRouter();

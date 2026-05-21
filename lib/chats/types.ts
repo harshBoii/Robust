@@ -2,6 +2,7 @@ import type { GroupModel } from '@/lib/create-ad/group-model';
 import type { AdsetPreset, CampaignPreset } from '@/app/components/manager/presets/types';
 
 export type ChatWorkflowStep =
+  | 'imageGen'
   | 'intent'
   | 'mediaSource'
   | 'mediaUpload'
@@ -24,7 +25,11 @@ export type ChatWorkflowStep =
   | 'publishChoice'
   | 'done';
 
+import type { ImageGenState } from '@/lib/image-gen/types';
+
 export type WorkflowState = {
+  /** Path B image generation state (when pathType is IMAGE_GEN). */
+  imageGen?: ImageGenState;
   bulkUploadId?: string;
   assetIds?: string[];
   groups?: GroupModel[];
@@ -55,7 +60,7 @@ export type WorkflowState = {
   lastOperationError?: string | null;
 };
 
-export type WidgetType =
+export type AdWidgetType =
   | 'mediaSource'
   | 'mediaUpload'
   | 'mediaPick'
@@ -76,6 +81,23 @@ export type WidgetType =
   | 'publishSchedule'
   | 'done'
   | 'stepNav';
+
+export type ImageGenWidgetType =
+  | 'imageGenSourceChoice'
+  | 'shopifyProductPicker'
+  | 'imageGenUpload'
+  | 'imageGenGenerating'
+  | 'imageGenSingleResult'
+  | 'imageGenVariantSource'
+  | 'imageGenExistingAdPicker'
+  | 'imageGenIdeaReview'
+  | 'imageGenVariantGrid'
+  | 'imageGenModelGallery'
+  | 'imageGenBackgroundGallery'
+  | 'imageGenPoseGallery'
+  | 'imageGenPushToAds';
+
+export type WidgetType = AdWidgetType | ImageGenWidgetType;
 
 export type ChatActionType =
   | 'intent.ack'
@@ -99,7 +121,23 @@ export type ChatActionType =
   | 'preview.approved'
   | 'preview.changes'
   | 'publish.submit'
-  | 'workflow.goBack';
+  | 'workflow.goBack'
+  | 'imageGen.source'
+  | 'imageGen.shopifySelected'
+  | 'imageGen.uploaded'
+  | 'imageGen.variantSource'
+  | 'imageGen.existingAdSelected'
+  | 'imageGen.baseAccepted'
+  | 'imageGen.baseRejected'
+  | 'imageGen.ideasAccepted'
+  | 'imageGen.ideasChanged'
+  | 'imageGen.variantRegenerate'
+  | 'imageGen.modelSelected'
+  | 'imageGen.backgroundSelected'
+  | 'imageGen.poseSelected'
+  | 'imageGen.onModelAccepted'
+  | 'imageGen.onModelRejected'
+  | 'imageGen.pushToAds';
 
 export type SerializedMessage = {
   id: string;

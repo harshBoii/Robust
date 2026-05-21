@@ -4,6 +4,16 @@ import type { AdsetPreset, CampaignPreset } from '@/app/components/manager/prese
 import { prisma } from '@/lib/prisma';
 import { enqueueBulkPublish } from '@/lib/meta/process-publish-jobs';
 
+import { classifyTopLevelPath } from '@/lib/image-gen/classify-top-level';
+import {
+  handleImageGenAction,
+  handleImageGenMessage,
+  initImageGenFromFirstMessage,
+} from '@/lib/image-gen/orchestrator';
+import { parseImageGenState } from '@/lib/image-gen/state';
+import type { ImageGenActionType } from '@/lib/image-gen/types';
+import { IMAGE_GEN_ACTIONS } from '@/lib/image-gen/types';
+
 import { runAdAgentTurn } from './agent-turn';
 import { buildGuidedReply } from './guided-replies';
 import { approveAdsetWithRecovery, approveCampaignWithRecovery } from './approve-with-recovery';
@@ -148,6 +158,14 @@ function packageOrchestratorResult(
   };
 }
 
+function sessionPathType(session: DbChatSession): 'ADS' | 'IMAGE_GEN' | null {
+  const pt = (session as DbChatSession & { pathType?: string | null }).pathType;
+  if (pt === 'IMAGE_GEN') return 'IMAGE_GEN';
+  if (pt === 'ADS') return 'ADS';
+  if (parseImageGenState(parseWorkflowState(session.workflowState))) return 'IMAGE_GEN';
+  return null;
+}
+
 export async function handleChatMessage(
   sessionId: string,
   companyId: string,
@@ -159,13 +177,30 @@ export async function handleChatMessage(
   const state = parseWorkflowState(session.workflowState);
   const step = session.currentStep as ChatWorkflowStep;
   const priorMessages = (session.messages ?? []).map(serializeMessage);
+  const pathType = sessionPathType(session);
 
   if (!session.title || session.title === 'New chat') {
     const title = text.trim().slice(0, 80) || 'Ad chat';
     await updateChatSession(sessionId, companyId, { title });
   }
 
+  if (pathType === 'IMAGE_GEN' || step === 'imageGen') {
+    return handleImageGenMessage(sessionId, companyId, text);
+  }
+
   const userRow = await userMsg(sessionId, text);
+
+  if (pathType === null && step === 'intent') {
+    const route = await classifyTopLevelPath(text);
+    if (route === 'imageGen') {
+      await userMsg(sessionId, text);
+      await updateChatSession(sessionId, companyId, { pathType: 'IMAGE_GEN' });
+      const refreshed = await getChatSession(sessionId, companyId);
+      if (!refreshed) throw new Error('Session not found');
+      return initImageGenFromFirstMessage(refreshed, state, text);
+    }
+    await updateChatSession(sessionId, companyId, { pathType: 'ADS' });
+  }
 
   const plan = await runAdAgentTurn({
     userText: text,
@@ -198,6 +233,20 @@ export async function handleChatAction(
 ): Promise<OrchestratorResult> {
   const session = await getChatSession(sessionId, companyId);
   if (!session) throw new Error('Session not found');
+
+  if (
+    IMAGE_GEN_ACTIONS.includes(action as ImageGenActionType) ||
+    sessionPathType(session) === 'IMAGE_GEN' ||
+    session.currentStep === 'imageGen'
+  ) {
+    return handleImageGenAction(
+      sessionId,
+      companyId,
+      action as ImageGenActionType,
+      payload,
+      userMessage,
+    );
+  }
 
   const state = parseWorkflowState(session.workflowState);
   const newMessages: SerializedMessage[] = [];

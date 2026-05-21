@@ -1,0 +1,97 @@
+import 'server-only';
+
+import { generateImage } from './generate-image';
+import { storeGeneratedImage } from './store-generated';
+import type { ImageGenVariant } from './types';
+
+export type BatchGenerateInput = {
+  companyId: string;
+  sessionId: string;
+  referenceImageUrl: string;
+  aspectRatio?: string | null;
+  variants: ImageGenVariant[];
+  indices?: number[];
+};
+
+export type BatchGenerateResult = {
+  variants: ImageGenVariant[];
+  succeeded: number;
+  failed: number;
+};
+
+async function generateOneWithRetry(input: {
+  companyId: string;
+  sessionId: string;
+  referenceImageUrl: string;
+  aspectRatio?: string | null;
+  variant: ImageGenVariant;
+}): Promise<ImageGenVariant> {
+  const run = async () => {
+    const gen = await generateImage({
+      prompt: input.variant.prompt,
+      referenceImageUrl: input.referenceImageUrl,
+      aspectRatio: input.aspectRatio,
+    });
+    const stored = await storeGeneratedImage({
+      companyId: input.companyId,
+      sessionId: input.sessionId,
+      imageBase64: gen.imageBase64,
+      title: input.variant.ideaLabel,
+      label: input.variant.ideaLabel,
+    });
+    return {
+      ...input.variant,
+      assetId: stored.assetId,
+      imageUrl: stored.imageUrl,
+      status: 'done' as const,
+      error: undefined,
+    };
+  };
+
+  try {
+    return await run();
+  } catch (firstErr) {
+    try {
+      return await run();
+    } catch (secondErr) {
+      return {
+        ...input.variant,
+        status: 'failed' as const,
+        error: secondErr instanceof Error ? secondErr.message : String(secondErr),
+      };
+    }
+  }
+}
+
+export async function batchGenerateVariants(
+  input: BatchGenerateInput,
+): Promise<BatchGenerateResult> {
+  const indices =
+    input.indices ??
+    input.variants.map((v, i) => (v.status !== 'done' ? i : -1)).filter((i) => i >= 0);
+
+  const variants = [...input.variants];
+
+  const tasks = indices.map(async (index) => {
+    const variant = variants[index];
+    if (!variant?.prompt) return { index, variant };
+    const updated = await generateOneWithRetry({
+      companyId: input.companyId,
+      sessionId: input.sessionId,
+      referenceImageUrl: input.referenceImageUrl,
+      aspectRatio: input.aspectRatio,
+      variant,
+    });
+    return { index, variant: updated };
+  });
+
+  const results = await Promise.all(tasks);
+  for (const { index, variant } of results) {
+    variants[index] = variant;
+  }
+
+  const succeeded = variants.filter((v) => v.status === 'done').length;
+  const failed = variants.filter((v) => v.status === 'failed').length;
+
+  return { variants, succeeded, failed };
+}

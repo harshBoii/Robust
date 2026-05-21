@@ -95,6 +95,7 @@ export async function updateChatSession(
   data: {
     title?: string;
     status?: string;
+    pathType?: string | null;
     currentStep?: string;
     workflowState?: unknown;
     bulkUploadId?: string | null;
