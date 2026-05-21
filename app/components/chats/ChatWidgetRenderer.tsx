@@ -30,6 +30,8 @@ import {
   ImageGenExistingAdPickerWidget,
   ImageGenGeneratingWidget,
   ImageGenModelGalleryWidget,
+  ImageGenArtistSettingsWidget,
+  ImageGenNextStepWidget,
   ImageGenPoseGalleryWidget,
   ImageGenPushToAdsWidget,
   ImageGenSingleResultWidget,
@@ -196,10 +198,14 @@ export function ChatWidgetRenderer({
       return <ShopifyProductPickerWidget onAction={onAction} />;
     case 'imageGenUpload':
       return <ImageGenUploadWidget companyId={companyId} onAction={onAction} />;
+    case 'imageGenArtistSettings':
+      return <ImageGenArtistSettingsWidget payload={payload} onAction={onAction} />;
     case 'imageGenGenerating':
       return <ImageGenGeneratingWidget />;
     case 'imageGenSingleResult':
-      return <ImageGenSingleResultWidget payload={payload} onAction={onAction} />;
+      return <ImageGenSingleResultWidget payload={payload} />;
+    case 'imageGenNextStep':
+      return <ImageGenNextStepWidget payload={payload} onAction={onAction} />;
     case 'imageGenVariantSource':
       return <ImageGenVariantSourceWidget onAction={onAction} />;
     case 'imageGenExistingAdPicker':

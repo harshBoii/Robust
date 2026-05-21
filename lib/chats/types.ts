@@ -86,6 +86,7 @@ export type ImageGenWidgetType =
   | 'imageGenSourceChoice'
   | 'shopifyProductPicker'
   | 'imageGenUpload'
+  | 'imageGenArtistSettings'
   | 'imageGenGenerating'
   | 'imageGenSingleResult'
   | 'imageGenVariantSource'
@@ -95,7 +96,8 @@ export type ImageGenWidgetType =
   | 'imageGenModelGallery'
   | 'imageGenBackgroundGallery'
   | 'imageGenPoseGallery'
-  | 'imageGenPushToAds';
+  | 'imageGenPushToAds'
+  | 'imageGenNextStep';
 
 export type WidgetType = AdWidgetType | ImageGenWidgetType;
 
@@ -125,10 +127,12 @@ export type ChatActionType =
   | 'imageGen.source'
   | 'imageGen.shopifySelected'
   | 'imageGen.uploaded'
+  | 'imageGen.artistSettings'
   | 'imageGen.variantSource'
   | 'imageGen.existingAdSelected'
   | 'imageGen.baseAccepted'
   | 'imageGen.baseRejected'
+  | 'imageGen.nextStepChosen'
   | 'imageGen.ideasAccepted'
   | 'imageGen.ideasChanged'
   | 'imageGen.variantRegenerate'

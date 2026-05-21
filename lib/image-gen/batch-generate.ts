@@ -2,13 +2,15 @@ import 'server-only';
 
 import { generateImage } from './generate-image';
 import { storeGeneratedImage } from './store-generated';
-import type { ImageGenVariant } from './types';
+import type { ImageGenState, ImageGenVariant } from './types';
 
 export type BatchGenerateInput = {
   companyId: string;
   sessionId: string;
   referenceImageUrl: string;
   aspectRatio?: string | null;
+  imageArtistId?: string | null;
+  imageQuality?: ImageGenState['imageQuality'];
   variants: ImageGenVariant[];
   indices?: number[];
 };
@@ -24,6 +26,8 @@ async function generateOneWithRetry(input: {
   sessionId: string;
   referenceImageUrl: string;
   aspectRatio?: string | null;
+  imageArtistId?: string | null;
+  imageQuality?: ImageGenState['imageQuality'];
   variant: ImageGenVariant;
 }): Promise<ImageGenVariant> {
   const run = async () => {
@@ -31,6 +35,8 @@ async function generateOneWithRetry(input: {
       prompt: input.variant.prompt,
       referenceImageUrl: input.referenceImageUrl,
       aspectRatio: input.aspectRatio,
+      imageArtistId: input.imageArtistId,
+      quality: input.imageQuality,
     });
     const stored = await storeGeneratedImage({
       companyId: input.companyId,
@@ -80,6 +86,8 @@ export async function batchGenerateVariants(
       sessionId: input.sessionId,
       referenceImageUrl: input.referenceImageUrl,
       aspectRatio: input.aspectRatio,
+      imageArtistId: input.imageArtistId,
+      imageQuality: input.imageQuality,
       variant,
     });
     return { index, variant: updated };

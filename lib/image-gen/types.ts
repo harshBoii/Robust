@@ -5,10 +5,12 @@ export type ImageGenStep =
   | 'imageSource'
   | 'shopifyPick'
   | 'customUpload'
+  | 'artistSettings'
   | 'productSource'
   | 'collectFields'
   | 'generateBase'
   | 'reviewBase'
+  | 'chooseNext'
   | 'variantImageSource'
   | 'existingAdPick'
   | 'generateIdeas'
@@ -49,6 +51,9 @@ export type ImageGenState = {
   brandTone?: string;
   copyCount?: number;
   aspectRatio?: string;
+  /** Mr Adicasso / Mr Crafta / Tintin */
+  imageArtistId?: string;
+  imageQuality?: 'low' | 'medium' | 'high';
   collectorTurns?: number;
   baseGeneratedAssetId?: string;
   baseGeneratedImageUrl?: string;
@@ -70,10 +75,12 @@ export type ImageGenActionType =
   | 'imageGen.source'
   | 'imageGen.shopifySelected'
   | 'imageGen.uploaded'
+  | 'imageGen.artistSettings'
   | 'imageGen.variantSource'
   | 'imageGen.existingAdSelected'
   | 'imageGen.baseAccepted'
   | 'imageGen.baseRejected'
+  | 'imageGen.nextStepChosen'
   | 'imageGen.ideasAccepted'
   | 'imageGen.ideasChanged'
   | 'imageGen.variantRegenerate'
@@ -88,10 +95,12 @@ export const IMAGE_GEN_ACTIONS: ImageGenActionType[] = [
   'imageGen.source',
   'imageGen.shopifySelected',
   'imageGen.uploaded',
+  'imageGen.artistSettings',
   'imageGen.variantSource',
   'imageGen.existingAdSelected',
   'imageGen.baseAccepted',
   'imageGen.baseRejected',
+  'imageGen.nextStepChosen',
   'imageGen.ideasAccepted',
   'imageGen.ideasChanged',
   'imageGen.variantRegenerate',
@@ -107,6 +116,7 @@ export type ImageGenWidgetType =
   | 'imageGenSourceChoice'
   | 'shopifyProductPicker'
   | 'imageGenUpload'
+  | 'imageGenArtistSettings'
   | 'imageGenGenerating'
   | 'imageGenSingleResult'
   | 'imageGenVariantSource'
@@ -116,4 +126,5 @@ export type ImageGenWidgetType =
   | 'imageGenModelGallery'
   | 'imageGenBackgroundGallery'
   | 'imageGenPoseGallery'
-  | 'imageGenPushToAds';
+  | 'imageGenPushToAds'
+  | 'imageGenNextStep';

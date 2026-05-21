@@ -5,7 +5,68 @@ import { useCallback, useEffect, useState } from 'react';
 import { useUploader } from '@/app/hooks/useUploader';
 import type { WorkflowState } from '@/lib/chats/types';
 
+import {
+  IMAGE_ARTISTS,
+  IMAGE_QUALITY_OPTIONS,
+  type ImageArtistId,
+  type ImageQuality,
+} from '@/lib/image-gen/image-artists';
+
 import type { ChatWidgetDispatch } from './ChatWidgets';
+
+export function DownloadImageButton({
+  imageUrl,
+  filename = 'robust-ad.png',
+}: {
+  imageUrl: string;
+  filename?: string;
+}) {
+  const onDownload = useCallback(async () => {
+    try {
+      const res = await fetch(imageUrl);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error(e);
+      window.open(imageUrl, '_blank', 'noopener,noreferrer');
+    }
+  }, [imageUrl, filename]);
+
+  return (
+    <button
+      type="button"
+      onClick={() => void onDownload()}
+      className="rounded-full border border-border/50 bg-background/90 px-3 py-1 text-[12px] font-medium text-foreground transition hover:border-primary/40 hover:bg-primary/5"
+    >
+      Download
+    </button>
+  );
+}
+
+function ImageWithDownload({
+  imageUrl,
+  alt,
+  filename,
+  className,
+}: {
+  imageUrl: string;
+  alt: string;
+  filename?: string;
+  className?: string;
+}) {
+  return (
+    <div className="space-y-2">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={imageUrl} alt={alt} className={className ?? 'max-h-80 w-full rounded-lg border object-contain'} />
+      <DownloadImageButton imageUrl={imageUrl} filename={filename} />
+    </div>
+  );
+}
 
 type ShopifyProduct = {
   id: string;
@@ -147,6 +208,81 @@ export function ImageGenUploadWidget({
   );
 }
 
+export function ImageGenArtistSettingsWidget({
+  payload,
+  onAction,
+}: {
+  payload: Record<string, unknown>;
+  onAction: ChatWidgetDispatch;
+}) {
+  const artists = (payload.artists as typeof IMAGE_ARTISTS) ?? IMAGE_ARTISTS;
+  const qualities = (payload.qualities as typeof IMAGE_QUALITY_OPTIONS) ?? IMAGE_QUALITY_OPTIONS;
+  const [artistId, setArtistId] = useState<ImageArtistId>(
+    (payload.selectedArtistId as ImageArtistId) ?? 'crafta',
+  );
+  const [quality, setQuality] = useState<ImageQuality>(
+    (payload.selectedQuality as ImageQuality) ?? 'medium',
+  );
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <p className="mb-2 text-[12px] font-medium text-muted-foreground">Image artist</p>
+        <div className="grid gap-2 sm:grid-cols-3">
+          {artists.map((a) => (
+            <button
+              key={a.id}
+              type="button"
+              onClick={() => setArtistId(a.id)}
+              className={`rounded-xl border px-3 py-2.5 text-left transition ${
+                artistId === a.id
+                  ? 'border-primary bg-primary/10'
+                  : 'border-border/50 hover:border-primary/30'
+              }`}
+            >
+              <span className="block text-[13px] font-semibold">{a.name}</span>
+              <span className="mt-0.5 block text-[11px] text-muted-foreground">{a.tagline}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+      <div>
+        <p className="mb-2 text-[12px] font-medium text-muted-foreground">Quality</p>
+        <div className="flex flex-wrap gap-2">
+          {qualities.map((q) => (
+            <button
+              key={q.id}
+              type="button"
+              onClick={() => setQuality(q.id)}
+              className={`rounded-full px-3.5 py-1.5 text-[13px] font-medium capitalize transition ${
+                quality === q.id
+                  ? 'bg-primary text-primary-foreground'
+                  : 'border border-border/50 hover:border-primary/40'
+              }`}
+            >
+              {q.label}
+            </button>
+          ))}
+        </div>
+      </div>
+      <button
+        type="button"
+        onClick={() => {
+          const artist = artists.find((a) => a.id === artistId);
+          void onAction(
+            'imageGen.artistSettings',
+            { artistId, quality },
+            `${artist?.name ?? 'Artist'} · ${quality} quality`,
+          );
+        }}
+        className="rounded-full bg-primary px-4 py-2 text-[13px] font-medium text-primary-foreground"
+      >
+        Continue
+      </button>
+    </div>
+  );
+}
+
 export function ImageGenGeneratingWidget() {
   return (
     <div className="flex items-center gap-2 text-[13px] text-muted-foreground">
@@ -158,47 +294,72 @@ export function ImageGenGeneratingWidget() {
 
 export function ImageGenSingleResultWidget({
   payload,
+}: {
+  payload: Record<string, unknown>;
+  onAction?: ChatWidgetDispatch;
+}) {
+  const imageUrl = payload.imageUrl as string | undefined;
+  const artistName = payload.artistName as string | undefined;
+  const imageQuality = payload.imageQuality as string | undefined;
+
+  return (
+    <div>
+      {artistName || imageQuality ? (
+        <p className="mb-2 text-[11px] text-muted-foreground">
+          {artistName}
+          {imageQuality ? ` · ${imageQuality} quality` : ''}
+        </p>
+      ) : null}
+      {imageUrl ? (
+        <ImageWithDownload
+          imageUrl={imageUrl}
+          alt="Generated ad"
+          filename={`robust-${(artistName ?? 'ad').toLowerCase().replace(/\s+/g, '-')}.png`}
+        />
+      ) : (
+        <p className="text-[13px] text-muted-foreground">Image preview unavailable.</p>
+      )}
+    </div>
+  );
+}
+
+type NextStepOption = { id: string; label: string; description: string };
+
+export function ImageGenNextStepWidget({
+  payload,
   onAction,
 }: {
   payload: Record<string, unknown>;
   onAction: ChatWidgetDispatch;
 }) {
-  const imageUrl = payload.imageUrl as string | undefined;
-  const mode = payload.mode as string | undefined;
+  const options = (payload.options as NextStepOption[]) ?? [];
 
   return (
-    <div className="space-y-3">
-      {imageUrl && (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={imageUrl} alt="Generated" className="max-h-80 rounded-lg border object-contain" />
-      )}
-      <div className="flex flex-wrap gap-2">
-        {mode === 'productAd' && (
+    <div className="space-y-2">
+      <div className="grid gap-2 sm:grid-cols-2">
+        {options.map((opt) => (
           <button
+            key={opt.id}
             type="button"
-            onClick={() => void onAction('imageGen.baseAccepted', {}, 'Accept — create variants')}
-            className="rounded-full bg-primary px-4 py-1.5 text-[13px] font-medium text-primary-foreground"
+            onClick={() =>
+              void onAction(
+                'imageGen.nextStepChosen',
+                { choiceId: opt.id, label: opt.label },
+                opt.label,
+              )
+            }
+            className="rounded-xl border border-border/50 bg-background/80 px-3 py-2.5 text-left transition hover:border-primary/40 hover:bg-primary/5"
           >
-            Accept & create variants
+            <span className="block text-[13px] font-semibold text-foreground">{opt.label}</span>
+            <span className="mt-0.5 block text-[11px] leading-snug text-muted-foreground">
+              {opt.description}
+            </span>
           </button>
-        )}
-        {mode === 'productOnModel' && (
-          <button
-            type="button"
-            onClick={() => void onAction('imageGen.onModelAccepted', {}, 'Looks good')}
-            className="rounded-full bg-primary px-4 py-1.5 text-[13px] font-medium text-primary-foreground"
-          >
-            Looks good
-          </button>
-        )}
-        <button
-          type="button"
-          onClick={() => void onAction('imageGen.baseRejected', {}, 'Request changes')}
-          className="rounded-full border border-border/50 px-4 py-1.5 text-[13px] font-medium"
-        >
-          Request changes
-        </button>
+        ))}
       </div>
+      <p className="text-[11px] text-muted-foreground">
+        Or type what you want next — we&apos;ll route you automatically.
+      </p>
     </div>
   );
 }
@@ -346,8 +507,14 @@ export function ImageGenVariantGridWidget({
         <div key={i} className="rounded-lg border border-border/50 p-2">
           <p className="mb-1 truncate text-[12px] font-medium">{v.ideaLabel}</p>
           {v.imageUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={v.imageUrl} alt="" className="aspect-square w-full rounded object-cover" />
+            <div className="space-y-1">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={v.imageUrl} alt="" className="aspect-square w-full rounded object-cover" />
+              <DownloadImageButton
+                imageUrl={v.imageUrl}
+                filename={`robust-${v.ideaLabel.toLowerCase().replace(/\s+/g, '-').slice(0, 40)}.png`}
+              />
+            </div>
           ) : (
             <div className="flex aspect-square items-center justify-center rounded bg-muted text-[11px] text-muted-foreground">
               {v.status === 'failed' ? v.error ?? 'Failed' : 'Pending'}

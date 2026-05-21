@@ -5,7 +5,12 @@ import { toFile } from 'openai/uploads';
 
 import { fetchImageBytesFromUrl } from '@/lib/cloudfare/r2-video-thumbnail';
 
-import { IMAGE_GENERATION_MODEL } from './models';
+import {
+  DEFAULT_IMAGE_ARTIST_ID,
+  DEFAULT_IMAGE_QUALITY,
+  findImageArtist,
+  type ImageQuality,
+} from './image-artists';
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
@@ -13,6 +18,9 @@ export type GenerateImageInput = {
   prompt: string;
   referenceImageUrl?: string | null;
   aspectRatio?: string | null;
+  model?: string | null;
+  quality?: ImageQuality | null;
+  imageArtistId?: string | null;
 };
 
 export type GenerateImageResult = {
@@ -26,8 +34,29 @@ function resolveSize(aspectRatio?: string | null): '1024x1024' | '1536x1024' | '
   return '1024x1024';
 }
 
+function resolveModel(input: GenerateImageInput): string {
+  if (input.model?.trim()) return input.model.trim();
+  return findImageArtist(input.imageArtistId ?? DEFAULT_IMAGE_ARTIST_ID).openAiModel;
+}
+
+function resolveQuality(input: GenerateImageInput): ImageQuality {
+  const q = input.quality;
+  if (q === 'low' || q === 'medium' || q === 'high') return q;
+  return DEFAULT_IMAGE_QUALITY;
+}
+
 export async function generateImage(input: GenerateImageInput): Promise<GenerateImageResult> {
   const size = resolveSize(input.aspectRatio);
+  const model = resolveModel(input);
+  const quality = resolveQuality(input);
+
+  const commonParams = {
+    model,
+    prompt: input.prompt,
+    size,
+    n: 1 as const,
+    quality,
+  };
 
   if (input.referenceImageUrl) {
     const bytes = await fetchImageBytesFromUrl(input.referenceImageUrl, {
@@ -39,11 +68,8 @@ export async function generateImage(input: GenerateImageInput): Promise<Generate
     const file = await toFile(Buffer.from(bytes), 'reference.png', { type: 'image/png' });
 
     const res = await openai.images.edit({
-      model: IMAGE_GENERATION_MODEL,
+      ...commonParams,
       image: file,
-      prompt: input.prompt,
-      size,
-      n: 1,
     });
 
     const b64 = res.data?.[0]?.b64_json;
@@ -52,10 +78,7 @@ export async function generateImage(input: GenerateImageInput): Promise<Generate
   }
 
   const res = await openai.images.generate({
-    model: IMAGE_GENERATION_MODEL,
-    prompt: input.prompt,
-    size,
-    n: 1,
+    ...commonParams,
   });
 
   const b64 = res.data?.[0]?.b64_json;

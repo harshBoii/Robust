@@ -13,9 +13,19 @@ import type { OrchestratorResult, SerializedMessage, WorkflowState } from '@/lib
 
 import { buildProductAdBasePrompt, buildProductOnModelPrompt } from './base-prompts';
 import { batchGenerateVariants } from './batch-generate';
+import {
+  classifyPostResultNext,
+  POST_RESULT_NEXT_OPTIONS,
+  type PostResultNextRoute,
+} from './classify-post-result-next';
 import { classifyImageGenSubpath } from './classify-subpath';
 import { runCollectorTurn } from './collect-fields-agent';
 import { findBackground, findModel, findPose, getCatalogForWidget } from './catalog';
+import {
+  findImageArtist,
+  IMAGE_ARTISTS,
+  IMAGE_QUALITY_OPTIONS,
+} from './image-artists';
 import { generateImage } from './generate-image';
 import { importProductImageFromUrl } from './import-product-image';
 import { appendGeneratedAsset, initialImageGenState, mergeImageGenIntoWorkflow, parseImageGenState } from './state';
@@ -24,6 +34,38 @@ import type { ImageGenActionType, ImageGenState, ImageGenSubpath, ImageGenWidget
 import { generateVariantPrompts, regenerateVariantPrompts } from './variant-prompts';
 
 const IMAGE_GEN_STEP = 'imageGen';
+
+function artistSettingsWidgetPayload(ig: ImageGenState) {
+  return {
+    artists: IMAGE_ARTISTS,
+    qualities: IMAGE_QUALITY_OPTIONS,
+    selectedArtistId: ig.imageArtistId,
+    selectedQuality: ig.imageQuality,
+  };
+}
+
+function generatingLabel(ig: ImageGenState): string {
+  const artist = findImageArtist(ig.imageArtistId);
+  const q = ig.imageQuality ?? 'medium';
+  return `Generating with ${artist.name} · ${q} quality…`;
+}
+
+async function promptArtistSettings(
+  session: DbChatSession,
+  ig: ImageGenState,
+  newMessages: SerializedMessage[],
+): Promise<ImageGenState> {
+  ig.step = 'artistSettings';
+  newMessages.push(
+    await assistantMsg(
+      session.id,
+      'Pick your image artist and quality. Mr Adicasso is the best in the game; Mr Crafta is a solid budget option; Tintin is the cheaper pick.',
+      'imageGenArtistSettings',
+      artistSettingsWidgetPayload(ig),
+    ),
+  );
+  return ig;
+}
 
 async function assistantMsg(
   sessionId: string,
@@ -197,18 +239,17 @@ export async function handleImageGenMessage(
     }
   }
 
-  if (ig.step === 'reviewBase' || ig.step === 'reviewOnModel') {
-    ig.rejectFeedback = text;
-    if (ig.subpath === 'productAd') {
-      ig.step = 'collectFields';
-      const nextWorkflow = mergeImageGenIntoWorkflow(workflowState, ig);
-      await persist(session, nextWorkflow);
-      newMessages.push(
-        await assistantMsg(sessionId, "Got it — I'll adjust. Anything else about tone or layout?"),
-      );
-      const updated = await getChatSession(sessionId, companyId);
-      return packageResult(updated!, nextWorkflow, newMessages);
-    }
+  if (ig.step === 'chooseNext' || ig.step === 'reviewBase' || ig.step === 'reviewOnModel') {
+    const route = await classifyPostResultNext({ userText: text });
+    return routePostResultNext(
+      session,
+      companyId,
+      workflowState,
+      ig,
+      route,
+      newMessages,
+      text,
+    );
   }
 
   if (ig.subpath === 'variantGen' && ig.step === 'generateVariants') {
@@ -246,7 +287,7 @@ async function runGenerateBase(
   ig.step = 'generateBase';
   let nextWorkflow = mergeImageGenIntoWorkflow(workflowState, ig);
   await persist(session, nextWorkflow);
-  newMessages.push(await assistantMsg(session.id, 'Generating your product ad…', 'imageGenGenerating'));
+  newMessages.push(await assistantMsg(session.id, generatingLabel(ig), 'imageGenGenerating'));
 
   try {
     const refUrl = await resolveProductImageUrl(session.companyId, ig);
@@ -257,6 +298,8 @@ async function runGenerateBase(
       prompt,
       referenceImageUrl: refUrl,
       aspectRatio: ig.aspectRatio,
+      imageArtistId: ig.imageArtistId,
+      quality: ig.imageQuality,
     });
     const stored = await storeGeneratedImage({
       companyId: session.companyId,
@@ -269,7 +312,7 @@ async function runGenerateBase(
     ig = appendGeneratedAsset(
       {
         ...ig,
-        step: 'reviewBase',
+        step: 'chooseNext',
         baseGeneratedAssetId: stored.assetId,
         baseGeneratedImageUrl: stored.imageUrl,
         rejectFeedback: undefined,
@@ -277,17 +320,23 @@ async function runGenerateBase(
       { assetId: stored.assetId, label: 'Base ad', imageUrl: stored.imageUrl },
     );
 
+    const artist = findImageArtist(ig.imageArtistId);
     newMessages.push(
-      await assistantMsg(session.id, "Here's your product ad. Accept to create variants, or tell me what to change.", 'imageGenSingleResult', {
+      await assistantMsg(session.id, "Here's your product ad.", 'imageGenSingleResult', {
         assetId: stored.assetId,
         imageUrl: stored.imageUrl,
         mode: 'productAd',
+        artistName: artist.name,
+        imageQuality: ig.imageQuality,
       }),
     );
     newMessages.push(
-      await assistantMsg(session.id, 'Or post this image directly to ads.', 'imageGenPushToAds', {
-        assetIds: [stored.assetId],
-      }),
+      await assistantMsg(
+        session.id,
+        'What would you like to do next? Pick an option or describe it in your own words.',
+        'imageGenNextStep',
+        { options: POST_RESULT_NEXT_OPTIONS, context: 'productAd' },
+      ),
     );
   } catch (e) {
     workflowState.lastOperationError = e instanceof Error ? e.message : 'Generation failed';
@@ -369,6 +418,8 @@ async function runGenerateVariants(
       sessionId: session.id,
       referenceImageUrl: refUrl,
       aspectRatio: ig.aspectRatio,
+      imageArtistId: ig.imageArtistId,
+      imageQuality: ig.imageQuality,
       variants: ig.variants ?? [],
     });
 
@@ -394,10 +445,14 @@ async function runGenerateVariants(
         },
       ),
     );
+    ig.step = 'chooseNext';
     newMessages.push(
-      await assistantMsg(session.id, 'Ready to use these in an ad campaign?', 'imageGenPushToAds', {
-        assetIds: ig.generatedAssets?.map((g) => g.assetId) ?? [],
-      }),
+      await assistantMsg(
+        session.id,
+        'What would you like to do next?',
+        'imageGenNextStep',
+        { options: POST_RESULT_NEXT_OPTIONS, context: 'variants' },
+      ),
     );
   } catch (e) {
     workflowState.lastOperationError = e instanceof Error ? e.message : 'Batch generation failed';
@@ -428,6 +483,8 @@ async function runRegenerateVariant(
     sessionId: session.id,
     referenceImageUrl: refUrl,
     aspectRatio: ig.aspectRatio,
+    imageArtistId: ig.imageArtistId,
+    imageQuality: ig.imageQuality,
     variants,
     indices: [index],
   });
@@ -450,14 +507,15 @@ async function runProductOnModelGenerate(
   session: DbChatSession,
   workflowState: WorkflowState,
   ig: ImageGenState,
+  priorMessages: SerializedMessage[] = [],
 ): Promise<OrchestratorResult> {
-  const newMessages: SerializedMessage[] = [];
+  const newMessages = [...priorMessages];
   const model = findModel(ig.selectedModelId ?? '');
   const bg = findBackground(ig.selectedBackgroundId ?? '');
   const pose = findPose(ig.selectedPoseId ?? '');
   if (!model || !bg || !pose) throw new Error('Model, background, or pose not selected');
 
-  newMessages.push(await assistantMsg(session.id, 'Creating your product-on-model shot…', 'imageGenGenerating'));
+  newMessages.push(await assistantMsg(session.id, generatingLabel(ig), 'imageGenGenerating'));
 
   try {
     const refUrl = await resolveProductImageUrl(session.companyId, ig);
@@ -468,7 +526,13 @@ async function runProductOnModelGenerate(
       { modelLabel: model.label, backgroundLabel: bg.label, poseLabel: pose.label },
       ig.rejectFeedback,
     );
-    const gen = await generateImage({ prompt, referenceImageUrl: refUrl, aspectRatio: ig.aspectRatio });
+    const gen = await generateImage({
+      prompt,
+      referenceImageUrl: refUrl,
+      aspectRatio: ig.aspectRatio,
+      imageArtistId: ig.imageArtistId,
+      quality: ig.imageQuality,
+    });
     const stored = await storeGeneratedImage({
       companyId: session.companyId,
       sessionId: session.id,
@@ -487,17 +551,24 @@ async function runProductOnModelGenerate(
       { assetId: stored.assetId, label: 'Product on model', imageUrl: stored.imageUrl },
     );
 
+    const artist = findImageArtist(ig.imageArtistId);
     newMessages.push(
       await assistantMsg(session.id, "Here's your product-on-model image.", 'imageGenSingleResult', {
         assetId: stored.assetId,
         imageUrl: stored.imageUrl,
         mode: 'productOnModel',
+        artistName: artist.name,
+        imageQuality: ig.imageQuality,
       }),
     );
+    ig.step = 'chooseNext';
     newMessages.push(
-      await assistantMsg(session.id, 'Post this to your ad campaign?', 'imageGenPushToAds', {
-        assetIds: [stored.assetId],
-      }),
+      await assistantMsg(
+        session.id,
+        'What would you like to do next?',
+        'imageGenNextStep',
+        { options: POST_RESULT_NEXT_OPTIONS, context: 'onModel' },
+      ),
     );
   } catch (e) {
     workflowState.lastOperationError = e instanceof Error ? e.message : 'Generation failed';
@@ -512,7 +583,7 @@ async function runProductOnModelGenerate(
 }
 
 function transitionToVariantGenFromProductAd(
-  workflowState: WorkflowState,
+  _workflowState: WorkflowState,
   ig: ImageGenState,
 ): ImageGenState {
   return {
@@ -525,6 +596,180 @@ function transitionToVariantGenFromProductAd(
     productImageUrl: ig.baseGeneratedImageUrl ?? ig.productImageUrl,
     copyCount: ig.copyCount ?? 4,
   };
+}
+
+async function executePushToAds(
+  sessionId: string,
+  companyId: string,
+  workflowState: WorkflowState,
+  assetIds: string[],
+  newMessages: SerializedMessage[],
+): Promise<OrchestratorResult> {
+  if (!assetIds.length) throw new Error('No images selected');
+
+  const bulk = await prisma.bulkUpload.create({
+    data: {
+      companyId,
+      name: `Chat generated · ${new Date().toLocaleString()}`,
+      status: 'READY',
+    },
+  });
+
+  await prisma.asset.updateMany({
+    where: { id: { in: assetIds }, companyId },
+    data: { bulkUploadId: bulk.id },
+  });
+
+  const { groups } = await loadGroupsForBulk(bulk.id, companyId, { runContentAnalyze: true });
+
+  const adsState: WorkflowState = {
+    bulkUploadId: bulk.id,
+    assetIds,
+    groups,
+    agentNextStep: 'setup_campaign',
+  };
+  const nextWorkflow = { ...workflowState };
+  delete nextWorkflow.imageGen;
+
+  await updateChatSession(sessionId, companyId, {
+    pathType: 'ADS',
+    currentStep: 'campaignChoice',
+    workflowState: adsState,
+    bulkUploadId: bulk.id,
+  });
+
+  const [campaignRow] = await appendChatMessages(sessionId, [
+    {
+      role: 'ASSISTANT',
+      content: "Your generated images are in — let's set up the campaign.",
+      widgetType: 'campaignChoice',
+    },
+  ]);
+  newMessages.push(serializeMessage(campaignRow));
+
+  const updated = await getChatSession(sessionId, companyId);
+  const serialized = serializeSession(updated!);
+  return {
+    session: {
+      id: serialized.id,
+      title: serialized.title,
+      status: serialized.status,
+      currentStep: 'campaignChoice',
+      workflowState: adsState,
+      bulkUploadId: bulk.id,
+      campaignId: serialized.campaignId,
+    },
+    messages: serialized.messages,
+    newMessages,
+  };
+}
+
+async function routePostResultNext(
+  session: DbChatSession,
+  companyId: string,
+  workflowState: WorkflowState,
+  ig: ImageGenState,
+  route: PostResultNextRoute,
+  newMessages: SerializedMessage[],
+  userFeedback?: string,
+): Promise<OrchestratorResult> {
+  switch (route) {
+    case 'variants': {
+      ig = transitionToVariantGenFromProductAd(workflowState, ig);
+      const nextWorkflow = mergeImageGenIntoWorkflow(workflowState, ig);
+      await persist(session, nextWorkflow);
+      if (ig.productDescription && ig.brandTone && ig.copyCount) {
+        return runGenerateIdeas(session, nextWorkflow, ig, newMessages);
+      }
+      newMessages.push(
+        await assistantMsg(
+          session.id,
+          'Building variants from your image. How many copies do you want (1–8), and any tone tweaks?',
+        ),
+      );
+      const updated = await getChatSession(session.id, companyId);
+      return packageResult(updated!, nextWorkflow, newMessages);
+    }
+
+    case 'regenerate': {
+      if (ig.subpath === 'productOnModel') {
+        ig.rejectFeedback = userFeedback;
+        return runProductOnModelGenerate(session, workflowState, ig, newMessages);
+      }
+      ig.rejectFeedback = userFeedback;
+      ig.step = 'collectFields';
+      const nextWorkflow = mergeImageGenIntoWorkflow(workflowState, ig);
+      if (userFeedback?.trim() && ig.productImageAssetId) {
+        await persist(session, nextWorkflow);
+        return runGenerateBase(session, nextWorkflow, ig, newMessages);
+      }
+      await persist(session, nextWorkflow);
+      newMessages.push(
+        await assistantMsg(
+          session.id,
+          'Tell me what to change — tone, layout, or any details for the new version.',
+        ),
+      );
+      const updated = await getChatSession(session.id, companyId);
+      return packageResult(updated!, nextWorkflow, newMessages);
+    }
+
+    case 'productOnModel': {
+      ig = {
+        ...ig,
+        subpath: 'productOnModel',
+        step: 'modelSelect',
+        selectedModelId: undefined,
+        selectedBackgroundId: undefined,
+        selectedPoseId: undefined,
+      };
+      const nextWorkflow = mergeImageGenIntoWorkflow(workflowState, ig);
+      await persist(session, nextWorkflow);
+      newMessages.push(
+        await assistantMsg(session.id, 'Choose a model for your product.', 'imageGenModelGallery', {
+          ...getCatalogForWidget(),
+        }),
+      );
+      const updated = await getChatSession(session.id, companyId);
+      return packageResult(updated!, nextWorkflow, newMessages);
+    }
+
+    case 'newProductAd': {
+      const preservedAssets = ig.generatedAssets ?? [];
+      ig = {
+        ...initialImageGenState('productAd'),
+        generatedAssets: preservedAssets,
+        agentMemory: ig.agentMemory,
+        step: 'imageSource',
+      };
+      const nextWorkflow = mergeImageGenIntoWorkflow(workflowState, ig);
+      await persist(session, nextWorkflow);
+      newMessages.push(
+        await assistantMsg(
+          session.id,
+          "Starting a new product ad. Where should the product image come from?",
+          'imageGenSourceChoice',
+        ),
+      );
+      const updated = await getChatSession(session.id, companyId);
+      return packageResult(updated!, nextWorkflow, newMessages);
+    }
+
+    case 'postToAds': {
+      const assetIds =
+        ig.generatedAssets?.map((g) => g.assetId) ??
+        (ig.baseGeneratedAssetId ? [ig.baseGeneratedAssetId] : []);
+      return executePushToAds(session.id, companyId, workflowState, assetIds, newMessages);
+    }
+
+    default:
+      break;
+  }
+
+  const nextWorkflow = mergeImageGenIntoWorkflow(workflowState, ig);
+  await persist(session, nextWorkflow);
+  const updated = await getChatSession(session.id, companyId);
+  return packageResult(updated!, nextWorkflow, newMessages);
 }
 
 export async function handleImageGenAction(
@@ -585,17 +830,34 @@ export async function handleImageGenAction(
         ig.productImageUrl = product.featuredImageUrl;
       }
 
+      newMessages.push(
+        await assistantMsg(session.id, `Got **${product.title}**.`, undefined),
+      );
+      ig = await promptArtistSettings(session, ig, newMessages);
+      break;
+    }
+
+    case 'imageGen.artistSettings': {
+      const artistId = String(payload.artistId ?? ig.imageArtistId ?? 'crafta');
+      const quality = String(payload.quality ?? ig.imageQuality ?? 'medium');
+      ig.imageArtistId = artistId;
+      ig.imageQuality =
+        quality === 'low' || quality === 'medium' || quality === 'high' ? quality : 'medium';
+
       if (ig.subpath === 'productOnModel') {
         ig.step = 'modelSelect';
         newMessages.push(
-          await assistantMsg(session.id, 'Choose a model.', 'imageGenModelGallery', getCatalogForWidget()),
+          await assistantMsg(session.id, 'Choose a photoshoot model.', 'imageGenModelGallery', {
+            ...getCatalogForWidget(),
+          }),
         );
       } else {
         ig.step = 'collectFields';
+        const artist = findImageArtist(ig.imageArtistId);
         newMessages.push(
           await assistantMsg(
             session.id,
-            `Got **${product.title}**. What's the brand tone, and how many variants do you need?`,
+            `${artist.name} · ${ig.imageQuality} quality. Share product description, brand tone, and how many copies you want.`,
           ),
         );
       }
@@ -611,20 +873,8 @@ export async function handleImageGenAction(
         ig.productDescription = payload.description;
       }
 
-      if (ig.subpath === 'productOnModel') {
-        ig.step = 'modelSelect';
-        newMessages.push(
-          await assistantMsg(session.id, 'Choose a model.', 'imageGenModelGallery', getCatalogForWidget()),
-        );
-      } else {
-        ig.step = 'collectFields';
-        newMessages.push(
-          await assistantMsg(
-            session.id,
-            'Image received. Share product description, brand tone, and how many copies you want.',
-          ),
-        );
-      }
+      newMessages.push(await assistantMsg(session.id, 'Image received.', undefined));
+      ig = await promptArtistSettings(session, ig, newMessages);
       break;
     }
 
@@ -654,41 +904,50 @@ export async function handleImageGenAction(
       ig.productImageAssetId = creative.assetId ?? undefined;
       ig.productImageUrl =
         creative.thumbnailUrl ?? creative.imageUrl ?? creative.asset?.thumbnailUrl ?? undefined;
-      ig.step = 'collectFields';
-      newMessages.push(
-        await assistantMsg(
-          session.id,
-          'Using that ad image. Tell me brand tone and how many variant copies you need.',
-        ),
-      );
+      newMessages.push(await assistantMsg(session.id, 'Using that ad image.', undefined));
+      ig = await promptArtistSettings(session, ig, newMessages);
       break;
+    }
+
+    case 'imageGen.nextStepChosen': {
+      const choiceId = typeof payload.choiceId === 'string' ? payload.choiceId : null;
+      const label = typeof payload.label === 'string' ? payload.label : choiceId ?? '';
+      const route = await classifyPostResultNext({
+        userText: displayText ?? label,
+        choiceId,
+      });
+      return routePostResultNext(
+        session,
+        companyId,
+        workflowState,
+        ig,
+        route,
+        newMessages,
+        displayText ?? undefined,
+      );
     }
 
     case 'imageGen.baseAccepted': {
-      ig.baseAccepted = true;
-      ig = transitionToVariantGenFromProductAd(workflowState, ig);
-      const nextWorkflow = mergeImageGenIntoWorkflow(workflowState, ig);
-      await persist(session, nextWorkflow);
-      if (ig.productDescription && ig.brandTone && ig.copyCount) {
-        return runGenerateIdeas(session, nextWorkflow, ig, newMessages);
-      }
-      newMessages.push(
-        await assistantMsg(
-          session.id,
-          'Great — your base ad is locked in. How many variant copies should we create, and any tone tweaks?',
-        ),
+      return routePostResultNext(
+        session,
+        companyId,
+        workflowState,
+        { ...ig, baseAccepted: true },
+        'variants',
+        newMessages,
       );
-      const updated = await getChatSession(sessionId, companyId);
-      return packageResult(updated!, nextWorkflow, newMessages);
     }
 
     case 'imageGen.baseRejected': {
-      ig.step = 'collectFields';
-      ig.rejectFeedback = typeof payload.feedback === 'string' ? payload.feedback : undefined;
-      newMessages.push(
-        await assistantMsg(session.id, 'What would you like changed? Describe the updates below.'),
+      return routePostResultNext(
+        session,
+        companyId,
+        workflowState,
+        ig,
+        'regenerate',
+        newMessages,
+        typeof payload.feedback === 'string' ? payload.feedback : displayText ?? undefined,
       );
-      break;
     }
 
     case 'imageGen.ideasAccepted': {
@@ -745,14 +1004,18 @@ export async function handleImageGenAction(
 
     case 'imageGen.poseSelected': {
       ig.selectedPoseId = String(payload.poseId ?? '');
-      return runProductOnModelGenerate(session, workflowState, ig);
+      return runProductOnModelGenerate(session, workflowState, ig, newMessages);
     }
 
     case 'imageGen.onModelAccepted': {
+      ig.step = 'chooseNext';
       newMessages.push(
-        await assistantMsg(session.id, 'Saved. Use **Post to ads** when ready.', 'imageGenPushToAds', {
-          assetIds: ig.generatedAssets?.map((g) => g.assetId) ?? [],
-        }),
+        await assistantMsg(
+          session.id,
+          'What would you like to do next?',
+          'imageGenNextStep',
+          { options: POST_RESULT_NEXT_OPTIONS, context: 'onModel' },
+        ),
       );
       break;
     }
@@ -769,61 +1032,7 @@ export async function handleImageGenAction(
         ? (payload.assetIds as string[])
         : (ig.generatedAssets?.map((g) => g.assetId) ?? []);
       if (!assetIds.length) break;
-
-      const bulk = await prisma.bulkUpload.create({
-        data: {
-          companyId,
-          name: `Chat generated · ${new Date().toLocaleString()}`,
-          status: 'READY',
-        },
-      });
-
-      await prisma.asset.updateMany({
-        where: { id: { in: assetIds }, companyId },
-        data: { bulkUploadId: bulk.id },
-      });
-
-      const { groups } = await loadGroupsForBulk(bulk.id, companyId, { runContentAnalyze: true });
-
-      const adsState: WorkflowState = {
-        bulkUploadId: bulk.id,
-        assetIds,
-        groups,
-        agentNextStep: 'setup_campaign',
-      };
-      delete workflowState.imageGen;
-
-      await updateChatSession(sessionId, companyId, {
-        pathType: 'ADS',
-        currentStep: 'campaignChoice',
-        workflowState: adsState,
-        bulkUploadId: bulk.id,
-      });
-
-      const [campaignRow] = await appendChatMessages(sessionId, [
-        {
-          role: 'ASSISTANT',
-          content: "Your generated images are in — let's set up the campaign.",
-          widgetType: 'campaignChoice',
-        },
-      ]);
-      newMessages.push(serializeMessage(campaignRow));
-
-      const updated = await getChatSession(sessionId, companyId);
-      const serialized = serializeSession(updated!);
-      return {
-        session: {
-          id: serialized.id,
-          title: serialized.title,
-          status: serialized.status,
-          currentStep: 'campaignChoice',
-          workflowState: adsState,
-          bulkUploadId: bulk.id,
-          campaignId: serialized.campaignId,
-        },
-        messages: serialized.messages,
-        newMessages,
-      };
+      return executePushToAds(sessionId, companyId, workflowState, assetIds, newMessages);
     }
 
     default:

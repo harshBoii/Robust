@@ -1,5 +1,7 @@
 'use client';
 
+import { DownloadImageButton } from './widgets/ImageGenWidgets';
+
 /** Read-only image previews from chat widget payloads (stay visible after step advances). */
 
 export function ChatMessageMediaPreview({
@@ -17,13 +19,14 @@ export function ChatMessageMediaPreview({
     const imageUrl = payload.imageUrl as string | undefined;
     if (!imageUrl) return null;
     return (
-      <div className="mb-2">
+      <div className="mb-2 space-y-2">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={imageUrl}
           alt="Generated ad"
           className="max-h-80 w-full rounded-lg border border-border/40 object-contain bg-muted/30"
         />
+        <DownloadImageButton imageUrl={imageUrl} filename="robust-ad.png" />
       </div>
     );
   }
@@ -49,6 +52,12 @@ export function ChatMessageMediaPreview({
             ) : null}
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={v.imageUrl} alt={v.ideaLabel ?? `Variant ${i + 1}`} className="aspect-square w-full object-cover" />
+            <div className="px-2 pb-2">
+              <DownloadImageButton
+                imageUrl={v.imageUrl!}
+                filename={`robust-variant-${i + 1}.png`}
+              />
+            </div>
           </div>
         ))}
       </div>

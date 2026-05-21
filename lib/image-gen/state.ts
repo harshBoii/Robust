@@ -1,5 +1,7 @@
 import type { WorkflowState } from '@/lib/chats/types';
 
+import { DEFAULT_IMAGE_ARTIST_ID, DEFAULT_IMAGE_QUALITY } from './image-artists';
+
 import type { ImageGenState, ImageGenSubpath } from './types';
 
 export function parseImageGenState(workflowState: WorkflowState): ImageGenState | null {
@@ -20,6 +22,8 @@ export function initialImageGenState(subpath: ImageGenSubpath): ImageGenState {
     subpath,
     step: 'routing',
     collectorTurns: 0,
+    imageArtistId: DEFAULT_IMAGE_ARTIST_ID,
+    imageQuality: DEFAULT_IMAGE_QUALITY,
     generatedAssets: [],
   };
 }

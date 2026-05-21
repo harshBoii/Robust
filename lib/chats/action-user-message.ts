@@ -82,6 +82,11 @@ export function resolveActionUserMessage(
       return typeof payload.title === 'string' ? payload.title : 'Selected product';
     case 'imageGen.uploaded':
       return 'Uploaded product image';
+    case 'imageGen.artistSettings': {
+      const artist = typeof payload.artistId === 'string' ? payload.artistId : '';
+      const q = typeof payload.quality === 'string' ? payload.quality : '';
+      return q ? `${artist} · ${q} quality` : 'Artist settings';
+    }
     case 'imageGen.variantSource':
       return payload.source === 'existing' ? 'Existing ads' : 'Upload image';
     case 'imageGen.existingAdSelected':
@@ -90,6 +95,8 @@ export function resolveActionUserMessage(
       return 'Accept — create variants';
     case 'imageGen.baseRejected':
       return 'Request changes';
+    case 'imageGen.nextStepChosen':
+      return typeof payload.label === 'string' ? payload.label : 'Next step';
     case 'imageGen.ideasAccepted':
       return 'Accept all ideas';
     case 'imageGen.ideasChanged':
