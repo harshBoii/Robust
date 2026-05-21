@@ -6,7 +6,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import type { SerializedMessage } from '@/lib/chats/types';
 
-import { getPendingChatStart } from './chat-pending-storage';
+import { resolveInitialHandoffText } from './resolve-initial-handoff-text';
 import { ChatMessageMediaPreview, messageHasMediaPreview } from './ChatMessageMediaPreview';
 import { ChatWidgetRenderer } from './ChatWidgetRenderer';
 import { CHAT_COMPOSER_LAYOUT_ID } from './ChatsRouteTransition';
@@ -52,11 +52,7 @@ export default function ChatsClient({
   userName: string;
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
-  const pendingRef = useRef<ReturnType<typeof getPendingChatStart>>(undefined);
-  if (pendingRef.current === undefined) {
-    pendingRef.current = getPendingChatStart(sessionId);
-  }
-  const pending = pendingRef.current;
+  const initialHandoffText = resolveInitialHandoffText(sessionId);
 
   const {
     session,
@@ -69,8 +65,8 @@ export default function ChatsClient({
     sendMessage,
     dispatchAction,
   } = useChatSession(sessionId, {
-    initialMessage: pending?.text ?? null,
-    initialTitle: pending?.title ?? null,
+    initialMessage: initialHandoffText || null,
+    initialTitle: initialHandoffText.slice(0, 80) || null,
   });
 
   const handleAction = useCallback(

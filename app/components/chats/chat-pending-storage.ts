@@ -12,6 +12,10 @@ function initialSendLockKey(sessionId: string) {
   return `robust-chat-initial-lock-${sessionId}`;
 }
 
+function initialSendTextKey(sessionId: string) {
+  return `robust-chat-initial-text-${sessionId}`;
+}
+
 export function setPendingChatStart(data: PendingChatStart): void {
   if (typeof window === 'undefined') return;
   sessionStorage.removeItem(initialSendLockKey(data.sessionId));
@@ -42,8 +46,22 @@ export function hasInitialSendLock(sessionId: string): boolean {
   return sessionStorage.getItem(initialSendLockKey(sessionId)) === '1';
 }
 
-export function setInitialSendLock(sessionId: string): void {
+/** Persist text until the first message is confirmed on the server (Strict Mode safe). */
+export function setInitialSendLock(sessionId: string, text: string): void {
   if (typeof window === 'undefined') return;
   sessionStorage.setItem(initialSendLockKey(sessionId), '1');
+  sessionStorage.setItem(initialSendTextKey(sessionId), text.trim());
   clearPendingChatStart();
+}
+
+export function getInitialSendText(sessionId: string): string | null {
+  if (typeof window === 'undefined') return null;
+  const t = sessionStorage.getItem(initialSendTextKey(sessionId))?.trim();
+  return t || null;
+}
+
+export function clearInitialSendLock(sessionId: string): void {
+  if (typeof window === 'undefined') return;
+  sessionStorage.removeItem(initialSendLockKey(sessionId));
+  sessionStorage.removeItem(initialSendTextKey(sessionId));
 }

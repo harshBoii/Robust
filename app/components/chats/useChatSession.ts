@@ -6,9 +6,11 @@ import { resolveActionUserMessage } from '@/lib/chats/action-user-message';
 import { shouldSkipActionUserBubble } from '@/lib/chats/user-message-policy';
 
 import {
+  clearInitialSendLock,
   hasInitialSendLock,
   setInitialSendLock,
 } from './chat-pending-storage';
+import { resolveInitialHandoffText } from './resolve-initial-handoff-text';
 import { resolveChatBusyTone, type ChatBusyTone } from './chat-busy-tone';
 import type { SerializedMessage } from '@/lib/chats/types';
 import type { WorkflowState } from '@/lib/chats/types';
@@ -54,8 +56,42 @@ function optimisticUserMessage(text: string, id: string): SerializedMessage {
   };
 }
 
+function mergeMessagesKeepingPendingUser(
+  serverMsgs: SerializedMessage[],
+  prev: SerializedMessage[],
+): SerializedMessage[] {
+  const pendingUser = prev.find((m) => m.id.startsWith('pending-user-'));
+  if (!pendingUser?.content?.trim()) return serverMsgs;
+  const hasSameUser = serverMsgs.some(
+    (m) => m.role === 'user' && m.content?.trim() === pendingUser.content?.trim(),
+  );
+  if (hasSameUser) return serverMsgs;
+  return [...serverMsgs, pendingUser];
+}
+
+async function pollSessionAfterInitialSend(
+  sessionId: string,
+  initialText: string,
+): Promise<ChatSessionData | null> {
+  const want = initialText.trim();
+  for (let attempt = 0; attempt < 45; attempt++) {
+    const res = await fetch(`/api/chats/${sessionId}`, { credentials: 'include' });
+    const data = (await res.json()) as { session?: ChatSessionData; error?: string };
+    if (res.ok && data.session) {
+      const msgs = data.session.messages ?? [];
+      const hasUser = msgs.some((m) => m.role === 'user' && m.content?.trim() === want);
+      const routed =
+        data.session.currentStep !== 'intent' ||
+        Boolean(data.session.workflowState?.imageGen);
+      if (hasUser || routed) return data.session;
+    }
+    await new Promise((r) => setTimeout(r, 400));
+  }
+  return null;
+}
+
 export function useChatSession(sessionId: string, options?: UseChatSessionOptions) {
-  const initialText = options?.initialMessage?.trim() ?? '';
+  const initialText = resolveInitialHandoffText(sessionId, options?.initialMessage);
   const hasInitialSend = Boolean(initialText);
   const initialTitle = options?.initialTitle?.trim() || initialText.slice(0, 80) || 'New chat';
   const initialOptimisticId = `pending-user-initial-${sessionId}`;
@@ -84,7 +120,9 @@ export function useChatSession(sessionId: string, options?: UseChatSessionOption
       if (!res.ok) throw new Error(data.error ?? 'Failed to load');
       if (data.session) {
         setSession(data.session);
-        setMessages(data.session.messages ?? []);
+        setMessages((prev) =>
+          mergeMessagesKeepingPendingUser(data.session!.messages ?? [], prev),
+        );
         const persisted = data.session.workflowState?.lastOperationError;
         setOperationError(persisted || null);
       }
@@ -106,6 +144,7 @@ export function useChatSession(sessionId: string, options?: UseChatSessionOption
     }) => {
       setSession(result.session);
       setMessages(result.messages);
+      clearInitialSendLock(sessionId);
       const err =
         result.operationError ??
         result.session.workflowState?.lastOperationError ??
@@ -192,18 +231,47 @@ export function useChatSession(sessionId: string, options?: UseChatSessionOption
     if (initialSendStarted.current) return;
     initialSendStarted.current = true;
 
+    const runPollAndApply = async () => {
+      setBusy(true);
+      setLoading(false);
+      const polled = await pollSessionAfterInitialSend(sessionId, initialText);
+      if (polled) {
+        setSession(polled);
+        setMessages(polled.messages ?? []);
+        setOperationError(polled.workflowState?.lastOperationError ?? null);
+        clearInitialSendLock(sessionId);
+        window.dispatchEvent(new CustomEvent('robust-chats-refresh'));
+        setBusy(false);
+        return;
+      }
+      setBusy(false);
+      clearInitialSendLock(sessionId);
+      void sendMessage(initialText, 'intent', {
+        skipOptimistic: true,
+        optimisticId: initialOptimisticId,
+      });
+    };
+
     if (hasInitialSendLock(sessionId)) {
-      void load();
+      setMessages((prev) =>
+        prev.length > 0
+          ? prev
+          : [optimisticUserMessage(initialText, initialOptimisticId)],
+      );
+      void runPollAndApply();
       return;
     }
-    setInitialSendLock(sessionId);
+
+    setInitialSendLock(sessionId, initialText);
 
     void sendMessage(initialText, 'intent', {
       skipOptimistic: true,
       optimisticId: initialOptimisticId,
+    }).catch(() => {
+      clearInitialSendLock(sessionId);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- fire once on mount for landing handoff
-  }, [hasInitialSend]);
+  }, [hasInitialSend, sessionId, initialText]);
 
   const appendOptimisticUser = useCallback((text: string) => {
     const optimistic: SerializedMessage = {
