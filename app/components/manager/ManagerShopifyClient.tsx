@@ -46,6 +46,7 @@ type ShopifyAppResponse = {
 
 export default function ManagerShopifyClient() {
   const [expectedShopDomain, setExpectedShopDomain] = useState('');
+  const [connectUrl, setConnectUrl] = useState('');
   const [connected, setConnected] = useState(false);
   const [shopDomain, setShopDomain] = useState<string | null>(null);
   const [scopes, setScopes] = useState<string | null>(null);
@@ -64,6 +65,7 @@ export default function ManagerShopifyClient() {
         await fetch('/api/company/shopify-app', { credentials: 'include' }),
       );
       setExpectedShopDomain(data.cms?.expectedShopDomain ?? data.shop?.shopDomain ?? '');
+      setConnectUrl(data.cms?.connectUrl ?? '');
       setConnected(data.connected);
       setShopDomain(data.connected ? data.shop?.shopDomain ?? null : null);
       setScopes(data.shop?.scopes ?? null);
@@ -100,26 +102,38 @@ export default function ManagerShopifyClient() {
     }
   }, [load]);
 
-  const saveDomain = useCallback(async () => {
+  const saveSettings = useCallback(async () => {
+    const domain = expectedShopDomain.trim();
+    const url = connectUrl.trim();
+    if (!domain && !url) {
+      setError('Enter a store domain and/or install URL to save.');
+      return;
+    }
+
     setSaving(true);
     setError(null);
     setSuccess(null);
     try {
+      const body: { expectedShopDomain?: string; connectUrl: string | null } = {
+        connectUrl: url || null,
+      };
+      if (domain) body.expectedShopDomain = domain;
+
       await json(
         await fetch('/api/company/shopify-app', {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'include',
-          body: JSON.stringify({ expectedShopDomain }),
+          body: JSON.stringify(body),
         }),
       );
-      setSuccess('Store domain saved.');
+      setSuccess('Shopify settings saved.');
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to save store domain');
+      setError(e instanceof Error ? e.message : 'Failed to save settings');
     } finally {
       setSaving(false);
     }
-  }, [expectedShopDomain]);
+  }, [expectedShopDomain, connectUrl]);
 
   const disconnect = useCallback(async () => {
     setDisconnecting(true);
@@ -182,7 +196,7 @@ export default function ManagerShopifyClient() {
           <div>
             <h3 className="text-lg font-semibold">Store &amp; credentials</h3>
             <p className="text-sm text-muted-foreground">
-              Save your *.myshopify.com domain before connecting.
+              Save your store domain and Partners install link before connecting.
             </p>
           </div>
           {connected ? (
@@ -194,27 +208,47 @@ export default function ManagerShopifyClient() {
           )}
         </div>
 
-        <div className="mt-4">
-          <label className="text-xs font-semibold text-muted-foreground" htmlFor="shop-domain">
-            Store domain
-          </label>
-          <input
-            id="shop-domain"
-            className="glass-input mt-1 w-full px-3 py-2 text-sm"
-            value={expectedShopDomain}
-            onChange={(e) => setExpectedShopDomain(e.target.value)}
-            placeholder="my-store.myshopify.com"
-          />
+        <div className="mt-4 space-y-3">
+          <div>
+            <label className="text-xs font-semibold text-muted-foreground" htmlFor="shop-domain">
+              Store domain
+            </label>
+            <input
+              id="shop-domain"
+              className="glass-input mt-1 w-full px-3 py-2 text-sm"
+              value={expectedShopDomain}
+              onChange={(e) => setExpectedShopDomain(e.target.value)}
+              placeholder="my-store.myshopify.com"
+            />
+          </div>
+          <div>
+            <label className="text-xs font-semibold text-muted-foreground" htmlFor="connect-url">
+              Install URL (connect URL)
+            </label>
+            <input
+              id="connect-url"
+              type="url"
+              className="glass-input mt-1 w-full px-3 py-2 text-sm"
+              value={connectUrl}
+              onChange={(e) => setConnectUrl(e.target.value)}
+              placeholder="https://admin.shopify.com/store/.../apps/your-app"
+            />
+            <p className="mt-1 text-xs text-muted-foreground">
+              Shopify Partners or custom app install link used for step 1.
+            </p>
+          </div>
         </div>
 
         <div className="mt-3 flex justify-end">
           <button
             className="glass-button-primary px-4 py-2 text-sm"
             type="button"
-            onClick={saveDomain}
-            disabled={saving || !expectedShopDomain.trim()}
+            onClick={saveSettings}
+            disabled={
+              saving || (!expectedShopDomain.trim() && !connectUrl.trim())
+            }
           >
-            {saving ? 'Saving…' : 'Save domain'}
+            {saving ? 'Saving…' : 'Save settings'}
           </button>
         </div>
       </div>
@@ -225,7 +259,8 @@ export default function ManagerShopifyClient() {
         <div className="rounded-lg border border-black/[0.06] p-4">
           <p className="text-sm font-medium">Step 1 — Install app</p>
           <p className="mt-1 text-xs text-muted-foreground">
-            Opens your Shopify Partners install link in the merchant store.
+            Opens your Shopify Partners install link in the merchant store. Save the install URL
+            above first, or set SHOPIFY_CONNECT_URL on the server.
           </p>
           <a
             href="/shopify/install-app"
