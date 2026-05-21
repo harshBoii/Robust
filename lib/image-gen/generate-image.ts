@@ -5,6 +5,8 @@ import { toFile } from 'openai/uploads';
 
 import { fetchImageBytesFromUrl } from '@/lib/cloudfare/r2-video-thumbnail';
 
+import { loadCatalogImageBytes } from './read-catalog-image';
+
 import {
   DEFAULT_IMAGE_ARTIST_ID,
   DEFAULT_IMAGE_QUALITY,
@@ -17,6 +19,8 @@ const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 export type GenerateImageInput = {
   prompt: string;
   referenceImageUrl?: string | null;
+  /** Multiple references (e.g. product + model + background + pose). Takes precedence over referenceImageUrl. */
+  referenceImageUrls?: string[] | null;
   aspectRatio?: string | null;
   model?: string | null;
   quality?: ImageQuality | null;
@@ -58,18 +62,25 @@ export async function generateImage(input: GenerateImageInput): Promise<Generate
     quality,
   };
 
-  if (input.referenceImageUrl) {
-    const bytes = await fetchImageBytesFromUrl(input.referenceImageUrl, {
-      attempts: 3,
-      delayMs: 1000,
-    });
-    if (!bytes) throw new Error('Could not load reference image for generation');
+  const refUrls =
+    input.referenceImageUrls?.filter((u) => typeof u === 'string' && u.trim()) ??
+    (input.referenceImageUrl ? [input.referenceImageUrl] : []);
 
-    const file = await toFile(Buffer.from(bytes), 'reference.png', { type: 'image/png' });
+  if (refUrls.length > 0) {
+    const files = await Promise.all(
+      refUrls.map(async (url, i) => {
+        const bytes = url.startsWith('/image-gen/')
+          ? await loadCatalogImageBytes(url)
+          : await fetchImageBytesFromUrl(url, { attempts: 3, delayMs: 1000 });
+        if (!bytes) throw new Error('Could not load reference image for generation');
+        const buf = Buffer.isBuffer(bytes) ? bytes : Buffer.from(bytes);
+        return toFile(buf, `reference-${i}.png`, { type: 'image/png' });
+      }),
+    );
 
     const res = await openai.images.edit({
       ...commonParams,
-      image: file,
+      image: files.length === 1 ? files[0]! : files,
     });
 
     const b64 = res.data?.[0]?.b64_json;

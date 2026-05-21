@@ -215,11 +215,21 @@ export function ChatWidgetRenderer({
     case 'imageGenVariantGrid':
       return <ImageGenVariantGridWidget payload={payload} onAction={onAction} />;
     case 'imageGenModelGallery':
-      return <ImageGenModelGalleryWidget payload={payload} onAction={onAction} />;
+      return (
+        <ImageGenModelGalleryWidget payload={payload} onAction={onAction} companyId={companyId} />
+      );
     case 'imageGenBackgroundGallery':
-      return <ImageGenBackgroundGalleryWidget payload={payload} onAction={onAction} />;
+      return (
+        <ImageGenBackgroundGalleryWidget
+          payload={payload}
+          onAction={onAction}
+          companyId={companyId}
+        />
+      );
     case 'imageGenPoseGallery':
-      return <ImageGenPoseGalleryWidget payload={payload} onAction={onAction} />;
+      return (
+        <ImageGenPoseGalleryWidget payload={payload} onAction={onAction} companyId={companyId} />
+      );
     case 'imageGenPushToAds':
       return (
         <ImageGenPushToAdsWidget

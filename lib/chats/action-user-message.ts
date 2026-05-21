@@ -82,8 +82,13 @@ export function resolveActionUserMessage(
       return typeof payload.title === 'string' && payload.title.trim()
         ? payload.title.trim()
         : 'Selected product';
-    case 'imageGen.uploaded':
+    case 'imageGen.uploaded': {
+      const role = payload.role;
+      if (role === 'model') return 'Uploaded custom model';
+      if (role === 'background') return 'Uploaded custom background';
+      if (role === 'pose') return 'Uploaded custom pose';
       return 'Uploaded product image';
+    }
     case 'imageGen.artistSettings': {
       const artist = typeof payload.artistId === 'string' ? payload.artistId : '';
       const q = typeof payload.quality === 'string' ? payload.quality : '';

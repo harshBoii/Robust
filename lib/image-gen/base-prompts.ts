@@ -14,15 +14,27 @@ export function buildProductAdBasePrompt(state: ImageGenState, feedback?: string
 
 export function buildProductOnModelPrompt(
   state: ImageGenState,
-  refs: { modelLabel: string; backgroundLabel: string; poseLabel: string },
+  refs: {
+    modelLabel: string;
+    backgroundLabel: string;
+    poseLabel: string;
+    modelSource?: string;
+    backgroundSource?: string;
+    poseSource?: string;
+  },
   feedback?: string,
 ): string {
   const parts = [
-    'Composite the product into a professional ecommerce photoshoot.',
-    state.productDescription ? `Product: ${state.productDescription}` : null,
-    `Model: ${refs.modelLabel}. Background: ${refs.backgroundLabel}. Pose: ${refs.poseLabel}.`,
+    'Create a professional ecommerce product-on-model photoshoot composite.',
+    'You receive four reference images in order: (1) product hero, (2) model reference, (3) background scene, (4) pose reference.',
+    'Place the product on the model using the pose and background. Keep the product accurate and clearly visible.',
+    state.productDescription ? `Product description: ${state.productDescription}` : null,
+    `Model (${refs.modelSource ?? 'reference'}): ${refs.modelLabel}.`,
+    `Background (${refs.backgroundSource ?? 'reference'}): ${refs.backgroundLabel}.`,
+    `Pose (${refs.poseSource ?? 'reference'}): ${refs.poseLabel}.`,
     state.brandTone ? `Brand tone: ${state.brandTone}` : null,
-    'Realistic lighting, natural shadows, product clearly visible and accurate.',
+    state.aspectRatio ? `Aspect ratio preference: ${state.aspectRatio}` : null,
+    'Match lighting and shadows across all elements. Photorealistic, ad-ready framing.',
     feedback ? `User requested changes: ${feedback}` : null,
   ].filter(Boolean);
   return parts.join('\n');

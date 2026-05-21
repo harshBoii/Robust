@@ -205,6 +205,10 @@ export async function handleChatMessage(
   const emptyPickerResult = await tryHandleAdsEmptyPickerTurn(sessionId, companyId, text);
   if (emptyPickerResult) return emptyPickerResult;
 
+  const { tryHandleAdsWidgetChoiceTurn } = await import('@/lib/chats/handle-widget-choice-turn');
+  const widgetChoiceResult = await tryHandleAdsWidgetChoiceTurn(sessionId, companyId, text);
+  if (widgetChoiceResult) return widgetChoiceResult;
+
   const userRow = await userMsg(sessionId, text);
 
   const plan = await runAdAgentTurn({

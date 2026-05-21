@@ -20,9 +20,11 @@ import {
   type PostResultNextRoute,
 } from './classify-post-result-next';
 import { tryHandleImageGenEmptyPickerTurn } from '@/lib/chats/handle-empty-picker-turn';
+import { tryHandleImageGenWidgetChoiceTurn } from '@/lib/chats/handle-widget-choice-turn';
 import { classifyImageGenSubpath } from './classify-subpath';
 import { runCollectorTurn } from './collect-fields-agent';
-import { findBackground, findModel, findPose, getCatalogForWidget } from './catalog';
+import { getCatalogForWidget } from './catalog';
+import { resolveOnModelReferenceUrls } from './resolve-on-model-refs';
 import {
   findImageArtist,
   IMAGE_ARTISTS,
@@ -213,6 +215,9 @@ export async function handleImageGenMessage(
 
   const emptyPickerResult = await tryHandleImageGenEmptyPickerTurn(sessionId, companyId, text);
   if (emptyPickerResult) return emptyPickerResult;
+
+  const widgetChoiceResult = await tryHandleImageGenWidgetChoiceTurn(sessionId, companyId, text);
+  if (widgetChoiceResult) return widgetChoiceResult;
 
   const newMessages: SerializedMessage[] = [];
   newMessages.push(await userMsg(sessionId, text));
@@ -516,10 +521,6 @@ async function runProductOnModelGenerate(
   priorMessages: SerializedMessage[] = [],
 ): Promise<OrchestratorResult> {
   const newMessages = [...priorMessages];
-  const model = findModel(ig.selectedModelId ?? '');
-  const bg = findBackground(ig.selectedBackgroundId ?? '');
-  const pose = findPose(ig.selectedPoseId ?? '');
-  if (!model || !bg || !pose) throw new Error('Model, background, or pose not selected');
 
   newMessages.push(await assistantMsg(session.id, generatingLabel(ig), 'imageGenGenerating'));
 
@@ -527,14 +528,23 @@ async function runProductOnModelGenerate(
     const refUrl = await resolveProductImageUrl(session.companyId, ig);
     if (!refUrl) throw new Error('Product image missing');
 
+    const { urls, refs } = await resolveOnModelReferenceUrls(session.companyId, refUrl, ig);
+
     const prompt = buildProductOnModelPrompt(
       ig,
-      { modelLabel: model.label, backgroundLabel: bg.label, poseLabel: pose.label },
+      {
+        modelLabel: refs.model.label,
+        backgroundLabel: refs.background.label,
+        poseLabel: refs.pose.label,
+        modelSource: refs.model.source,
+        backgroundSource: refs.background.source,
+        poseSource: refs.pose.source,
+      },
       ig.rejectFeedback,
     );
     const gen = await generateImage({
       prompt,
-      referenceImageUrl: refUrl,
+      referenceImageUrls: urls,
       aspectRatio: ig.aspectRatio,
       imageArtistId: ig.imageArtistId,
       quality: ig.imageQuality,
@@ -544,7 +554,7 @@ async function runProductOnModelGenerate(
       sessionId: session.id,
       imageBase64: gen.imageBase64,
       title: 'Product on model',
-      label: `${model.label} · ${pose.label}`,
+      label: `${refs.model.label} · ${refs.pose.label}`,
     });
 
     ig = appendGeneratedAsset(
@@ -728,6 +738,12 @@ async function routePostResultNext(
         selectedModelId: undefined,
         selectedBackgroundId: undefined,
         selectedPoseId: undefined,
+        customModelAssetId: undefined,
+        customModelImageUrl: undefined,
+        customBackgroundAssetId: undefined,
+        customBackgroundImageUrl: undefined,
+        customPoseAssetId: undefined,
+        customPoseImageUrl: undefined,
       };
       const nextWorkflow = mergeImageGenIntoWorkflow(workflowState, ig);
       await persist(session, nextWorkflow);
@@ -875,6 +891,35 @@ export async function handleImageGenAction(
     case 'imageGen.uploaded': {
       const assetId = String(payload.assetId ?? '');
       const imageUrl = typeof payload.imageUrl === 'string' ? payload.imageUrl : undefined;
+      const role = typeof payload.role === 'string' ? payload.role : 'product';
+
+      if (role === 'model') {
+        ig.customModelAssetId = assetId;
+        if (imageUrl) ig.customModelImageUrl = imageUrl;
+        ig.selectedModelId = undefined;
+        ig.step = 'backgroundSelect';
+        newMessages.push(await assistantMsg(session.id, 'Custom model saved — pick a background.', 'imageGenBackgroundGallery', {
+          backgrounds: getCatalogForWidget().backgrounds,
+        }));
+        break;
+      }
+      if (role === 'background') {
+        ig.customBackgroundAssetId = assetId;
+        if (imageUrl) ig.customBackgroundImageUrl = imageUrl;
+        ig.selectedBackgroundId = undefined;
+        ig.step = 'poseSelect';
+        newMessages.push(await assistantMsg(session.id, 'Custom background saved — pick a pose.', 'imageGenPoseGallery', {
+          poses: getCatalogForWidget().poses,
+        }));
+        break;
+      }
+      if (role === 'pose') {
+        ig.customPoseAssetId = assetId;
+        if (imageUrl) ig.customPoseImageUrl = imageUrl;
+        ig.selectedPoseId = undefined;
+        return runProductOnModelGenerate(session, workflowState, ig, newMessages);
+      }
+
       ig.productImageAssetId = assetId;
       if (imageUrl) ig.productImageUrl = imageUrl;
       if (!ig.productDescription && typeof payload.description === 'string') {
@@ -990,6 +1035,8 @@ export async function handleImageGenAction(
 
     case 'imageGen.modelSelected': {
       ig.selectedModelId = String(payload.modelId ?? '');
+      ig.customModelAssetId = undefined;
+      ig.customModelImageUrl = undefined;
       ig.step = 'backgroundSelect';
       newMessages.push(
         await assistantMsg(session.id, 'Pick a background.', 'imageGenBackgroundGallery', {
@@ -1001,6 +1048,8 @@ export async function handleImageGenAction(
 
     case 'imageGen.backgroundSelected': {
       ig.selectedBackgroundId = String(payload.backgroundId ?? '');
+      ig.customBackgroundAssetId = undefined;
+      ig.customBackgroundImageUrl = undefined;
       ig.step = 'poseSelect';
       newMessages.push(
         await assistantMsg(session.id, 'Pick a pose.', 'imageGenPoseGallery', {
@@ -1012,6 +1061,8 @@ export async function handleImageGenAction(
 
     case 'imageGen.poseSelected': {
       ig.selectedPoseId = String(payload.poseId ?? '');
+      ig.customPoseAssetId = undefined;
+      ig.customPoseImageUrl = undefined;
       return runProductOnModelGenerate(session, workflowState, ig, newMessages);
     }
 

@@ -565,7 +565,7 @@ function CatalogGallery({
           key={item.id}
           type="button"
           onClick={() =>
-            void onSelect(action, { [payloadKey]: item.id }, item.label)
+            void onSelect(action, { [payloadKey]: item.id, label: item.label }, item.label)
           }
           className="overflow-hidden rounded-lg border text-left transition hover:border-primary/40"
         >
@@ -578,12 +578,80 @@ function CatalogGallery({
   );
 }
 
+function CatalogGalleryWithUpload({
+  items,
+  onSelect,
+  action,
+  payloadKey,
+  uploadRole,
+  companyId,
+  uploadLabel,
+}: {
+  items: CatalogItem[];
+  onSelect: ChatWidgetDispatch;
+  action: string;
+  payloadKey: string;
+  uploadRole: 'model' | 'background' | 'pose';
+  companyId: string;
+  uploadLabel: string;
+}) {
+  const { uploadWithBulkId } = useUploader(companyId);
+  const [busy, setBusy] = useState(false);
+
+  const onPick = useCallback(
+    async (picked: FileList | null) => {
+      if (!picked?.length || busy) return;
+      setBusy(true);
+      try {
+        const files = Array.from(picked).filter((f) => f.type.startsWith('image/'));
+        if (!files.length) return;
+        const { assetIds } = await uploadWithBulkId(files, {
+          bulkName: `On-model ${uploadRole} · ${new Date().toLocaleString()}`,
+        });
+        const assetId = assetIds[0];
+        if (!assetId) return;
+        await onSelect(
+          'imageGen.uploaded',
+          { assetId, role: uploadRole },
+          uploadLabel,
+        );
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setBusy(false);
+      }
+    },
+    [busy, onSelect, uploadRole, uploadLabel, uploadWithBulkId],
+  );
+
+  return (
+    <div className="space-y-3">
+      <CatalogGallery items={items} onSelect={onSelect} action={action} payloadKey={payloadKey} />
+      <label className="flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-border/60 bg-muted/30 px-4 py-3 text-[12px] font-medium transition hover:border-primary/40">
+        <input
+          type="file"
+          className="sr-only"
+          accept="image/*"
+          disabled={busy}
+          onChange={(e) => void onPick(e.target.files)}
+        />
+        {busy ? 'Uploading…' : uploadLabel}
+      </label>
+      <p className="text-[11px] text-muted-foreground">
+        Or type a name in chat (e.g. {items[0]?.label ? `"${items[0].label}"` : 'a catalog option'}).
+      </p>
+    </div>
+  );
+}
+
 export function ImageGenModelGalleryWidget({
   payload,
   onAction,
+  companyId,
 }: {
   payload: Record<string, unknown>;
   onAction: ChatWidgetDispatch;
+  companyId: string;
 }) {
   const [tab, setTab] = useState<'male' | 'female' | 'kids'>('female');
   const models = (payload.models as CatalogItem[]) ?? [];
@@ -603,11 +671,14 @@ export function ImageGenModelGalleryWidget({
           </button>
         ))}
       </div>
-      <CatalogGallery
+      <CatalogGalleryWithUpload
         items={filtered}
         onSelect={onAction}
         action="imageGen.modelSelected"
         payloadKey="modelId"
+        uploadRole="model"
+        companyId={companyId}
+        uploadLabel="Upload your own model"
       />
     </div>
   );
@@ -616,17 +687,22 @@ export function ImageGenModelGalleryWidget({
 export function ImageGenBackgroundGalleryWidget({
   payload,
   onAction,
+  companyId,
 }: {
   payload: Record<string, unknown>;
   onAction: ChatWidgetDispatch;
+  companyId: string;
 }) {
   const backgrounds = (payload.backgrounds as CatalogItem[]) ?? [];
   return (
-    <CatalogGallery
+    <CatalogGalleryWithUpload
       items={backgrounds}
       onSelect={onAction}
       action="imageGen.backgroundSelected"
       payloadKey="backgroundId"
+      uploadRole="background"
+      companyId={companyId}
+      uploadLabel="Upload your own background"
     />
   );
 }
@@ -634,17 +710,22 @@ export function ImageGenBackgroundGalleryWidget({
 export function ImageGenPoseGalleryWidget({
   payload,
   onAction,
+  companyId,
 }: {
   payload: Record<string, unknown>;
   onAction: ChatWidgetDispatch;
+  companyId: string;
 }) {
   const poses = (payload.poses as CatalogItem[]) ?? [];
   return (
-    <CatalogGallery
+    <CatalogGalleryWithUpload
       items={poses}
       onSelect={onAction}
       action="imageGen.poseSelected"
       payloadKey="poseId"
+      uploadRole="pose"
+      companyId={companyId}
+      uploadLabel="Upload your own pose reference"
     />
   );
 }

@@ -64,6 +64,12 @@ export type ImageGenState = {
   selectedModelId?: string;
   selectedBackgroundId?: string;
   selectedPoseId?: string;
+  customModelAssetId?: string;
+  customModelImageUrl?: string;
+  customBackgroundAssetId?: string;
+  customBackgroundImageUrl?: string;
+  customPoseAssetId?: string;
+  customPoseImageUrl?: string;
   onModelGeneratedAssetId?: string;
   onModelGeneratedImageUrl?: string;
   generatedAssets?: GeneratedAssetRef[];
