@@ -51,6 +51,7 @@ export function ChatWidgetRenderer({
   companyId,
   sessionId,
   onAction,
+  imageGenArtistInComposer,
 }: {
   widgetType: string | null | undefined;
   widgetPayload: unknown;
@@ -59,6 +60,8 @@ export function ChatWidgetRenderer({
   companyId: string;
   sessionId: string;
   onAction: ChatWidgetDispatch;
+  /** Artist/quality dropdowns are shown in the composer footer instead */
+  imageGenArtistInComposer?: boolean;
 }) {
   if (!widgetType) return null;
 
@@ -199,7 +202,13 @@ export function ChatWidgetRenderer({
     case 'imageGenUpload':
       return <ImageGenUploadWidget companyId={companyId} onAction={onAction} />;
     case 'imageGenArtistSettings':
-      return <ImageGenArtistSettingsWidget payload={payload} onAction={onAction} />;
+      return (
+        <ImageGenArtistSettingsWidget
+          payload={payload}
+          onAction={onAction}
+          hideControls={imageGenArtistInComposer}
+        />
+      );
     case 'imageGenGenerating':
       return <ImageGenGeneratingWidget />;
     case 'imageGenSingleResult':

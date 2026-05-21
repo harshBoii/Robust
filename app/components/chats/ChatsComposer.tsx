@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Plus, ArrowUp } from 'lucide-react';
 
 export type ChatsComposerProps = {
@@ -12,6 +12,8 @@ export type ChatsComposerProps = {
   disabled?: boolean;
   loading?: boolean;
   modelLabel?: string;
+  /** Claude-style controls left of send (e.g. image artist / quality). */
+  leadingSlot?: ReactNode;
   suggestions?: string[];
   /** Tighter padding when pinned to the bottom of the thread */
   sticky?: boolean;
@@ -26,6 +28,7 @@ export function ChatsComposer({
   disabled,
   loading,
   modelLabel = 'Miss Robusta',
+  leadingSlot,
   suggestions,
   sticky = false,
 }: ChatsComposerProps) {
@@ -97,18 +100,27 @@ export function ChatsComposer({
           />
 
           <div className="flex items-center justify-between gap-2 px-2 pb-2">
-            <button
-              type="button"
-              disabled={disabled}
-              onClick={onAttach}
-              className="flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition hover:bg-muted/60 hover:text-foreground disabled:opacity-40"
-              aria-label="Attach"
-            >
-              <Plus className="h-5 w-5" strokeWidth={1.75} />
-            </button>
+            <div className="flex min-w-0 flex-1 items-center gap-1">
+              <button
+                type="button"
+                disabled={disabled}
+                onClick={onAttach}
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition hover:bg-muted/60 hover:text-foreground disabled:opacity-40"
+                aria-label="Attach"
+              >
+                <Plus className="h-5 w-5" strokeWidth={1.75} />
+              </button>
+              {leadingSlot ? (
+                <div className="flex min-w-0 flex-wrap items-center gap-0.5 border-l border-border/40 pl-1">
+                  {leadingSlot}
+                </div>
+              ) : null}
+            </div>
 
-            <div className="flex items-center gap-2">
-              <span className="hidden text-[12px] text-muted-foreground/70 sm:inline">{modelLabel}</span>
+            <div className="flex shrink-0 items-center gap-2">
+              {!leadingSlot ? (
+                <span className="hidden text-[12px] text-muted-foreground/70 sm:inline">{modelLabel}</span>
+              ) : null}
               <button
                 type="button"
                 disabled={!canSend}

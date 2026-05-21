@@ -5,12 +5,12 @@ import { useCallback, useEffect, useState } from 'react';
 import { useUploader } from '@/app/hooks/useUploader';
 import type { WorkflowState } from '@/lib/chats/types';
 
+import { IMAGE_ARTISTS, type ImageArtistId, type ImageQuality } from '@/lib/image-gen/image-artists';
+
 import {
-  IMAGE_ARTISTS,
-  IMAGE_QUALITY_OPTIONS,
-  type ImageArtistId,
-  type ImageQuality,
-} from '@/lib/image-gen/image-artists';
+  defaultArtistSettings,
+  ImageGenArtistSettingsBar,
+} from '../ImageGenArtistSettingsBar';
 
 import type { ChatWidgetDispatch } from './ChatWidgets';
 
@@ -221,74 +221,51 @@ export function ImageGenUploadWidget({
 export function ImageGenArtistSettingsWidget({
   payload,
   onAction,
+  hideControls,
 }: {
   payload: Record<string, unknown>;
   onAction: ChatWidgetDispatch;
+  /** When composer footer shows the same dropdowns */
+  hideControls?: boolean;
 }) {
-  const artists = (payload.artists as typeof IMAGE_ARTISTS) ?? IMAGE_ARTISTS;
-  const qualities = (payload.qualities as typeof IMAGE_QUALITY_OPTIONS) ?? IMAGE_QUALITY_OPTIONS;
+  const defaults = defaultArtistSettings();
   const [artistId, setArtistId] = useState<ImageArtistId>(
-    (payload.selectedArtistId as ImageArtistId) ?? 'crafta',
+    (payload.selectedArtistId as ImageArtistId) ?? defaults.artistId,
   );
   const [quality, setQuality] = useState<ImageQuality>(
-    (payload.selectedQuality as ImageQuality) ?? 'medium',
+    (payload.selectedQuality as ImageQuality) ?? defaults.quality,
   );
 
+  const submit = () => {
+    const artist = IMAGE_ARTISTS.find((a) => a.id === artistId);
+    void onAction(
+      'imageGen.artistSettings',
+      { artistId, quality },
+      `${artist?.name ?? 'Artist'} · ${quality} quality`,
+    );
+  };
+
+  if (hideControls) {
+    return (
+      <p className="text-[13px] text-muted-foreground">
+        Choose your image artist and quality in the menus below the message box, then tap{' '}
+        <strong className="font-medium text-foreground">Continue</strong>.
+      </p>
+    );
+  }
+
   return (
-    <div className="space-y-4">
-      <div>
-        <p className="mb-2 text-[12px] font-medium text-muted-foreground">Image artist</p>
-        <div className="grid gap-2 sm:grid-cols-3">
-          {artists.map((a) => (
-            <button
-              key={a.id}
-              type="button"
-              onClick={() => setArtistId(a.id)}
-              className={`rounded-xl border px-3 py-2.5 text-left transition ${
-                artistId === a.id
-                  ? 'border-primary bg-primary/10'
-                  : 'border-border/50 hover:border-primary/30'
-              }`}
-            >
-              <span className="block text-[13px] font-semibold">{a.name}</span>
-              <span className="mt-0.5 block text-[11px] text-muted-foreground">{a.tagline}</span>
-            </button>
-          ))}
-        </div>
-      </div>
-      <div>
-        <p className="mb-2 text-[12px] font-medium text-muted-foreground">Quality</p>
-        <div className="flex flex-wrap gap-2">
-          {qualities.map((q) => (
-            <button
-              key={q.id}
-              type="button"
-              onClick={() => setQuality(q.id)}
-              className={`rounded-full px-3.5 py-1.5 text-[13px] font-medium capitalize transition ${
-                quality === q.id
-                  ? 'bg-primary text-primary-foreground'
-                  : 'border border-border/50 hover:border-primary/40'
-              }`}
-            >
-              {q.label}
-            </button>
-          ))}
-        </div>
-      </div>
-      <button
-        type="button"
-        onClick={() => {
-          const artist = artists.find((a) => a.id === artistId);
-          void onAction(
-            'imageGen.artistSettings',
-            { artistId, quality },
-            `${artist?.name ?? 'Artist'} · ${quality} quality`,
-          );
-        }}
-        className="rounded-full bg-primary px-4 py-2 text-[13px] font-medium text-primary-foreground"
-      >
-        Continue
-      </button>
+    <div className="space-y-3">
+      <p className="text-[13px] text-muted-foreground">
+        Pick who generates your images and at what quality.
+      </p>
+      <ImageGenArtistSettingsBar
+        artistId={artistId}
+        quality={quality}
+        onArtistChange={setArtistId}
+        onQualityChange={setQuality}
+        onContinue={submit}
+      />
     </div>
   );
 }

@@ -2,7 +2,7 @@
 
 import { motion } from 'framer-motion';
 import Link from 'next/link';
-import { useCallback, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import type { SerializedMessage } from '@/lib/chats/types';
 
@@ -15,7 +15,15 @@ import { composerSuggestions as agentComposerSuggestions } from '@/lib/chats/com
 import { getBackStepOptions } from '@/lib/chats/workflow-navigation';
 import type { ChatWorkflowStep, WorkflowState } from '@/lib/chats/types';
 
+import { ImageGenArtistSettingsBar } from './ImageGenArtistSettingsBar';
 import { useChatSession } from './useChatSession';
+import {
+  DEFAULT_IMAGE_ARTIST_ID,
+  DEFAULT_IMAGE_QUALITY,
+  IMAGE_ARTISTS,
+  type ImageArtistId,
+  type ImageQuality,
+} from '@/lib/image-gen/image-artists';
 
 const ease = [0.22, 1, 0.36, 1] as const;
 
@@ -72,6 +80,28 @@ export default function ChatsClient({
     [dispatchAction, session?.currentStep],
   );
 
+  const ig = session?.workflowState?.imageGen;
+  const showImageGenArtistBar =
+    session?.currentStep === 'imageGen' && ig?.step === 'artistSettings';
+
+  const [composerArtistId, setComposerArtistId] = useState<ImageArtistId>(DEFAULT_IMAGE_ARTIST_ID);
+  const [composerQuality, setComposerQuality] = useState<ImageQuality>(DEFAULT_IMAGE_QUALITY);
+
+  useEffect(() => {
+    if (!showImageGenArtistBar) return;
+    setComposerArtistId((ig?.imageArtistId as ImageArtistId) ?? DEFAULT_IMAGE_ARTIST_ID);
+    setComposerQuality((ig?.imageQuality as ImageQuality) ?? DEFAULT_IMAGE_QUALITY);
+  }, [showImageGenArtistBar, ig?.imageArtistId, ig?.imageQuality]);
+
+  const submitArtistSettings = useCallback(() => {
+    const artist = IMAGE_ARTISTS.find((a) => a.id === composerArtistId);
+    void handleAction(
+      'imageGen.artistSettings',
+      { artistId: composerArtistId, quality: composerQuality },
+      `${artist?.name ?? 'Artist'} · ${composerQuality} quality`,
+    );
+  }, [composerArtistId, composerQuality, handleAction]);
+
   const latestWidgetMessageId = (() => {
     for (let i = messages.length - 1; i >= 0; i--) {
       const m = messages[i];
@@ -117,6 +147,7 @@ export default function ChatsClient({
                 widgetPayload={m.widgetPayload}
                 workflowState={session?.workflowState ?? {}}
                 currentStep={session?.currentStep ?? 'intent'}
+                imageGenArtistInComposer={showImageGenArtistBar}
                 companyId={companyId}
                 sessionId={sessionId}
                 onAction={handleAction}
@@ -225,6 +256,17 @@ export default function ChatsClient({
             disabled: busy || session?.status === 'COMPLETED',
             placeholder: 'Write a message…',
             suggestions: stepSuggestions(session?.currentStep, session?.workflowState ?? {}),
+            leadingSlot: showImageGenArtistBar ? (
+              <ImageGenArtistSettingsBar
+                compact
+                disabled={busy}
+                artistId={composerArtistId}
+                quality={composerQuality}
+                onArtistChange={setComposerArtistId}
+                onQualityChange={setComposerQuality}
+                onContinue={submitArtistSettings}
+              />
+            ) : undefined,
             sticky: true,
           }}
         />
