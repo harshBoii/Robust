@@ -1,6 +1,5 @@
 'use client';
 
-import { motion } from 'framer-motion';
 import { useEffect, useRef, type ReactNode } from 'react';
 
 import type { WorkflowState } from '@/lib/chats/types';
@@ -25,7 +24,6 @@ export function ChatsThread({
   busyTone = 'thinking',
   currentStep = 'intent',
   workflowState = {},
-  composerLayoutId,
 }: {
   messages: ThreadMessage[];
   composer: ChatsComposerProps;
@@ -35,8 +33,6 @@ export function ChatsThread({
   busyTone?: ChatBusyTone;
   currentStep?: string;
   workflowState?: WorkflowState;
-  /** Shared with landing page for layout morph into the bottom composer. */
-  composerLayoutId?: string;
 }) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const showEmpty = messages.length === 0 && emptyState;
@@ -59,12 +55,12 @@ export function ChatsThread({
       : undefined;
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }, [messages, loading, statusText, operationError]);
 
   return (
-    <div className="relative flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-background">
-      <div className="custom-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain">
+    <div className="relative flex h-0 min-h-0 flex-1 flex-col overflow-hidden bg-background">
+      <div className="custom-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain pb-2">
         <div className="mx-auto w-full max-w-3xl px-4 py-6 pb-4">
           {showEmpty ? emptyState : null}
           {messages.map((m) => (
@@ -85,20 +81,12 @@ export function ChatsThread({
         </div>
       </div>
 
-      <footer className="sticky bottom-0 z-20 shrink-0 relative">
+      <footer className="relative z-20 mt-auto shrink-0 border-t border-border/15 bg-background/95 backdrop-blur-md supports-[backdrop-filter]:bg-background/80">
         <div
           className="pointer-events-none absolute inset-x-0 -top-10 h-10 bg-gradient-to-t from-background via-background/90 to-transparent"
           aria-hidden
         />
-        <div className="relative border-t border-border/15 bg-background/95 backdrop-blur-md supports-[backdrop-filter]:bg-background/80">
-          {composerLayoutId ? (
-            <motion.div layoutId={composerLayoutId} transition={{ type: 'spring', stiffness: 380, damping: 34 }}>
-              <ChatsComposer {...composer} sticky />
-            </motion.div>
-          ) : (
-            <ChatsComposer {...composer} sticky />
-          )}
-        </div>
+        <ChatsComposer {...composer} sticky />
       </footer>
     </div>
   );
