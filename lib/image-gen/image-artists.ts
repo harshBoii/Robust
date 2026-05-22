@@ -38,11 +38,14 @@ export const IMAGE_QUALITY_OPTIONS: Array<{ id: ImageQuality; label: string }> =
   { id: 'high', label: 'High' },
 ];
 
-export const DEFAULT_IMAGE_ARTIST_ID: ImageArtistId = 'crafta';
-export const DEFAULT_IMAGE_QUALITY: ImageQuality = 'medium';
+export const DEFAULT_IMAGE_ARTIST_ID: ImageArtistId = 'adicasso';
+export const DEFAULT_IMAGE_QUALITY: ImageQuality = 'low';
 
 export function findImageArtist(id: string | undefined | null): ImageArtistOption {
-  return IMAGE_ARTISTS.find((a) => a.id === id) ?? IMAGE_ARTISTS[1];
+  return (
+    IMAGE_ARTISTS.find((a) => a.id === id) ??
+    IMAGE_ARTISTS.find((a) => a.id === DEFAULT_IMAGE_ARTIST_ID)!
+  );
 }
 
 export function resolveImageGenApiOptions(state: {

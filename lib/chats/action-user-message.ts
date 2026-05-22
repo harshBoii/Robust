@@ -83,6 +83,9 @@ export function resolveActionUserMessage(
         ? payload.title.trim()
         : 'Selected product';
     case 'imageGen.uploaded': {
+      if (typeof payload.fileName === 'string' && payload.fileName.trim()) {
+        return payload.fileName.trim();
+      }
       const role = payload.role;
       if (role === 'model') return 'Uploaded custom model';
       if (role === 'background') return 'Uploaded custom background';
@@ -116,6 +119,8 @@ export function resolveActionUserMessage(
       return typeof payload.label === 'string' ? payload.label : null;
     case 'imageGen.pushToAds':
       return 'Post to ads';
+    case 'imageGen.templateRegenerate':
+      return 'Regenerate output';
     default:
       return null;
   }

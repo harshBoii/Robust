@@ -20,6 +20,7 @@ const IMAGE_GEN_GENERATING_STEPS = new Set([
   'generateOnModel',
   'generateVariants',
   'generateIdeas',
+  'generateTemplate',
 ]);
 
 export function ChatsThread({
@@ -29,6 +30,9 @@ export function ChatsThread({
   loading,
   operationError,
   busyTone = 'thinking',
+  busyEtaSuffix,
+  showSavedEta = false,
+  savedEtaMessage,
   currentStep = 'intent',
   workflowState = {},
 }: {
@@ -38,6 +42,10 @@ export function ChatsThread({
   loading?: boolean;
   operationError?: string | null;
   busyTone?: ChatBusyTone;
+  /** e.g. "~1:45" shown beside the thinking label */
+  busyEtaSuffix?: string | null;
+  showSavedEta?: boolean;
+  savedEtaMessage?: string | null;
   currentStep?: string;
   workflowState?: WorkflowState;
 }) {
@@ -53,20 +61,26 @@ export function ChatsThread({
     workflowState,
   };
   const statusPool = resolveChatStatusMessages(statusCtx);
-  const statusActive = Boolean(loading);
-  const statusText = useRotatingStatus(statusPool, statusActive);
+  const statusActive = Boolean(loading) && !showSavedEta;
+  const rotatingStatus = useRotatingStatus(statusPool, statusActive);
   const imageGenGenerating = Boolean(
     workflowState.imageGen?.step &&
       IMAGE_GEN_GENERATING_STEPS.has(workflowState.imageGen.step),
   );
   const showStatusPanel = Boolean(
-    hasOperationError || (loading && !imageGenGenerating),
+    hasOperationError || ((loading || showSavedEta) && !imageGenGenerating),
   );
-  const statusLabel = loading
+  const baseStatusLabel = loading || showSavedEta
     ? resolveChatStatusLabel(statusCtx)
     : hasOperationError
       ? 'Fixing…'
       : undefined;
+  const statusLabel =
+    baseStatusLabel && loading && busyEtaSuffix && effectiveTone === 'thinking'
+      ? `${baseStatusLabel} · ${busyEtaSuffix}`
+      : baseStatusLabel;
+  const statusText = showSavedEta && savedEtaMessage ? savedEtaMessage : rotatingStatus;
+  const showThinkingDots = Boolean(loading) && !showSavedEta;
 
   useEffect(() => {
     const el = scrollRef.current;
@@ -93,11 +107,11 @@ export function ChatsThread({
             <ChatsMessage
               id="operation-status"
               role="assistant"
-              streaming={loading}
-              statusText={loading ? (statusText ?? undefined) : undefined}
+              streaming={loading || showSavedEta}
+              statusText={statusText ?? undefined}
               errorDetail={operationError ?? undefined}
               statusLabel={statusLabel}
-              showThinkingDots={loading}
+              showThinkingDots={showThinkingDots}
             />
           ) : null}
         </div>

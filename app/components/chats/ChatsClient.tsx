@@ -23,6 +23,14 @@ import {
   type ImageArtistId,
   type ImageQuality,
 } from '@/lib/image-gen/image-artists';
+import type { ChatAttachmentsPayload } from '@/lib/chats/chat-attachment-types';
+import { getTemplateById } from '@/lib/templates/catalog';
+
+import {
+  ChatAttachmentMessage,
+  ComposerAttachmentStrip,
+} from './ChatAttachmentDisplay';
+import { useChatComposerAttach } from './useChatComposerAttach';
 
 const ease = [0.22, 1, 0.36, 1] as const;
 
@@ -59,6 +67,9 @@ export default function ChatsClient({
     loading,
     busy,
     busyTone,
+    busyEtaSuffix,
+    showSavedEta,
+    savedEtaMessage,
     error,
     operationError,
     sendMessage,
@@ -76,17 +87,27 @@ export default function ChatsClient({
   );
 
   const ig = session?.workflowState?.imageGen;
-  const showImageGenArtistBar =
-    session?.currentStep === 'imageGen' && ig?.step === 'artistSettings';
+  const isTemplateFlow = ig?.subpath === 'templates';
+  const templateMeta =
+    isTemplateFlow && ig?.templateId ? getTemplateById(ig.templateId) : undefined;
+  const templateAwaitingUpload = isTemplateFlow && !ig?.productImageAssetId;
+  const showImageGenArtistInComposer =
+    session?.currentStep === 'imageGen' &&
+    !templateAwaitingUpload &&
+    ((ig?.step === 'artistSettings' && !isTemplateFlow) ||
+      (isTemplateFlow &&
+        ['templateUpload', 'templateNotes', 'reviewTemplate', 'chooseNext'].includes(
+          ig?.step ?? '',
+        )));
 
   const [composerArtistId, setComposerArtistId] = useState<ImageArtistId>(DEFAULT_IMAGE_ARTIST_ID);
   const [composerQuality, setComposerQuality] = useState<ImageQuality>(DEFAULT_IMAGE_QUALITY);
 
   useEffect(() => {
-    if (!showImageGenArtistBar) return;
+    if (!showImageGenArtistInComposer) return;
     setComposerArtistId((ig?.imageArtistId as ImageArtistId) ?? DEFAULT_IMAGE_ARTIST_ID);
     setComposerQuality((ig?.imageQuality as ImageQuality) ?? DEFAULT_IMAGE_QUALITY);
-  }, [showImageGenArtistBar, ig?.imageArtistId, ig?.imageQuality]);
+  }, [showImageGenArtistInComposer, ig?.imageArtistId, ig?.imageQuality]);
 
   const submitArtistSettings = useCallback(() => {
     const artist = IMAGE_ARTISTS.find((a) => a.id === composerArtistId);
@@ -96,6 +117,22 @@ export default function ChatsClient({
       `${artist?.name ?? 'Artist'} · ${composerQuality} quality`,
     );
   }, [composerArtistId, composerQuality, handleAction]);
+
+  const {
+    canAttach,
+    pending: pendingAttachments,
+    uploading: attachUploading,
+    handleFiles: handleAttachFiles,
+    removePending: removePendingAttachment,
+    clearPending: clearPendingAttachments,
+  } = useChatComposerAttach({
+    companyId,
+    workflowState: session?.workflowState ?? {},
+    currentStep: session?.currentStep ?? 'intent',
+    onDispatchUploaded: async (action, payload, userMessage) => {
+      await handleAction(action, payload, userMessage);
+    },
+  });
 
   const latestWidgetMessageId = (() => {
     for (let i = messages.length - 1; i >= 0; i--) {
@@ -112,6 +149,17 @@ export default function ChatsClient({
       m.role !== 'user' &&
       messageHasMediaPreview(m.widgetType, m.widgetPayload) &&
       !isLatestWidget;
+
+    if (m.role === 'user' && m.widgetType === 'chatAttachments') {
+      const payload = (m.widgetPayload ?? {}) as ChatAttachmentsPayload;
+      const items = payload.items ?? [];
+      return {
+        id: m.id,
+        role: 'user' as const,
+        content: m.content ?? undefined,
+        children: <ChatAttachmentMessage items={items} content={m.content} />,
+      };
+    }
 
     if (!isLatestWidget && !showMediaPreview) {
       return {
@@ -142,7 +190,7 @@ export default function ChatsClient({
                 widgetPayload={m.widgetPayload}
                 workflowState={session?.workflowState ?? {}}
                 currentStep={session?.currentStep ?? 'intent'}
-                imageGenArtistInComposer={showImageGenArtistBar}
+                imageGenArtistInComposer={showImageGenArtistInComposer}
                 companyId={companyId}
                 sessionId={sessionId}
                 onAction={handleAction}
@@ -185,9 +233,14 @@ export default function ChatsClient({
         className="shrink-0 border-b border-border/20 bg-background/80 px-4 py-2.5 backdrop-blur-sm"
       >
         <div className="mx-auto flex max-w-3xl items-center justify-between gap-3">
-          <h1 className="truncate font-display text-[15px] font-semibold text-foreground">
-            {session?.title ?? 'New chat'}
-          </h1>
+          <div className="min-w-0">
+            <h1 className="truncate font-display text-[15px] font-semibold text-foreground">
+              {session?.title ?? 'New chat'}
+            </h1>
+            {templateMeta ? (
+              <p className="truncate text-[11px] text-muted-foreground">{templateMeta.description}</p>
+            ) : null}
+          </div>
           <Link
             href="/chats"
             className="shrink-0 rounded-lg px-2.5 py-1 text-[12px] text-muted-foreground transition hover:bg-muted/50 hover:text-foreground"
@@ -208,9 +261,10 @@ export default function ChatsClient({
         type="file"
         className="hidden"
         multiple
-        accept="image/*,video/*"
-        onChange={() => {
-          /* upload handled inside MediaUploadWidget when visible */
+        accept="image/*"
+        onChange={(e) => {
+          void handleAttachFiles(e.target.files);
+          e.target.value = '';
         }}
       />
 
@@ -220,6 +274,9 @@ export default function ChatsClient({
           loading={busy}
           operationError={operationError}
           busyTone={busyTone}
+          busyEtaSuffix={busyEtaSuffix}
+          showSavedEta={showSavedEta}
+          savedEtaMessage={savedEtaMessage}
           currentStep={session?.currentStep ?? 'intent'}
           workflowState={session?.workflowState ?? {}}
           composer={{
@@ -244,13 +301,28 @@ export default function ChatsClient({
                 return;
               }
               void sendMessage(text, session?.currentStep);
+              clearPendingAttachments();
             },
-            onAttach: () => fileRef.current?.click(),
-            loading: busy,
-            disabled: busy || session?.status === 'COMPLETED',
-            placeholder: 'Write a message…',
+            onAttach:
+              canAttach && !templateAwaitingUpload ? () => fileRef.current?.click() : undefined,
+            loading: busy || attachUploading,
+            disabled:
+              busy ||
+              attachUploading ||
+              session?.status === 'COMPLETED' ||
+              templateAwaitingUpload,
+            attachmentSlot: (
+              <ComposerAttachmentStrip
+                items={pendingAttachments}
+                onRemove={removePendingAttachment}
+                disabled={busy || attachUploading}
+              />
+            ),
+            placeholder: templateAwaitingUpload
+              ? 'Upload your image above to continue…'
+              : 'Write a message…',
             suggestions: stepSuggestions(session?.currentStep, session?.workflowState ?? {}),
-            leadingSlot: showImageGenArtistBar ? (
+            leadingSlot: showImageGenArtistInComposer ? (
               <ImageGenArtistSettingsBar
                 compact
                 disabled={busy}
@@ -259,6 +331,7 @@ export default function ChatsClient({
                 onArtistChange={setComposerArtistId}
                 onQualityChange={setComposerQuality}
                 onContinue={submitArtistSettings}
+                continueLabel={isTemplateFlow && ig?.step !== 'artistSettings' ? 'Apply' : 'Continue'}
               />
             ) : undefined,
             sticky: true,

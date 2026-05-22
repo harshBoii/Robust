@@ -38,7 +38,9 @@ function ThinkingPanel({
   return (
     <div className="space-y-2 py-1">
       {statusLabel ? (
-        <p className="text-[13px] font-medium text-muted-foreground">{statusLabel}</p>
+        <p className="text-[13px] font-medium text-muted-foreground">
+          {statusLabel}
+        </p>
       ) : null}
       {statusText ? (
         <p className="text-[14px] italic leading-snug text-muted-foreground">{statusText}</p>
@@ -85,6 +87,9 @@ export function ChatsMessage({
   showThinkingDots,
 }: ChatsMessageProps) {
   if (role === 'user') {
+    if (children) {
+      return <div className="py-2">{children}</div>;
+    }
     return (
       <div className="flex justify-end py-2">
         <div

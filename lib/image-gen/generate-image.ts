@@ -5,6 +5,7 @@ import { toFile } from 'openai/uploads';
 
 import { fetchImageBytesFromUrl } from '@/lib/cloudfare/r2-video-thumbnail';
 
+import { normalizeReferenceImageForOpenAI } from './normalize-reference-image';
 import { loadCatalogImageBytes } from './read-catalog-image';
 
 import {
@@ -73,8 +74,8 @@ export async function generateImage(input: GenerateImageInput): Promise<Generate
           ? await loadCatalogImageBytes(url)
           : await fetchImageBytesFromUrl(url, { attempts: 3, delayMs: 1000 });
         if (!bytes) throw new Error('Could not load reference image for generation');
-        const buf = Buffer.isBuffer(bytes) ? bytes : Buffer.from(bytes);
-        return toFile(buf, `reference-${i}.png`, { type: 'image/png' });
+        const normalized = await normalizeReferenceImageForOpenAI(bytes);
+        return toFile(normalized.buffer, normalized.filename, { type: normalized.mimeType });
       }),
     );
 

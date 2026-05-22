@@ -38,6 +38,7 @@ import {
   ImageGenSourceChoiceWidget,
   ImageGenUploadWidget,
   ImageGenVariantGridWidget,
+  ImageGenTemplateGridWidget,
   ImageGenVariantSourceWidget,
   ImageGenIdeaReviewWidget,
   ShopifyProductPickerWidget,
@@ -76,7 +77,9 @@ export function ChatWidgetRenderer({
   /** Image previews persist via ChatMessageMediaPreview; here only interactive controls. */
   if (
     !active &&
-    (widgetType === 'imageGenSingleResult' || widgetType === 'imageGenVariantGrid')
+    (widgetType === 'imageGenSingleResult' ||
+      widgetType === 'imageGenVariantGrid' ||
+      widgetType === 'imageGenTemplateGrid')
   ) {
     return null;
   }
@@ -223,6 +226,8 @@ export function ChatWidgetRenderer({
       return <ImageGenIdeaReviewWidget payload={payload} onAction={onAction} />;
     case 'imageGenVariantGrid':
       return <ImageGenVariantGridWidget payload={payload} onAction={onAction} />;
+    case 'imageGenTemplateGrid':
+      return <ImageGenTemplateGridWidget payload={payload} onAction={onAction} />;
     case 'imageGenModelGallery':
       return (
         <ImageGenModelGalleryWidget payload={payload} onAction={onAction} companyId={companyId} />

@@ -64,6 +64,7 @@ export function ImageGenArtistSettingsBar({
   disabled,
   compact,
   showContinue = true,
+  continueLabel = 'Continue',
 }: {
   artistId: ImageArtistId;
   quality: ImageQuality;
@@ -73,6 +74,7 @@ export function ImageGenArtistSettingsBar({
   disabled?: boolean;
   compact?: boolean;
   showContinue?: boolean;
+  continueLabel?: string;
 }) {
   const artistOptions = buildArtistOptions();
   const qualityOptions = buildQualityOptions();
@@ -107,7 +109,7 @@ export function ImageGenArtistSettingsBar({
             compact ? 'px-2.5 py-1.5 text-[12px]' : 'px-3.5 py-2 text-[13px]',
           ].join(' ')}
         >
-          Continue
+          {continueLabel}
         </button>
       ) : null}
     </div>

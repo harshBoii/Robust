@@ -12,6 +12,7 @@ import {
 } from './chat-pending-storage';
 import { resolveInitialHandoffText } from './resolve-initial-handoff-text';
 import { resolveChatBusyTone, type ChatBusyTone } from './chat-busy-tone';
+import { useChatBusyEta } from './useChatBusyEta';
 import type { SerializedMessage } from '@/lib/chats/types';
 import type { WorkflowState } from '@/lib/chats/types';
 
@@ -110,6 +111,8 @@ export function useChatSession(sessionId: string, options?: UseChatSessionOption
   const operationErrorRef = useRef<string | null>(null);
   operationErrorRef.current = operationError;
   const initialSendStarted = useRef(false);
+  const busyEta = useChatBusyEta();
+  const etaTrackingRef = useRef(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -168,9 +171,23 @@ export function useChatSession(sessionId: string, options?: UseChatSessionOption
       setBusyTone(tone);
       setError(null);
       setOperationError(null);
+      if (tone === 'thinking') {
+        busyEta.begin();
+        etaTrackingRef.current = true;
+      } else {
+        etaTrackingRef.current = false;
+      }
     },
-    [],
+    [busyEta],
   );
+
+  const endBusy = useCallback(() => {
+    if (etaTrackingRef.current) {
+      busyEta.end();
+      etaTrackingRef.current = false;
+    }
+    setBusy(false);
+  }, [busyEta]);
 
   const sendMessage = useCallback(
     async (
@@ -217,10 +234,10 @@ export function useChatSession(sessionId: string, options?: UseChatSessionOption
         setOperationError(msg);
         setBusyTone('fixing');
       } finally {
-        setBusy(false);
+        endBusy();
       }
     },
-    [sessionId, session?.currentStep, applyResult, beginBusy],
+    [sessionId, session?.currentStep, applyResult, beginBusy, endBusy],
   );
 
   useEffect(() => {
@@ -232,7 +249,7 @@ export function useChatSession(sessionId: string, options?: UseChatSessionOption
     initialSendStarted.current = true;
 
     const runPollAndApply = async () => {
-      setBusy(true);
+      beginBusy('thinking');
       setLoading(false);
       const polled = await pollSessionAfterInitialSend(sessionId, initialText);
       if (polled) {
@@ -241,10 +258,10 @@ export function useChatSession(sessionId: string, options?: UseChatSessionOption
         setOperationError(polled.workflowState?.lastOperationError ?? null);
         clearInitialSendLock(sessionId);
         window.dispatchEvent(new CustomEvent('robust-chats-refresh'));
-        setBusy(false);
+        endBusy();
         return;
       }
-      setBusy(false);
+      endBusy();
       clearInitialSendLock(sessionId);
       void sendMessage(initialText, 'intent', {
         skipOptimistic: true,
@@ -347,10 +364,10 @@ export function useChatSession(sessionId: string, options?: UseChatSessionOption
         setOperationError(msg);
         setBusyTone('fixing');
       } finally {
-        if (!silent) setBusy(false);
+        if (!silent) endBusy();
       }
     },
-    [sessionId, session?.currentStep, applyResult, beginBusy, appendOptimisticUser],
+    [sessionId, session?.currentStep, applyResult, beginBusy, endBusy, appendOptimisticUser],
   );
 
   return {
@@ -359,6 +376,9 @@ export function useChatSession(sessionId: string, options?: UseChatSessionOption
     loading,
     busy,
     busyTone,
+    busyEtaSuffix: busyEta.etaSuffix,
+    showSavedEta: busyEta.showSaved,
+    savedEtaMessage: busyEta.savedMessage,
     error,
     operationError,
     load,

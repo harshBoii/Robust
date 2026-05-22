@@ -189,10 +189,28 @@ export function ImageGenUploadWidget({
         });
         const assetId = assetIds[0];
         if (!assetId) return;
+        const file = files[0];
+        let imageUrl: string | undefined;
+        try {
+          const urlRes = await fetch(`/api/assets/${encodeURIComponent(assetId)}/url`, {
+            credentials: 'include',
+          });
+          if (urlRes.ok) {
+            const urlData = (await urlRes.json()) as { url?: string };
+            imageUrl = typeof urlData.url === 'string' ? urlData.url : undefined;
+          }
+        } catch {
+          imageUrl = undefined;
+        }
         await onAction(
           'imageGen.uploaded',
-          { assetId },
-          `Uploaded ${files.length} image(s)`,
+          {
+            assetId,
+            imageUrl,
+            fileName: file.name,
+            mimeType: file.type,
+          },
+          file.name,
         );
       } catch (e) {
         console.error(e);
@@ -286,8 +304,28 @@ export function ImageGenSingleResultWidget({
   onAction?: ChatWidgetDispatch;
 }) {
   const imageUrl = payload.imageUrl as string | undefined;
+  const assetId = payload.assetId as string | undefined;
   const artistName = payload.artistName as string | undefined;
   const imageQuality = payload.imageQuality as string | undefined;
+  const [resolvedUrl, setResolvedUrl] = useState<string | undefined>(imageUrl);
+
+  useEffect(() => {
+    setResolvedUrl(imageUrl);
+  }, [imageUrl]);
+
+  useEffect(() => {
+    if (resolvedUrl || !assetId) return;
+    let cancelled = false;
+    void fetch(`/api/assets/${encodeURIComponent(assetId)}/url`, { credentials: 'include' })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data: { url?: string } | null) => {
+        if (!cancelled && typeof data?.url === 'string') setResolvedUrl(data.url);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [assetId, resolvedUrl]);
 
   return (
     <div>
@@ -297,9 +335,9 @@ export function ImageGenSingleResultWidget({
           {imageQuality ? ` · ${imageQuality} quality` : ''}
         </p>
       ) : null}
-      {imageUrl ? (
+      {resolvedUrl ? (
         <ImageWithDownload
-          imageUrl={imageUrl}
+          imageUrl={resolvedUrl}
           alt="Generated ad"
           filename={`robust-${(artistName ?? 'ad').toLowerCase().replace(/\s+/g, '-')}.png`}
         />
@@ -464,6 +502,67 @@ export function ImageGenIdeaReviewWidget({
       >
         Accept all & generate
       </button>
+    </div>
+  );
+}
+
+export function ImageGenTemplateGridWidget({
+  payload,
+  onAction,
+}: {
+  payload: Record<string, unknown>;
+  onAction: ChatWidgetDispatch;
+}) {
+  const outputs =
+    (payload.outputs as Array<{
+      label: string;
+      status?: string;
+      imageUrl?: string;
+      error?: string;
+    }>) ?? [];
+  const artistName = payload.artistName as string | undefined;
+  const imageQuality = payload.imageQuality as string | undefined;
+
+  return (
+    <div className="space-y-2">
+      {artistName || imageQuality ? (
+        <p className="text-[11px] text-muted-foreground">
+          {artistName}
+          {imageQuality ? ` · ${imageQuality} quality` : ''}
+        </p>
+      ) : null}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+        {outputs.map((o, i) => (
+          <div key={i} className="rounded-lg border border-border/50 p-2">
+            <p className="mb-1 truncate text-[12px] font-medium">{o.label}</p>
+            {o.imageUrl ? (
+              <div className="space-y-1">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={o.imageUrl} alt="" className="aspect-square w-full rounded object-cover" />
+                <DownloadImageButton
+                  imageUrl={o.imageUrl}
+                  filename={`robust-${o.label.toLowerCase().replace(/\s+/g, '-').slice(0, 40)}.png`}
+                />
+              </div>
+            ) : (
+              <div className="flex aspect-square items-center justify-center rounded bg-muted text-[11px] text-muted-foreground">
+                {o.status === 'failed' ? o.error ?? 'Failed' : 'Pending'}
+              </div>
+            )}
+            {o.status === 'failed' && (
+              <button
+                type="button"
+                className="mt-2 text-[11px] text-primary underline"
+                onClick={() =>
+                  void onAction('imageGen.templateRegenerate', { index: i }, `Regenerate ${o.label}`)
+                }
+              >
+                Regenerate
+              </button>
+            )}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

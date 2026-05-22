@@ -10,7 +10,8 @@ import {
   Upload, FolderOpen, Image as ImageIcon,
   Play, PauseCircle, PlusCircle, CalendarClock,
   SlidersHorizontal, Megaphone, History,
-  ShieldCheck, ScrollText, MessageSquare,
+  ShieldCheck, ScrollText,   MessageSquare,
+  LayoutTemplate,
   User,
   X,
 } from 'lucide-react';
@@ -78,6 +79,7 @@ type MainSection = {
 const MAIN_SECTIONS: MainSection[] = [
   { id: 'home',      label: 'Home',      icon: IconHome,    hasSecondary: true },
   { id: 'chats',     label: 'Chats',     icon: MessageSquare, hasSecondary: true },
+  { id: 'templates', label: 'Templates', icon: LayoutTemplate, hasSecondary: true },
   { id: 'manager',   label: 'Manager',   icon: IconManager, hasSecondary: true },
   // { id: 'createAd',  label: 'Create Ad', icon: PlusCircle,  hasSecondary: false },
   { id: 'gallery',   label: 'Gallery',   icon: IconGallery, hasSecondary: true },
@@ -373,6 +375,18 @@ const SecondarySidebarContent = ({
         </>
       );
 
+    case 'templates':
+      return (
+        <>
+          <SectionLabel label="Templates" />
+          <p className="px-3 py-2 text-[12px] leading-snug text-muted-foreground">
+            Browse ready-made image recipes. Each template opens a guided chat to collect inputs and
+            generate.
+          </p>
+          <SecondaryNavItem icon={LayoutTemplate} label="Browse templates" href="/templates" />
+        </>
+      );
+
     case 'manager':
       return (
         <>
@@ -502,6 +516,7 @@ export default function AppSidebar({
     switch (sectionId) {
       case 'home':      return '/home';
       case 'chats':     return '/chats';
+      case 'templates': return '/templates';
       case 'manager':   return '/manager/post';
       // case 'createAd':  return '/create-ad';
       case 'gallery':   return '/gallery';
@@ -545,6 +560,8 @@ export default function AppSidebar({
     if      (pathname === '/')                   setActiveSection('home');
     // eslint-disable-next-line react-hooks/set-state-in-effect
     else if (pathname?.startsWith('/chats'))     setActiveSection('chats');
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    else if (pathname?.startsWith('/templates')) setActiveSection('templates');
     // eslint-disable-next-line react-hooks/set-state-in-effect
     else if (pathname?.startsWith('/manager') || pathname?.startsWith('/shop'))
       setActiveSection('manager');

@@ -26,6 +26,7 @@ const IMAGE_GEN_GENERATING_STEPS = new Set<ImageGenStep>([
   'generateIdeas',
   'generateVariants',
   'generateOnModel',
+  'generateTemplate',
 ]);
 
 /** Top-level Path A — posting Meta ads. */
@@ -216,6 +217,12 @@ function imageGenStatusPool(ig: NonNullable<ReturnType<typeof parseImageGen>>): 
     if (step === 'generateIdeas' || step === 'reviewIdeas') return SP2_IDEAS;
     if (step === 'generateVariants') return SP2_GENERATING;
     if (step === 'reviewBase') return SP2_REVIEW;
+  }
+
+  if (subpath === 'templates') {
+    if (step === 'templateUpload') return SP1_SETUP;
+    if (step === 'templateNotes') return SP1_COLLECT;
+    if (step === 'reviewTemplate') return SP1_REVIEW;
   }
 
   if (subpath === 'productOnModel') {

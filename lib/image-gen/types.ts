@@ -1,4 +1,4 @@
-export type ImageGenSubpath = 'productAd' | 'variantGen' | 'productOnModel';
+export type ImageGenSubpath = 'productAd' | 'variantGen' | 'productOnModel' | 'templates';
 
 export type ImageGenStep =
   | 'routing'
@@ -8,9 +8,13 @@ export type ImageGenStep =
   | 'artistSettings'
   | 'productSource'
   | 'collectFields'
+  | 'templateUpload'
+  | 'templateNotes'
   | 'generateBase'
   | 'reviewBase'
   | 'chooseNext'
+  | 'generateTemplate'
+  | 'reviewTemplate'
   | 'variantImageSource'
   | 'existingAdPick'
   | 'generateIdeas'
@@ -75,6 +79,17 @@ export type ImageGenState = {
   generatedAssets?: GeneratedAssetRef[];
   agentMemory?: string;
   rejectFeedback?: string;
+  /** Templates subpath */
+  templateId?: string;
+  templateCollectedFields?: Record<string, unknown>;
+  templateAssetIds?: string[];
+  templateOutputs?: Array<{
+    label: string;
+    assetId?: string;
+    imageUrl?: string;
+    status: 'pending' | 'done' | 'failed';
+    error?: string;
+  }>;
 };
 
 export type ImageGenActionType =
@@ -95,7 +110,8 @@ export type ImageGenActionType =
   | 'imageGen.poseSelected'
   | 'imageGen.onModelAccepted'
   | 'imageGen.onModelRejected'
-  | 'imageGen.pushToAds';
+  | 'imageGen.pushToAds'
+  | 'imageGen.templateRegenerate';
 
 export const IMAGE_GEN_ACTIONS: ImageGenActionType[] = [
   'imageGen.source',
@@ -116,6 +132,7 @@ export const IMAGE_GEN_ACTIONS: ImageGenActionType[] = [
   'imageGen.onModelAccepted',
   'imageGen.onModelRejected',
   'imageGen.pushToAds',
+  'imageGen.templateRegenerate',
 ];
 
 export type ImageGenWidgetType =
@@ -133,4 +150,5 @@ export type ImageGenWidgetType =
   | 'imageGenBackgroundGallery'
   | 'imageGenPoseGallery'
   | 'imageGenPushToAds'
-  | 'imageGenNextStep';
+  | 'imageGenNextStep'
+  | 'imageGenTemplateGrid';

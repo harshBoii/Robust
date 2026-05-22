@@ -23,9 +23,18 @@ import { tryHandleImageGenEmptyPickerTurn } from '@/lib/chats/handle-empty-picke
 import { tryHandleImageGenWidgetChoiceTurn } from '@/lib/chats/handle-widget-choice-turn';
 import { classifyImageGenSubpath } from './classify-subpath';
 import { runCollectorTurn } from './collect-fields-agent';
+import { runTemplateNotesTurn } from './template-collector-agent';
+import {
+  runTemplateGenerate,
+  runTemplateRegenerateSlot,
+  TEMPLATE_POST_RESULT_OPTIONS,
+} from './template-generate';
+import { getTemplateById } from '@/lib/templates/catalog';
 import { getCatalogForWidget } from './catalog';
 import { resolveOnModelReferenceUrls } from './resolve-on-model-refs';
 import {
+  DEFAULT_IMAGE_ARTIST_ID,
+  DEFAULT_IMAGE_QUALITY,
   findImageArtist,
   IMAGE_ARTISTS,
   IMAGE_QUALITY_OPTIONS,
@@ -35,6 +44,7 @@ import { importProductImageFromUrl } from './import-product-image';
 import { appendGeneratedAsset, initialImageGenState, mergeImageGenIntoWorkflow, parseImageGenState } from './state';
 import { storeGeneratedImage } from './store-generated';
 import type { ImageGenActionType, ImageGenState, ImageGenSubpath, ImageGenWidgetType } from './types';
+import { resolveAssetImageUrl } from './resolve-asset-image-url';
 import { generateVariantPrompts, regenerateVariantPrompts } from './variant-prompts';
 
 const IMAGE_GEN_STEP = 'imageGen';
@@ -50,7 +60,7 @@ function artistSettingsWidgetPayload(ig: ImageGenState) {
 
 function generatingLabel(ig: ImageGenState): string {
   const artist = findImageArtist(ig.imageArtistId);
-  const q = ig.imageQuality ?? 'medium';
+  const q = ig.imageQuality ?? DEFAULT_IMAGE_QUALITY;
   return `Generating with ${artist.name} · ${q} quality…`;
 }
 
@@ -88,22 +98,67 @@ async function assistantMsg(
   return serializeMessage(row);
 }
 
-async function userMsg(sessionId: string, content: string): Promise<SerializedMessage> {
-  const [row] = await appendChatMessages(sessionId, [{ role: 'USER', content }]);
+async function userMsg(
+  sessionId: string,
+  content: string,
+  opts?: { widgetType?: string | null; widgetPayload?: unknown },
+): Promise<SerializedMessage> {
+  const [row] = await appendChatMessages(sessionId, [
+    {
+      role: 'USER',
+      content,
+      widgetType: opts?.widgetType ?? null,
+      widgetPayload: opts?.widgetPayload,
+    },
+  ]);
   return serializeMessage(row);
+}
+
+async function resolveUploadImageUrl(
+  companyId: string,
+  assetId: string,
+  imageUrl?: string,
+): Promise<string | undefined> {
+  const url = await resolveAssetImageUrl(companyId, assetId, imageUrl);
+  return url ?? undefined;
+}
+
+async function attachmentUserMsg(
+  sessionId: string,
+  companyId: string,
+  payload: Record<string, unknown>,
+  displayText?: string | null,
+): Promise<SerializedMessage | null> {
+  const assetId = typeof payload.assetId === 'string' ? payload.assetId : undefined;
+  let imageUrl = typeof payload.imageUrl === 'string' ? payload.imageUrl : undefined;
+  if (assetId) {
+    imageUrl = await resolveUploadImageUrl(companyId, assetId, imageUrl);
+  }
+  const fileName =
+    typeof payload.fileName === 'string' && payload.fileName.trim()
+      ? payload.fileName.trim()
+      : displayText?.trim() || 'Uploaded image';
+  const mimeType = typeof payload.mimeType === 'string' ? payload.mimeType : undefined;
+  if (!assetId && !imageUrl) return null;
+  const text =
+    displayText?.trim() && displayText.trim() !== fileName ? displayText.trim() : '';
+  return userMsg(sessionId, text, {
+    widgetType: 'chatAttachments',
+    widgetPayload: {
+      items: [{ assetId, fileName, imageUrl, mimeType }],
+    },
+  });
 }
 
 async function resolveProductImageUrl(
   companyId: string,
   ig: ImageGenState,
 ): Promise<string | null> {
-  if (ig.productImageUrl) return ig.productImageUrl;
-  if (!ig.productImageAssetId) return null;
-  const asset = await prisma.asset.findFirst({
-    where: { id: ig.productImageAssetId, companyId },
-    select: { thumbnailUrl: true, r2Key: true, r2Bucket: true },
-  });
-  return asset?.thumbnailUrl ?? null;
+  if (!ig.productImageAssetId && !ig.productImageUrl) return null;
+  if (ig.productImageAssetId) {
+    return resolveAssetImageUrl(companyId, ig.productImageAssetId, ig.productImageUrl);
+  }
+  return ig.productImageUrl ?? null;
 }
 
 function packageResult(
@@ -222,15 +277,61 @@ export async function handleImageGenMessage(
   const newMessages: SerializedMessage[] = [];
   newMessages.push(await userMsg(sessionId, text));
 
-  if (ig.step === 'collectFields') {
-    const history = (session.messages ?? [])
-      .filter((m) => m.content)
-      .map((m) => ({
-        role: (m.role === 'USER' ? 'user' : 'assistant') as 'user' | 'assistant',
-        content: m.content!,
-      }));
+  const messageHistory = (session.messages ?? [])
+    .filter((m) => m.content)
+    .map((m) => ({
+      role: (m.role === 'USER' ? 'user' : 'assistant') as 'user' | 'assistant',
+      content: m.content!,
+    }));
 
-    const result = await runCollectorTurn({ state: ig, userText: text, history });
+  if (ig.subpath === 'templates' && ig.step === 'templateUpload') {
+    if (!ig.productImageAssetId) {
+      newMessages.push(
+        await assistantMsg(
+          sessionId,
+          'Please upload your image using **+** or the upload button below.',
+          'imageGenUpload',
+          { mode: 'template', templateId: ig.templateId },
+        ),
+      );
+    } else {
+      ig.step = 'templateNotes';
+      const result = await runTemplateNotesTurn({
+        state: ig,
+        userText: text,
+        history: messageHistory,
+      });
+      ig = { ...ig, ...result.state, step: 'templateNotes' };
+      newMessages.push(await assistantMsg(sessionId, result.reply));
+      if (result.readyToGenerate) {
+        return runTemplateGenerateFlow(session, workflowState, ig, newMessages);
+      }
+    }
+    const nextWorkflow = mergeImageGenIntoWorkflow(workflowState, ig);
+    await persist(session, nextWorkflow);
+    const updated = await getChatSession(sessionId, companyId);
+    return packageResult(updated!, nextWorkflow, newMessages);
+  }
+
+  if (ig.subpath === 'templates' && ig.step === 'templateNotes') {
+    const result = await runTemplateNotesTurn({
+      state: ig,
+      userText: text,
+      history: messageHistory,
+    });
+    ig = { ...ig, ...result.state, step: 'templateNotes' };
+    newMessages.push(await assistantMsg(sessionId, result.reply));
+    if (result.readyToGenerate) {
+      return runTemplateGenerateFlow(session, workflowState, ig, newMessages);
+    }
+    const nextWorkflow = mergeImageGenIntoWorkflow(workflowState, ig);
+    await persist(session, nextWorkflow);
+    const updated = await getChatSession(sessionId, companyId);
+    return packageResult(updated!, nextWorkflow, newMessages);
+  }
+
+  if (ig.step === 'collectFields') {
+    const result = await runCollectorTurn({ state: ig, userText: text, history: messageHistory });
     ig = { ...ig, ...result.state };
     newMessages.push(await assistantMsg(sessionId, result.reply));
 
@@ -248,6 +349,25 @@ export async function handleImageGenMessage(
       const updated = await getChatSession(sessionId, companyId);
       return packageResult(updated!, nextWorkflow, newMessages);
     }
+  }
+
+  if (
+    ig.subpath === 'templates' &&
+    (ig.step === 'reviewTemplate' || ig.step === 'chooseNext')
+  ) {
+    const fields = {
+      ...(ig.templateCollectedFields ?? {}),
+      additionalRequest: text,
+      changeRequest: text,
+    };
+    ig = {
+      ...ig,
+      templateCollectedFields: fields,
+      rejectFeedback: text,
+    };
+    const nextWorkflow = mergeImageGenIntoWorkflow(workflowState, ig);
+    await persist(session, nextWorkflow);
+    return runTemplateGenerateFlow(session, nextWorkflow, ig, newMessages);
   }
 
   if (ig.step === 'chooseNext' || ig.step === 'reviewBase' || ig.step === 'reviewOnModel') {
@@ -356,6 +476,83 @@ async function runGenerateBase(
       await assistantMsg(
         session.id,
         'Generation failed. You can adjust your brief and try again.',
+      ),
+    );
+  }
+
+  nextWorkflow = mergeImageGenIntoWorkflow(workflowState, ig);
+  await persist(session, nextWorkflow);
+  const updated = await getChatSession(session.id, session.companyId);
+  return packageResult(updated!, nextWorkflow, newMessages);
+}
+
+async function runTemplateGenerateFlow(
+  session: DbChatSession,
+  workflowState: WorkflowState,
+  ig: ImageGenState,
+  priorMessages: SerializedMessage[],
+): Promise<OrchestratorResult> {
+  const newMessages = [...priorMessages];
+  const def = ig.templateId ? getTemplateById(ig.templateId) : undefined;
+  ig.step = 'generateTemplate';
+  let nextWorkflow = mergeImageGenIntoWorkflow(workflowState, ig);
+  await persist(session, nextWorkflow);
+  newMessages.push(await assistantMsg(session.id, generatingLabel(ig), 'imageGenGenerating'));
+
+  try {
+    const { ig: nextIg, succeeded } = await runTemplateGenerate({
+      companyId: session.companyId,
+      sessionId: session.id,
+      ig,
+    });
+    ig = nextIg;
+    const out = ig.templateOutputs?.[0];
+
+    if (!succeeded || !out?.assetId) {
+      const detail = out?.error?.trim() || 'The model returned no image.';
+      workflowState.lastOperationError = detail;
+      ig.step = 'templateNotes';
+      newMessages.push(
+        await assistantMsg(
+          session.id,
+          `Generation didn't complete (${detail}). Adjust your notes and try again — JPEG or PNG uploads work best.`,
+        ),
+      );
+    } else {
+      const artist = findImageArtist(ig.imageArtistId);
+      const imageUrl =
+        out.imageUrl ??
+        (await resolveAssetImageUrl(session.companyId, out.assetId)) ??
+        undefined;
+
+      newMessages.push(
+        await assistantMsg(session.id, "Here's your image.", 'imageGenSingleResult', {
+          assetId: out.assetId,
+          imageUrl,
+          mode: 'template',
+          artistName: artist.name,
+          imageQuality: ig.imageQuality,
+          templateName: def?.name,
+        }),
+      );
+
+      ig.step = 'chooseNext';
+      newMessages.push(
+        await assistantMsg(
+          session.id,
+          'What would you like to do next?',
+          'imageGenNextStep',
+          { options: TEMPLATE_POST_RESULT_OPTIONS, context: 'template' },
+        ),
+      );
+    }
+  } catch (e) {
+    workflowState.lastOperationError = e instanceof Error ? e.message : 'Generation failed';
+    ig.step = 'templateNotes';
+    newMessages.push(
+      await assistantMsg(
+        session.id,
+        'Generation failed. Adjust your notes or try again.',
       ),
     );
   }
@@ -708,6 +905,16 @@ async function routePostResultNext(
     }
 
     case 'regenerate': {
+      if (ig.subpath === 'templates') {
+        if (userFeedback?.trim()) {
+          ig.templateCollectedFields = {
+            ...(ig.templateCollectedFields ?? {}),
+            changeRequest: userFeedback,
+          };
+          ig.rejectFeedback = userFeedback;
+        }
+        return runTemplateGenerateFlow(session, workflowState, ig, newMessages);
+      }
       if (ig.subpath === 'productOnModel') {
         ig.rejectFeedback = userFeedback;
         return runProductOnModelGenerate(session, workflowState, ig, newMessages);
@@ -809,7 +1016,9 @@ export async function handleImageGenAction(
   const newMessages: SerializedMessage[] = [];
 
   const displayText = userMessage?.trim();
-  if (displayText && !shouldSkipActionUserBubble(session.messages, action)) {
+  const skipGenericUserBubble =
+    action === 'imageGen.uploaded' && Boolean(payload.assetId);
+  if (displayText && !skipGenericUserBubble && !shouldSkipActionUserBubble(session.messages, action)) {
     newMessages.push(await userMsg(sessionId, displayText));
   }
 
@@ -862,11 +1071,13 @@ export async function handleImageGenAction(
     }
 
     case 'imageGen.artistSettings': {
-      const artistId = String(payload.artistId ?? ig.imageArtistId ?? 'crafta');
-      const quality = String(payload.quality ?? ig.imageQuality ?? 'medium');
+      const artistId = String(payload.artistId ?? ig.imageArtistId ?? DEFAULT_IMAGE_ARTIST_ID);
+      const quality = String(payload.quality ?? ig.imageQuality ?? DEFAULT_IMAGE_QUALITY);
       ig.imageArtistId = artistId;
       ig.imageQuality =
-        quality === 'low' || quality === 'medium' || quality === 'high' ? quality : 'medium';
+        quality === 'low' || quality === 'medium' || quality === 'high'
+          ? quality
+          : DEFAULT_IMAGE_QUALITY;
 
       if (ig.subpath === 'productOnModel') {
         ig.step = 'modelSelect';
@@ -875,6 +1086,8 @@ export async function handleImageGenAction(
             ...getCatalogForWidget(),
           }),
         );
+      } else if (ig.subpath === 'templates') {
+        // Artist/quality only — step stays on templateUpload / templateNotes / generate / review
       } else {
         ig.step = 'collectFields';
         const artist = findImageArtist(ig.imageArtistId);
@@ -892,6 +1105,12 @@ export async function handleImageGenAction(
       const assetId = String(payload.assetId ?? '');
       const imageUrl = typeof payload.imageUrl === 'string' ? payload.imageUrl : undefined;
       const role = typeof payload.role === 'string' ? payload.role : 'product';
+
+      if (!shouldSkipActionUserBubble(session.messages, action)) {
+        const attachMsg = await attachmentUserMsg(sessionId, companyId, payload, displayText);
+        if (attachMsg) newMessages.push(attachMsg);
+        else if (displayText) newMessages.push(await userMsg(sessionId, displayText));
+      }
 
       if (role === 'model') {
         ig.customModelAssetId = assetId;
@@ -918,6 +1137,32 @@ export async function handleImageGenAction(
         if (imageUrl) ig.customPoseImageUrl = imageUrl;
         ig.selectedPoseId = undefined;
         return runProductOnModelGenerate(session, workflowState, ig, newMessages);
+      }
+
+      if (ig.subpath === 'templates') {
+        const fileName = typeof payload.fileName === 'string' ? payload.fileName : undefined;
+        ig.productImageAssetId = assetId;
+        if (imageUrl) ig.productImageUrl = imageUrl;
+        if (!ig.productDescription && fileName) {
+          ig.productDescription = fileName.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ');
+        }
+        ig.step = 'templateNotes';
+
+        const history = (session.messages ?? [])
+          .filter((m) => m.content)
+          .map((m) => ({
+            role: (m.role === 'USER' ? 'user' : 'assistant') as 'user' | 'assistant',
+            content: m.content!,
+          }));
+        const notes = await runTemplateNotesTurn({
+          state: ig,
+          userText: '',
+          history,
+          afterUpload: true,
+        });
+        ig = { ...ig, ...notes.state, step: 'templateNotes' };
+        newMessages.push(await assistantMsg(session.id, notes.reply));
+        break;
       }
 
       ig.productImageAssetId = assetId;
@@ -1092,6 +1337,26 @@ export async function handleImageGenAction(
         : (ig.generatedAssets?.map((g) => g.assetId) ?? []);
       if (!assetIds.length) break;
       return executePushToAds(sessionId, companyId, workflowState, assetIds, newMessages);
+    }
+
+    case 'imageGen.templateRegenerate': {
+      const index = Number(payload.index ?? -1);
+      if (index < 0 || ig.subpath !== 'templates') break;
+      ig = await runTemplateRegenerateSlot({
+        companyId,
+        sessionId,
+        ig,
+        index,
+      });
+      const artist = findImageArtist(ig.imageArtistId);
+      newMessages.push(
+        await assistantMsg(session.id, 'Regenerated output.', 'imageGenTemplateGrid', {
+          outputs: ig.templateOutputs,
+          artistName: artist.name,
+          imageQuality: ig.imageQuality,
+        }),
+      );
+      break;
     }
 
     default:

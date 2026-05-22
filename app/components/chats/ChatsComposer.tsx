@@ -14,6 +14,8 @@ export type ChatsComposerProps = {
   modelLabel?: string;
   /** Claude-style controls left of send (e.g. image artist / quality). */
   leadingSlot?: ReactNode;
+  /** Thumbnails above the text area (pending uploads). */
+  attachmentSlot?: ReactNode;
   suggestions?: string[];
   /** Tighter padding when pinned to the bottom of the thread */
   sticky?: boolean;
@@ -29,6 +31,7 @@ export function ChatsComposer({
   loading,
   modelLabel = 'Miss Robusta',
   leadingSlot,
+  attachmentSlot,
   suggestions,
   sticky = false,
 }: ChatsComposerProps) {
@@ -83,6 +86,8 @@ export function ChatsComposer({
             disabled ? 'opacity-60' : '',
           ].join(' ')}
         >
+          {attachmentSlot}
+
           <textarea
             ref={textareaRef}
             rows={1}

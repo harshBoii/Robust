@@ -18,14 +18,19 @@ export function mergeImageGenIntoWorkflow(
 }
 
 export function initialImageGenState(subpath: ImageGenSubpath): ImageGenState {
-  return {
+  const base: ImageGenState = {
     subpath,
-    step: 'routing',
+    step: subpath === 'templates' ? 'templateUpload' : 'routing',
     collectorTurns: 0,
     imageArtistId: DEFAULT_IMAGE_ARTIST_ID,
     imageQuality: DEFAULT_IMAGE_QUALITY,
     generatedAssets: [],
   };
+  if (subpath === 'templates') {
+    base.templateCollectedFields = {};
+    base.templateAssetIds = [];
+  }
+  return base;
 }
 
 export function appendGeneratedAsset(

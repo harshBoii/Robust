@@ -32,6 +32,7 @@ const WIDGET_STEP: Record<string, ChatWorkflowStep[]> = {
   imageGenExistingAdPicker: ['imageGen'],
   imageGenIdeaReview: ['imageGen'],
   imageGenVariantGrid: ['imageGen'],
+  imageGenTemplateGrid: ['imageGen'],
   imageGenModelGallery: ['imageGen'],
   imageGenBackgroundGallery: ['imageGen'],
   imageGenPoseGallery: ['imageGen'],
