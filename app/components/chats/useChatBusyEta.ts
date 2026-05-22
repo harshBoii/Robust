@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import {
   formatBusyEtaClock,
@@ -9,11 +9,17 @@ import {
 } from '@/lib/chats/chat-busy-eta';
 
 const SAVED_MESSAGE_MS = 3200;
+const TICK_MS = 1000;
+
+function formatEtaSuffix(remainingMs: number): string {
+  return `~${formatBusyEtaClock(Math.max(0, remainingMs))}`;
+}
 
 export function useChatBusyEta() {
   const [etaSuffix, setEtaSuffix] = useState<string | null>(null);
   const [savedMessage, setSavedMessage] = useState<string | null>(null);
   const [showSaved, setShowSaved] = useState(false);
+  const [deadlineAt, setDeadlineAt] = useState<number | null>(null);
 
   const etaMsRef = useRef<number | null>(null);
   const startedAtRef = useRef<number | null>(null);
@@ -26,6 +32,19 @@ export function useChatBusyEta() {
     }
   }, []);
 
+  useEffect(() => {
+    if (deadlineAt == null) return;
+
+    const tick = () => {
+      const remaining = deadlineAt - Date.now();
+      setEtaSuffix(formatEtaSuffix(remaining));
+    };
+
+    tick();
+    const id = window.setInterval(tick, TICK_MS);
+    return () => window.clearInterval(id);
+  }, [deadlineAt]);
+
   const begin = useCallback(() => {
     clearSavedTimer();
     setShowSaved(false);
@@ -33,12 +52,14 @@ export function useChatBusyEta() {
 
     const etaMs = randomBusyEtaMs();
     etaMsRef.current = etaMs;
-    startedAtRef.current = Date.now();
-    setEtaSuffix(`~${formatBusyEtaClock(etaMs)}`);
+    const started = Date.now();
+    startedAtRef.current = started;
+    setDeadlineAt(started + etaMs);
   }, [clearSavedTimer]);
 
   const end = useCallback(() => {
     clearSavedTimer();
+    setDeadlineAt(null);
 
     const started = startedAtRef.current;
     const etaMs = etaMsRef.current;

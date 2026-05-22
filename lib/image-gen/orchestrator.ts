@@ -44,6 +44,10 @@ import { importProductImageFromUrl } from './import-product-image';
 import { appendGeneratedAsset, initialImageGenState, mergeImageGenIntoWorkflow, parseImageGenState } from './state';
 import { storeGeneratedImage } from './store-generated';
 import type { ImageGenActionType, ImageGenState, ImageGenSubpath, ImageGenWidgetType } from './types';
+import {
+  applyLastGeneratedAsProductImage,
+  applyLastGeneratedForVariantGen,
+} from './carry-over-image';
 import { resolveAssetImageUrl } from './resolve-asset-image-url';
 import { generateVariantPrompts, regenerateVariantPrompts } from './variant-prompts';
 
@@ -360,14 +364,26 @@ export async function handleImageGenMessage(
       additionalRequest: text,
       changeRequest: text,
     };
-    ig = {
+    const carried = applyLastGeneratedAsProductImage({
       ...ig,
       templateCollectedFields: fields,
       rejectFeedback: text,
-    };
-    const nextWorkflow = mergeImageGenIntoWorkflow(workflowState, ig);
+    });
+    if (!carried) {
+      newMessages.push(
+        await assistantMsg(
+          sessionId,
+          'Generate an image first, then describe what to change.',
+        ),
+      );
+      const nextWorkflow = mergeImageGenIntoWorkflow(workflowState, ig);
+      await persist(session, nextWorkflow);
+      const updated = await getChatSession(sessionId, companyId);
+      return packageResult(updated!, nextWorkflow, newMessages);
+    }
+    const nextWorkflow = mergeImageGenIntoWorkflow(workflowState, carried);
     await persist(session, nextWorkflow);
-    return runTemplateGenerateFlow(session, nextWorkflow, ig, newMessages);
+    return runTemplateGenerateFlow(session, nextWorkflow, carried, newMessages);
   }
 
   if (ig.step === 'chooseNext' || ig.step === 'reviewBase' || ig.step === 'reviewOnModel') {
@@ -795,22 +811,6 @@ async function runProductOnModelGenerate(
   return packageResult(updated!, nextWorkflow, newMessages);
 }
 
-function transitionToVariantGenFromProductAd(
-  _workflowState: WorkflowState,
-  ig: ImageGenState,
-): ImageGenState {
-  return {
-    ...ig,
-    subpath: 'variantGen',
-    carryOverFromSubpath1: true,
-    imageSource: 'carriedOver',
-    step: 'collectFields',
-    productImageAssetId: ig.baseGeneratedAssetId ?? ig.productImageAssetId,
-    productImageUrl: ig.baseGeneratedImageUrl ?? ig.productImageUrl,
-    copyCount: ig.copyCount ?? 4,
-  };
-}
-
 async function executePushToAds(
   sessionId: string,
   companyId: string,
@@ -888,16 +888,32 @@ async function routePostResultNext(
 ): Promise<OrchestratorResult> {
   switch (route) {
     case 'variants': {
-      ig = transitionToVariantGenFromProductAd(workflowState, ig);
+      const carried = applyLastGeneratedForVariantGen(ig);
+      if (!carried) {
+        newMessages.push(
+          await assistantMsg(
+            session.id,
+            'Generate an image first, then you can build variants from it.',
+          ),
+        );
+        const nextWorkflow = mergeImageGenIntoWorkflow(workflowState, ig);
+        await persist(session, nextWorkflow);
+        const updated = await getChatSession(session.id, companyId);
+        return packageResult(updated!, nextWorkflow, newMessages);
+      }
+      ig = carried;
       const nextWorkflow = mergeImageGenIntoWorkflow(workflowState, ig);
       await persist(session, nextWorkflow);
+      newMessages.push(
+        await assistantMsg(session.id, 'Using your last generated image as the base for variants.'),
+      );
       if (ig.productDescription && ig.brandTone && ig.copyCount) {
         return runGenerateIdeas(session, nextWorkflow, ig, newMessages);
       }
       newMessages.push(
         await assistantMsg(
           session.id,
-          'Building variants from your image. How many copies do you want (1–8), and any tone tweaks?',
+          'How many copies do you want (1–8), and any tone tweaks?',
         ),
       );
       const updated = await getChatSession(session.id, companyId);
@@ -905,26 +921,47 @@ async function routePostResultNext(
     }
 
     case 'regenerate': {
-      if (ig.subpath === 'templates') {
-        if (userFeedback?.trim()) {
-          ig.templateCollectedFields = {
-            ...(ig.templateCollectedFields ?? {}),
-            changeRequest: userFeedback,
-          };
-          ig.rejectFeedback = userFeedback;
-        }
-        return runTemplateGenerateFlow(session, workflowState, ig, newMessages);
+      let nextIg = ig;
+      if (userFeedback?.trim()) {
+        nextIg = {
+          ...nextIg,
+          rejectFeedback: userFeedback,
+          templateCollectedFields: {
+            ...(nextIg.templateCollectedFields ?? {}),
+            ...(nextIg.subpath === 'templates'
+              ? { changeRequest: userFeedback, additionalRequest: userFeedback }
+              : {}),
+          },
+        };
       }
-      if (ig.subpath === 'productOnModel') {
-        ig.rejectFeedback = userFeedback;
-        return runProductOnModelGenerate(session, workflowState, ig, newMessages);
-      }
-      ig.rejectFeedback = userFeedback;
-      ig.step = 'collectFields';
-      const nextWorkflow = mergeImageGenIntoWorkflow(workflowState, ig);
-      if (userFeedback?.trim() && ig.productImageAssetId) {
+
+      const carried = applyLastGeneratedAsProductImage(nextIg);
+      if (!carried) {
+        newMessages.push(
+          await assistantMsg(
+            session.id,
+            'Generate an image first, then describe what to change.',
+          ),
+        );
+        const nextWorkflow = mergeImageGenIntoWorkflow(workflowState, ig);
         await persist(session, nextWorkflow);
-        return runGenerateBase(session, nextWorkflow, ig, newMessages);
+        const updated = await getChatSession(session.id, companyId);
+        return packageResult(updated!, nextWorkflow, newMessages);
+      }
+      nextIg = carried;
+
+      if (nextIg.subpath === 'templates') {
+        return runTemplateGenerateFlow(session, workflowState, nextIg, newMessages);
+      }
+      if (nextIg.subpath === 'productOnModel') {
+        return runProductOnModelGenerate(session, workflowState, nextIg, newMessages);
+      }
+
+      nextIg = { ...nextIg, step: 'collectFields' };
+      const nextWorkflow = mergeImageGenIntoWorkflow(workflowState, nextIg);
+      if (userFeedback?.trim()) {
+        await persist(session, nextWorkflow);
+        return runGenerateBase(session, nextWorkflow, nextIg, newMessages);
       }
       await persist(session, nextWorkflow);
       newMessages.push(

@@ -42,7 +42,7 @@ export function ChatsThread({
   loading?: boolean;
   operationError?: string | null;
   busyTone?: ChatBusyTone;
-  /** e.g. "~1:45" shown beside the thinking label */
+  /** Live countdown e.g. "~1:45" beside the thinking label */
   busyEtaSuffix?: string | null;
   showSavedEta?: boolean;
   savedEtaMessage?: string | null;
