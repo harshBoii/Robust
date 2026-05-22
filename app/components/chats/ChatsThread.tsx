@@ -1,5 +1,6 @@
 'use client';
 
+import { AnimatePresence, motion } from 'framer-motion';
 import { useEffect, useRef, type ReactNode } from 'react';
 
 import type { WorkflowState } from '@/lib/chats/types';
@@ -22,6 +23,8 @@ const IMAGE_GEN_GENERATING_STEPS = new Set([
   'generateIdeas',
   'generateTemplate',
 ]);
+
+const statusEase = [0.22, 1, 0.36, 1] as const;
 
 export function ChatsThread({
   messages,
@@ -67,18 +70,19 @@ export function ChatsThread({
     workflowState.imageGen?.step &&
       IMAGE_GEN_GENERATING_STEPS.has(workflowState.imageGen.step),
   );
-  const showStatusPanel = Boolean(
-    hasOperationError || ((loading || showSavedEta) && !imageGenGenerating),
+  const showThinkingPanel = Boolean(
+    hasOperationError || (loading && !showSavedEta && !imageGenGenerating),
   );
-  const baseStatusLabel = loading || showSavedEta
+  const baseStatusLabel = loading
     ? resolveChatStatusLabel(statusCtx)
     : hasOperationError
       ? 'Fixing…'
       : undefined;
-  const statusLabel =
-    baseStatusLabel && loading && busyEtaSuffix && effectiveTone === 'thinking'
-      ? `${baseStatusLabel} · ${busyEtaSuffix}`
-      : baseStatusLabel;
+  const statusLabel = showSavedEta ? 'Done!' : baseStatusLabel;
+  const statusEtaSuffix =
+    !showSavedEta && loading && busyEtaSuffix && effectiveTone === 'thinking'
+      ? busyEtaSuffix
+      : undefined;
   const statusText = showSavedEta && savedEtaMessage ? savedEtaMessage : rotatingStatus;
   const showThinkingDots = Boolean(loading) && !showSavedEta;
 
@@ -103,14 +107,36 @@ export function ChatsThread({
           {messages.map((m) => (
             <ChatsMessage key={m.id} {...m} />
           ))}
-          {showStatusPanel ? (
+          <AnimatePresence initial={false}>
+            {showSavedEta ? (
+              <motion.div
+                key="saved-eta"
+                initial={{ opacity: 0, x: 16 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -32 }}
+                transition={{ duration: 0.38, ease: statusEase }}
+              >
+                <ChatsMessage
+                  id="operation-status-saved"
+                  role="assistant"
+                  streaming
+                  statusText={statusText ?? undefined}
+                  statusTextSaved
+                  statusLabelBold
+                  statusLabel="Done!"
+                />
+              </motion.div>
+            ) : null}
+          </AnimatePresence>
+          {showThinkingPanel ? (
             <ChatsMessage
               id="operation-status"
               role="assistant"
-              streaming={loading || showSavedEta}
+              streaming={loading}
               statusText={statusText ?? undefined}
               errorDetail={operationError ?? undefined}
               statusLabel={statusLabel}
+              statusEtaSuffix={statusEtaSuffix}
               showThinkingDots={showThinkingDots}
             />
           ) : null}

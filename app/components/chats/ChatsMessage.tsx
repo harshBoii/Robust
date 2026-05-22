@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, type ReactNode } from 'react';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, Clock } from 'lucide-react';
 
 import { MarkdownMessage } from '@/app/components/assistant/MarkdownMessage';
 
@@ -19,31 +19,71 @@ export type ChatsMessageProps = {
   statusLabel?: string;
   /** Bounce dots while a request is in flight (off when only showing a persisted error). */
   showThinkingDots?: boolean;
+  /** Green accent for early-finish ETA message. */
+  statusTextSaved?: boolean;
+  /** Bold label (e.g. "Done!" after early finish). */
+  statusLabelBold?: boolean;
+  /** Live ETA countdown beside the status label. */
+  statusEtaSuffix?: string;
 };
 
 function ThinkingPanel({
   statusText,
   errorDetail,
-  statusLabel = 'Thinking…',
+  statusLabel,
   showThinkingDots = true,
+  statusTextSaved = false,
+  statusLabelBold = false,
+  statusEtaSuffix,
 }: {
   statusText?: string;
   errorDetail?: string | null;
   statusLabel?: string;
   showThinkingDots?: boolean;
+  statusTextSaved?: boolean;
+  statusLabelBold?: boolean;
+  statusEtaSuffix?: string;
 }) {
   const [errorOpen, setErrorOpen] = useState(false);
   const hasError = Boolean(errorDetail?.trim());
 
   return (
     <div className="space-y-2 py-1">
-      {statusLabel ? (
-        <p className="text-[13px] font-medium text-muted-foreground">
-          {statusLabel}
+      {statusLabel || statusEtaSuffix ? (
+        <p className="text-[13px] leading-snug">
+          {statusLabel ? (
+            <span
+              className={
+                statusLabelBold
+                  ? 'font-bold text-foreground'
+                  : 'font-medium text-muted-foreground'
+              }
+            >
+              {statusLabel}
+            </span>
+          ) : null}
+          {statusLabel && statusEtaSuffix ? (
+            <span className="font-medium text-muted-foreground"> · </span>
+          ) : null}
+          {statusEtaSuffix ? (
+            <span className="inline-flex items-center gap-1 italic text-primary">
+              <Clock className="h-3.5 w-3.5 shrink-0" strokeWidth={2} aria-hidden />
+              {statusEtaSuffix}
+            </span>
+          ) : null}
         </p>
       ) : null}
       {statusText ? (
-        <p className="text-[14px] italic leading-snug text-muted-foreground">{statusText}</p>
+        <p
+          className={[
+            'text-[14px] leading-snug',
+            statusTextSaved
+              ? 'font-medium text-emerald-600 dark:text-emerald-400'
+              : 'italic text-muted-foreground',
+          ].join(' ')}
+        >
+          {statusText}
+        </p>
       ) : null}
       {showThinkingDots ? (
         <div className="flex gap-1">
@@ -85,6 +125,9 @@ export function ChatsMessage({
   errorDetail,
   statusLabel,
   showThinkingDots,
+  statusTextSaved,
+  statusLabelBold,
+  statusEtaSuffix,
 }: ChatsMessageProps) {
   if (role === 'user') {
     if (children) {
@@ -118,6 +161,9 @@ export function ChatsMessage({
           errorDetail={errorDetail}
           statusLabel={statusLabel}
           showThinkingDots={showThinkingDots ?? streaming}
+          statusTextSaved={statusTextSaved}
+          statusLabelBold={statusLabelBold}
+          statusEtaSuffix={statusEtaSuffix}
         />
       ) : null}
       {children ? <div className="mt-3">{children}</div> : null}

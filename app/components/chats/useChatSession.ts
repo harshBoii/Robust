@@ -111,6 +111,8 @@ export function useChatSession(sessionId: string, options?: UseChatSessionOption
   const operationErrorRef = useRef<string | null>(null);
   operationErrorRef.current = operationError;
   const initialSendStarted = useRef(false);
+  /** After landing handoff, storage clears and hasInitialSend flips false — skip a redundant full-page load(). */
+  const skipLoadAfterHandoffRef = useRef(hasInitialSend);
   const busyEta = useChatBusyEta();
   const etaTrackingRef = useRef(false);
 
@@ -242,6 +244,10 @@ export function useChatSession(sessionId: string, options?: UseChatSessionOption
 
   useEffect(() => {
     if (!hasInitialSend) {
+      if (skipLoadAfterHandoffRef.current) {
+        skipLoadAfterHandoffRef.current = false;
+        return;
+      }
       void load();
       return;
     }
