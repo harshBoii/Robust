@@ -3,8 +3,10 @@ import 'server-only';
 import { getTemplateById } from '@/lib/templates/catalog';
 import type { TemplateDefinition } from '@/lib/templates/types';
 
+import { buildImageEditPrompt } from './base-prompts';
 import { generateImage } from './generate-image';
 import { resolveTemplateReferenceUrls as resolveTemplateRefs } from './resolve-asset-image-url';
+import { resolveLastGeneratedImageUrl } from './resolve-last-generated-image';
 import { storeGeneratedImage } from './store-generated';
 import { appendGeneratedAsset } from './state';
 import type { ImageGenState } from './types';
@@ -93,12 +95,23 @@ export async function runTemplateGenerate(input: {
   if (!def) throw new Error('Template not found');
 
   let ig: ImageGenState = { ...input.ig, step: 'generateTemplate' };
-  const refUrls = await resolveTemplateReferenceUrls(input.companyId, def, ig);
-  if (!refUrls.length) throw new Error('Required images are missing');
-
   const aspectRatio = def.fixedAspectRatio ?? ig.aspectRatio ?? null;
+  const editFeedback = ig.rejectFeedback?.trim();
 
-  const prompt = def.buildGenerationPrompt(ig, 0);
+  let prompt: string;
+  let refUrls: string[];
+
+  if (editFeedback) {
+    const lastUrl = await resolveLastGeneratedImageUrl(input.companyId, ig);
+    if (!lastUrl) throw new Error('No generated image to edit.');
+    prompt = buildImageEditPrompt(editFeedback);
+    refUrls = [lastUrl];
+  } else {
+    refUrls = await resolveTemplateReferenceUrls(input.companyId, def, ig);
+    if (!refUrls.length) throw new Error('Required images are missing');
+    prompt = def.buildGenerationPrompt(ig, 0);
+  }
+
   const out = await generateOneWithRetry({
     companyId: input.companyId,
     sessionId: input.sessionId,
@@ -138,12 +151,23 @@ export async function runTemplateRegenerateSlot(input: {
   const def = input.ig.templateId ? getTemplateById(input.ig.templateId) : undefined;
   if (!def) throw new Error('Template not found');
 
-  const refUrls = await resolveTemplateReferenceUrls(input.companyId, def, input.ig);
-  if (!refUrls.length) throw new Error('Required images are missing');
-
   const aspectRatio = def.fixedAspectRatio ?? input.ig.aspectRatio ?? null;
   const label = def.name;
-  const prompt = def.buildGenerationPrompt(input.ig, input.index);
+  const editFeedback = input.ig.rejectFeedback?.trim();
+
+  let prompt: string;
+  let refUrls: string[];
+
+  if (editFeedback) {
+    const lastUrl = await resolveLastGeneratedImageUrl(input.companyId, input.ig);
+    if (!lastUrl) throw new Error('No generated image to edit.');
+    prompt = buildImageEditPrompt(editFeedback);
+    refUrls = [lastUrl];
+  } else {
+    refUrls = await resolveTemplateReferenceUrls(input.companyId, def, input.ig);
+    if (!refUrls.length) throw new Error('Required images are missing');
+    prompt = def.buildGenerationPrompt(input.ig, input.index);
+  }
 
   const out = await generateOneWithRetry({
     companyId: input.companyId,

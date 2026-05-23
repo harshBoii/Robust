@@ -16,10 +16,7 @@ function fieldVal(state: ImageGenState, key: string): unknown {
 }
 
 function additionalRequest(state: ImageGenState): string | null {
-  const extra =
-    str(state, 'additionalRequest') ||
-    (state.rejectFeedback?.trim() ? state.rejectFeedback : '') ||
-    str(state, 'changeRequest');
+  const extra = str(state, 'additionalRequest') || str(state, 'changeRequest');
   return extra.trim() || null;
 }
 

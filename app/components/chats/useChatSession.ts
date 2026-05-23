@@ -12,6 +12,11 @@ import {
 } from './chat-pending-storage';
 import { resolveInitialHandoffText } from './resolve-initial-handoff-text';
 import { resolveChatBusyTone, type ChatBusyTone } from './chat-busy-tone';
+import {
+  captureReconcileSnapshot,
+  isNetworkFailure,
+  reconcileSessionAfterNetworkError,
+} from './reconcile-session-after-network-error';
 import { useChatBusyEta } from './useChatBusyEta';
 import type { SerializedMessage } from '@/lib/chats/types';
 import type { WorkflowState } from '@/lib/chats/types';
@@ -219,6 +224,7 @@ export function useChatSession(sessionId: string, options?: UseChatSessionOption
       }
 
       beginBusy(tone);
+      const reconcileSnapshot = captureReconcileSnapshot(session, messages);
 
       try {
         const res = await fetch(`/api/chats/${sessionId}/messages`, {
@@ -231,6 +237,19 @@ export function useChatSession(sessionId: string, options?: UseChatSessionOption
         if (!res.ok) throw new Error(data.error ?? 'Send failed');
         applyResult(data);
       } catch (e) {
+        if (isNetworkFailure(e)) {
+          const recovered = await reconcileSessionAfterNetworkError(
+            sessionId,
+            reconcileSnapshot,
+          );
+          if (recovered) {
+            applyResult({
+              session: recovered,
+              messages: recovered.messages ?? [],
+            });
+            return;
+          }
+        }
         setMessages((prev) => prev.filter((m) => m.id !== optimisticId));
         const msg = e instanceof Error ? e.message : 'Send failed';
         setOperationError(msg);
@@ -239,7 +258,7 @@ export function useChatSession(sessionId: string, options?: UseChatSessionOption
         endBusy();
       }
     },
-    [sessionId, session?.currentStep, applyResult, beginBusy, endBusy],
+    [sessionId, session, messages, applyResult, beginBusy, endBusy],
   );
 
   useEffect(() => {
@@ -332,6 +351,7 @@ export function useChatSession(sessionId: string, options?: UseChatSessionOption
         optimisticId = appendOptimisticUser(displayText);
       }
       if (!silent) beginBusy(tone);
+      const reconcileSnapshot = captureReconcileSnapshot(session, messages);
 
       const { userMessage: _u, ...apiPayload } = payload;
 
@@ -363,6 +383,19 @@ export function useChatSession(sessionId: string, options?: UseChatSessionOption
         }
         applyResult(data);
       } catch (e) {
+        if (isNetworkFailure(e)) {
+          const recovered = await reconcileSessionAfterNetworkError(
+            sessionId,
+            reconcileSnapshot,
+          );
+          if (recovered) {
+            applyResult({
+              session: recovered,
+              messages: recovered.messages ?? [],
+            });
+            return;
+          }
+        }
         if (optimisticId) {
           setMessages((prev) => prev.filter((m) => m.id !== optimisticId));
         }
@@ -373,7 +406,7 @@ export function useChatSession(sessionId: string, options?: UseChatSessionOption
         if (!silent) endBusy();
       }
     },
-    [sessionId, session?.currentStep, applyResult, beginBusy, endBusy, appendOptimisticUser],
+    [sessionId, session, messages, applyResult, beginBusy, endBusy, appendOptimisticUser],
   );
 
   return {

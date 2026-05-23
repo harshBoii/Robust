@@ -83,12 +83,36 @@ export async function regenerateVariantPrompts(input: {
   changes: Array<{ index: number; description: string }>;
 }): Promise<ImageGenVariant[]> {
   const variants = [...(input.state.variants ?? [])];
-  const indices = input.changes.map((c) => c.index);
+
+  const changesWithContext = input.changes
+    .filter((c) => c.index >= 0 && c.index < variants.length && c.description?.trim())
+    .map((c) => ({
+      index: c.index,
+      promptNumber: c.index + 1,
+      existingIdeaLabel: variants[c.index]!.ideaLabel,
+      existingPrompt: variants[c.index]!.prompt,
+      userRequest: c.description.trim(),
+    }));
+
+  if (!changesWithContext.length) {
+    return variants;
+  }
 
   const userText = [
-    'Regenerate prompts ONLY for the listed variant indices. Keep other variants identical in ideaLabel and prompt.',
-    `Changes: ${JSON.stringify(input.changes)}`,
-    `Current variants: ${JSON.stringify(variants.map((v, i) => ({ index: i, ideaLabel: v.ideaLabel })))}`,
+    'Rewrite image-generation prompts ONLY for the listed prompt numbers.',
+    'For each item you receive the EXISTING prompt and the USER change request — produce a new prompt that applies the request while keeping the same creative axis unless the user asks otherwise.',
+    'Keep all other variant indices identical (same ideaLabel and prompt).',
+    `Changes: ${JSON.stringify(changesWithContext, null, 2)}`,
+    `All variants (0-based index): ${JSON.stringify(
+      variants.map((v, i) => ({
+        index: i,
+        promptNumber: i + 1,
+        ideaLabel: v.ideaLabel,
+        prompt: v.prompt,
+      })),
+      null,
+      2,
+    )}`,
     TAXONOMY,
     'Respond JSON: { "variants": [{ "index": number, "ideaLabel": "...", "prompt": "..." }] }',
   ].join('\n');

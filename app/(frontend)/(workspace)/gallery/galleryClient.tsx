@@ -654,7 +654,8 @@ export default function GalleryClient({
     "grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6";
 
   return (
-    <div className="mx-auto max-w-[100rem] space-y-8 p-6">
+    <div className="mx-auto flex h-full min-h-0 w-full max-w-[100rem] flex-1 flex-col overflow-hidden p-6">
+      <div className="shrink-0 space-y-8">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <h1 className="font-heading text-2xl font-semibold tracking-tight text-foreground md:text-3xl">
@@ -739,20 +740,23 @@ export default function GalleryClient({
             : "No assets yet. Upload video or images above."}
         </div>
       ) : null}
+      </div>
 
-      {assets.length > 0 && viewMode === "flat" ? (
-        <div className={gridClass}>{assets.map(renderAssetCard)}</div>
-      ) : null}
-
-      {assets.length > 0 && viewMode === "bulk" && !hideFoldersView ? (
-        <div className={folderGridClass}>
-          {bulkGroups.map((group) => (
-            <FolderTile
-              key={group.key}
-              group={group}
-              onOpen={() => setOpenFolder(group)}
-            />
-          ))}
+      {assets.length > 0 ? (
+        <div className="min-h-0 flex-1 overflow-y-auto glass-scrollbar pt-8">
+          {viewMode === "flat" ? (
+            <div className={gridClass}>{assets.map(renderAssetCard)}</div>
+          ) : !hideFoldersView ? (
+            <div className={folderGridClass}>
+              {bulkGroups.map((group) => (
+                <FolderTile
+                  key={group.key}
+                  group={group}
+                  onOpen={() => setOpenFolder(group)}
+                />
+              ))}
+            </div>
+          ) : null}
         </div>
       ) : null}
 

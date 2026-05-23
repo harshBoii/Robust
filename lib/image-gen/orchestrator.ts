@@ -12,7 +12,12 @@ import { shouldSkipActionUserBubble } from '@/lib/chats/user-message-policy';
 import { parseWorkflowState, serializeMessage, serializeSession } from '@/lib/chats/serialize';
 import type { OrchestratorResult, SerializedMessage, WorkflowState } from '@/lib/chats/types';
 
-import { buildProductAdBasePrompt, buildProductOnModelPrompt } from './base-prompts';
+import {
+  buildImageEditPrompt,
+  buildProductAdBasePrompt,
+  buildProductOnModelPrompt,
+} from './base-prompts';
+import { resolveLastGeneratedImageUrl } from './resolve-last-generated-image';
 import { batchGenerateVariants } from './batch-generate';
 import {
   classifyPostResultNext,
@@ -49,6 +54,8 @@ import {
   applyLastGeneratedForVariantGen,
 } from './carry-over-image';
 import { resolveAssetImageUrl } from './resolve-asset-image-url';
+import { handleIdeaReviewTurn } from './handle-idea-review-turn';
+import { buildIdeaReviewWidgetPayload } from './idea-review-widget-payload';
 import { generateVariantPrompts, regenerateVariantPrompts } from './variant-prompts';
 
 const IMAGE_GEN_STEP = 'imageGen';
@@ -386,6 +393,23 @@ export async function handleImageGenMessage(
     return runTemplateGenerateFlow(session, nextWorkflow, carried, newMessages);
   }
 
+  if (ig.subpath === 'variantGen' && ig.step === 'reviewIdeas') {
+    return handleIdeaReviewTurn(session, companyId, workflowState, ig, text, newMessages, {
+      resolveProductImageUrl,
+      assistantMsg: (sessionId, content, widgetType, widgetPayload) =>
+        assistantMsg(
+          sessionId,
+          content,
+          widgetType as Parameters<typeof assistantMsg>[2],
+          widgetPayload,
+        ),
+      runGenerateVariants,
+      persist,
+      getChatSession,
+      packageResult,
+    });
+  }
+
   if (ig.step === 'chooseNext' || ig.step === 'reviewBase' || ig.step === 'reviewOnModel') {
     const route = await classifyPostResultNext({ userText: text });
     return routePostResultNext(
@@ -437,10 +461,15 @@ async function runGenerateBase(
   newMessages.push(await assistantMsg(session.id, generatingLabel(ig), 'imageGenGenerating'));
 
   try {
-    const refUrl = await resolveProductImageUrl(session.companyId, ig);
-    if (!refUrl) throw new Error('Product image is missing');
+    const editFeedback = ig.rejectFeedback?.trim();
+    const refUrl = editFeedback
+      ? await resolveLastGeneratedImageUrl(session.companyId, ig)
+      : await resolveProductImageUrl(session.companyId, ig);
+    if (!refUrl) {
+      throw new Error(editFeedback ? 'No generated image to edit.' : 'Product image is missing');
+    }
 
-    const prompt = buildProductAdBasePrompt(ig, ig.rejectFeedback);
+    const prompt = buildProductAdBasePrompt(ig, editFeedback);
     const gen = await generateImage({
       prompt,
       referenceImageUrl: refUrl,
@@ -600,9 +629,9 @@ async function runGenerateIdeas(
     newMessages.push(
       await assistantMsg(
         session.id,
-        `Here are ${variants.length} creative ideas. Accept all to generate, or tell me which to change.`,
+        `Here are ${variants.length} creative ideas. Each prompt is listed below — say "accept all" to generate, or e.g. "change prompt 1 to …" in chat.`,
         'imageGenIdeaReview',
-        { ideas: variants.map((v) => v.ideaLabel) },
+        buildIdeaReviewWidgetPayload(variants),
       ),
     );
   } catch (e) {
@@ -621,8 +650,9 @@ async function runGenerateVariants(
   session: DbChatSession,
   workflowState: WorkflowState,
   ig: ImageGenState,
+  priorMessages: SerializedMessage[] = [],
 ): Promise<OrchestratorResult> {
-  const newMessages: SerializedMessage[] = [];
+  const newMessages = [...priorMessages];
   ig.step = 'generateVariants';
   let nextWorkflow = mergeImageGenIntoWorkflow(workflowState, ig);
   await persist(session, nextWorkflow);
@@ -738,36 +768,51 @@ async function runProductOnModelGenerate(
   newMessages.push(await assistantMsg(session.id, generatingLabel(ig), 'imageGenGenerating'));
 
   try {
-    const refUrl = await resolveProductImageUrl(session.companyId, ig);
-    if (!refUrl) throw new Error('Product image missing');
+    const editFeedback = ig.rejectFeedback?.trim();
+    let gen: Awaited<ReturnType<typeof generateImage>>;
+    let storedLabel = 'Product on model';
 
-    const { urls, refs } = await resolveOnModelReferenceUrls(session.companyId, refUrl, ig);
+    if (editFeedback) {
+      const refUrl = await resolveLastGeneratedImageUrl(session.companyId, ig);
+      if (!refUrl) throw new Error('No generated image to edit.');
 
-    const prompt = buildProductOnModelPrompt(
-      ig,
-      {
+      const prompt = buildImageEditPrompt(editFeedback);
+      gen = await generateImage({
+        prompt,
+        referenceImageUrl: refUrl,
+        aspectRatio: ig.aspectRatio,
+        imageArtistId: ig.imageArtistId,
+        quality: ig.imageQuality,
+      });
+    } else {
+      const refUrl = await resolveProductImageUrl(session.companyId, ig);
+      if (!refUrl) throw new Error('Product image missing');
+
+      const { urls, refs } = await resolveOnModelReferenceUrls(session.companyId, refUrl, ig);
+      storedLabel = `${refs.model.label} · ${refs.pose.label}`;
+
+      const prompt = buildProductOnModelPrompt(ig, {
         modelLabel: refs.model.label,
         backgroundLabel: refs.background.label,
         poseLabel: refs.pose.label,
         modelSource: refs.model.source,
         backgroundSource: refs.background.source,
         poseSource: refs.pose.source,
-      },
-      ig.rejectFeedback,
-    );
-    const gen = await generateImage({
-      prompt,
-      referenceImageUrls: urls,
-      aspectRatio: ig.aspectRatio,
-      imageArtistId: ig.imageArtistId,
-      quality: ig.imageQuality,
-    });
+      });
+      gen = await generateImage({
+        prompt,
+        referenceImageUrls: urls,
+        aspectRatio: ig.aspectRatio,
+        imageArtistId: ig.imageArtistId,
+        quality: ig.imageQuality,
+      });
+    }
     const stored = await storeGeneratedImage({
       companyId: session.companyId,
       sessionId: session.id,
       imageBase64: gen.imageBase64,
       title: 'Product on model',
-      label: `${refs.model.label} · ${refs.pose.label}`,
+      label: storedLabel,
     });
 
     ig = appendGeneratedAsset(
@@ -776,6 +821,7 @@ async function runProductOnModelGenerate(
         step: 'reviewOnModel',
         onModelGeneratedAssetId: stored.assetId,
         onModelGeneratedImageUrl: stored.imageUrl,
+        rejectFeedback: undefined,
       },
       { assetId: stored.assetId, label: 'Product on model', imageUrl: stored.imageUrl },
     );
@@ -1286,7 +1332,7 @@ export async function handleImageGenAction(
     }
 
     case 'imageGen.ideasAccepted': {
-      return runGenerateVariants(session, workflowState, ig);
+      return runGenerateVariants(session, workflowState, ig, newMessages);
     }
 
     case 'imageGen.ideasChanged': {
@@ -1303,7 +1349,7 @@ export async function handleImageGenAction(
       ig = { ...ig, variants, step: 'reviewIdeas' };
       newMessages.push(
         await assistantMsg(session.id, 'Updated ideas — review below.', 'imageGenIdeaReview', {
-          ideas: variants.map((v) => v.ideaLabel),
+          ...buildIdeaReviewWidgetPayload(variants),
         }),
       );
       break;

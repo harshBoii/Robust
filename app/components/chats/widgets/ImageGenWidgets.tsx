@@ -449,30 +449,60 @@ export function ImageGenIdeaReviewWidget({
   payload: Record<string, unknown>;
   onAction: ChatWidgetDispatch;
 }) {
-  const ideas = (payload.ideas as string[]) ?? [];
+  const fromVariants =
+    (payload.variants as Array<{ ideaLabel: string; prompt: string }>) ?? [];
+  const legacyIdeas = (payload.ideas as string[]) ?? [];
+  const rows =
+    fromVariants.length > 0
+      ? fromVariants.map((v, i) => ({
+          index: i,
+          ideaLabel: v.ideaLabel,
+          prompt: v.prompt,
+        }))
+      : legacyIdeas.map((label, i) => ({
+          index: i,
+          ideaLabel: label,
+          prompt: '',
+        }));
+
   const [edits, setEdits] = useState<Record<number, string>>({});
 
   return (
     <div className="space-y-3">
-      <ul className="space-y-1">
-        {ideas.map((label, i) => (
-          <li key={i} className="flex items-center gap-2 text-[13px]">
-            <span className="font-medium text-muted-foreground">{i + 1}.</span>
-            <span>{label}</span>
+      <ul className="space-y-3">
+        {rows.map((row) => (
+          <li
+            key={row.index}
+            className="rounded-lg border border-border/40 bg-background/80 p-3"
+          >
+            <p className="text-[13px] font-semibold text-foreground">
+              <span className="text-muted-foreground">Prompt {row.index + 1} · </span>
+              {row.ideaLabel}
+            </p>
+            {row.prompt ? (
+              <p className="mt-2 whitespace-pre-wrap text-[12px] leading-relaxed text-muted-foreground">
+                {row.prompt}
+              </p>
+            ) : null}
           </li>
         ))}
       </ul>
       <details className="text-[12px] text-muted-foreground">
-        <summary className="cursor-pointer">Change an idea</summary>
+        <summary className="cursor-pointer">Change a prompt (widget)</summary>
+        <p className="mt-1 text-[11px]">
+          Or type in chat, e.g. &quot;change prompt 1 to a warmer studio look&quot;.
+        </p>
         <div className="mt-2 space-y-2">
-          {ideas.map((label, i) => (
-            <div key={i} className="flex gap-2">
-              <span className="w-6 shrink-0 pt-2">{i + 1}.</span>
+          {rows.map((row) => (
+            <div key={row.index} className="flex gap-2">
+              <span className="w-16 shrink-0 pt-2 text-[11px] font-medium">
+                Prompt {row.index + 1}
+              </span>
               <input
                 className="flex-1 rounded border border-border/50 bg-background px-2 py-1 text-[12px]"
-                placeholder={`New direction for "${label}"`}
-                value={edits[i] ?? ''}
-                onChange={(e) => setEdits((prev) => ({ ...prev, [i]: e.target.value }))}
+                placeholder={`New direction for "${row.ideaLabel}"`}
+                value={edits[row.index] ?? ''}
+                onChange={(e) => setEdits((prev) => ({ ...prev, [row.index]: e.target.value }))}
               />
             </div>
           ))}
@@ -491,7 +521,7 @@ export function ImageGenIdeaReviewWidget({
               }
             }}
           >
-            Apply idea changes
+            Apply prompt changes
           </button>
         </div>
       </details>
