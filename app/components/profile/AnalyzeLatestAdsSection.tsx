@@ -2,7 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import AnalyzeIntelligenceResults from '@/app/components/profile/AnalyzeIntelligenceResults';
 import { useToast } from '@/app/components/UI/ToastProvider';
+import type { IntelligenceResultRow } from '@/lib/asset-intelligence/intelligence-results';
 import type { TopWinningAsset } from '@/lib/asset-intelligence/types';
 
 type StepState = 'idle' | 'pending' | 'active' | 'done' | 'error';
@@ -82,9 +84,28 @@ export default function AnalyzeLatestAdsSection() {
   const [expanded, setExpanded] = useState(false);
   const [running, setRunning] = useState(false);
   const [assets, setAssets] = useState<TopWinningAsset[]>([]);
+  const [results, setResults] = useState<IntelligenceResultRow[]>([]);
+  const [resultsLoading, setResultsLoading] = useState(true);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const [steps, setSteps] = useState<Step[]>(INITIAL_STEPS);
+
+  const loadResults = useCallback(async (assetIds?: string[]) => {
+    setResultsLoading(true);
+    try {
+      const qs = assetIds?.length
+        ? `?assetIds=${encodeURIComponent(assetIds.join(','))}`
+        : '';
+      const data = await json<{ results: IntelligenceResultRow[] }>(
+        await fetch(`/api/ads/intelligence-results${qs}`, { credentials: 'include' }),
+      );
+      setResults(data.results ?? []);
+    } catch {
+      setResults([]);
+    } finally {
+      setResultsLoading(false);
+    }
+  }, []);
 
   const clearPoll = useCallback(() => {
     if (pollRef.current) {
@@ -94,6 +115,10 @@ export default function AnalyzeLatestAdsSection() {
   }, []);
 
   useEffect(() => () => clearPoll(), [clearPoll]);
+
+  useEffect(() => {
+    void loadResults();
+  }, [loadResults]);
 
   const setStep = (index: number, patch: Partial<Step>) => {
     setSteps((prev) =>
@@ -120,6 +145,7 @@ export default function AnalyzeLatestAdsSection() {
             clearPoll();
             setStep(3, { state: 'done', label: `${total}/${total} analyzed ✓` });
             setRunning(false);
+            void loadResults(assetIds);
           }
         } catch {
           clearPoll();
@@ -128,7 +154,7 @@ export default function AnalyzeLatestAdsSection() {
         }
       }, POLL_MS);
     },
-    [clearPoll],
+    [clearPoll, loadResults],
   );
 
   const runPipeline = async () => {
@@ -216,6 +242,7 @@ export default function AnalyzeLatestAdsSection() {
           label: `${initial.total}/${initial.total} analyzed ✓`,
         });
         setRunning(false);
+        void loadResults(ids);
       }
     } catch (e) {
       clearPoll();
@@ -262,6 +289,8 @@ export default function AnalyzeLatestAdsSection() {
           Intelligence saved for {assets.length} asset{assets.length === 1 ? '' : 's'}.
         </p>
       )}
+
+      <AnalyzeIntelligenceResults results={results} loading={resultsLoading && !results.length} />
     </div>
   );
 }
