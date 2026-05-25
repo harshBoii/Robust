@@ -25,13 +25,18 @@ const PUBLIC_PATH_PREFIXES = [
   "/api/videos",
 ] as const;
 
-/** GET /api/assets/{id}/download only — not /url or /status. */
+/** Public: GET /api/assets/{id}/download (not /url or /status). */
 function isPublicAssetDownloadPath(pathname: string): boolean {
   return /^\/api\/assets\/[^/]+\/download$/.test(pathname);
 }
 
+function isPublicVideoDownloadPath(pathname: string): boolean {
+  return /^\/api\/videos\/[^/]+\/download$/.test(pathname);
+}
+
 function isPublicPath(pathname: string): boolean {
   if (isPublicAssetDownloadPath(pathname)) return true;
+  if (isPublicVideoDownloadPath(pathname)) return true;
   return PUBLIC_PATH_PREFIXES.some(
     (p) => pathname === p || pathname.startsWith(`${p}/`),
   );
