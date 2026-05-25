@@ -18,6 +18,7 @@ import {
   Sparkles,
   User,
   AlertCircle,
+  Database,
 } from 'lucide-react';
 import { SiMeta, SiShopify } from 'react-icons/si';
 
@@ -34,6 +35,7 @@ import {
   formatRelativeTime,
   profileInitials,
 } from '@/app/components/profile/profile-utils';
+import DataMineSection from '@/app/components/profile/DataMineSection';
 import type { CompanyProfile } from '@/lib/profile/company-profile';
 
 type ProfileClientProps = {
@@ -605,6 +607,17 @@ export default function ProfileClient({ profile }: ProfileClientProps) {
               </Link>
             </p>
           )}
+        </ProfileSectionCard>
+
+        {/* Data Mine */}
+        <ProfileSectionCard
+          className="lg:col-span-12 min-h-[240px]"
+          bodyClassName="flex min-h-0 flex-1 flex-col overflow-hidden"
+          title="Data Mine"
+          icon={Database}
+          iconClassName="text-violet-600"
+        >
+          <DataMineSection />
         </ProfileSectionCard>
 
         {/* Security */}

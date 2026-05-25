@@ -23,6 +23,7 @@ model Company {
   description String?
   logoUrl     String? @db.VarChar(1000)
   website     String? @db.VarChar(500)
+  linkedinUrl String? @map("linkedin_url") @db.VarChar(1000)
   domain      String? @db.VarChar(255)
   email       String? @unique @db.VarChar(255)
   userName    String? @unique @db.VarChar(255)
@@ -61,9 +62,70 @@ model Company {
   adChatSessions     AdChatSession[]
   authSessions       AuthSession[]
   loginActivities    LoginActivity[]
+  brandEntity        BrandEntity?
+  offerings          Offering[]
 
   @@index([slug])
   @@map("companies")
+}
+
+// ================================================================
+// DATA MINE (company seed / brand enrichment)
+// ================================================================
+
+model BrandEntity {
+  id                  String   @id @default(cuid())
+  companyId           String   @unique @map("company_id")
+  canonicalName       String   @map("canonical_name") @db.VarChar(255)
+  aliases             String[] @default([])
+  entityType          String?  @map("entity_type") @db.VarChar(64)
+  oneLiner            String?  @map("one_liner") @db.Text
+  about               String?  @db.Text
+  industry            String?  @db.VarChar(255)
+  category            String?  @db.VarChar(255)
+  headquartersCity    String?  @map("headquarters_city") @db.VarChar(255)
+  headquartersCountry String?  @map("headquarters_country") @db.VarChar(255)
+  foundedYear         Int?     @map("founded_year")
+  employeeRange       String?  @map("employee_range") @db.VarChar(64)
+  businessModel       String?  @map("business_model") @db.VarChar(64)
+  topics              String[] @default([])
+  keywords            String[] @default([])
+  targetAudiences     String[] @default([]) @map("target_audiences")
+  branding            Json?
+  createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt           DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  company   Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  offerings Offering[]
+
+  @@map("brand_entities")
+}
+
+model Offering {
+  id              String       @id @default(cuid())
+  companyId       String       @map("company_id")
+  brandEntityId   String       @map("brand_entity_id")
+  name            String       @db.VarChar(500)
+  slug            String       @db.VarChar(255)
+  description     String?      @db.Text
+  offeringType    OfferingType @default(PRODUCT) @map("offering_type")
+  url             String?      @db.VarChar(1000)
+  keywords        String[]     @default([])
+  useCases        String[]     @default([]) @map("use_cases")
+  targetAudiences String[]     @default([]) @map("target_audiences")
+  differentiators String[]     @default([])
+  competitors     String[]     @default([])
+  isPrimary       Boolean      @default(false) @map("is_primary")
+  isActive        Boolean      @default(true) @map("is_active")
+  createdAt       DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  company     Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  brandEntity BrandEntity @relation(fields: [brandEntityId], references: [id], onDelete: Cascade)
+
+  @@unique([brandEntityId, slug])
+  @@index([companyId])
+  @@map("offerings")
 }
 
 model AuthSession {
@@ -1005,4 +1067,10 @@ enum AdChatMessageRole {
 
 enum IntegrationProvider {
   Shopify
+}
+
+enum OfferingType {
+  PRODUCT
+  SERVICE
+  OTHER
 }
