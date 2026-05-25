@@ -18,7 +18,6 @@ import {
   Sparkles,
   User,
   AlertCircle,
-  Database,
 } from 'lucide-react';
 import { SiMeta, SiShopify } from 'react-icons/si';
 
@@ -35,7 +34,6 @@ import {
   formatRelativeTime,
   profileInitials,
 } from '@/app/components/profile/profile-utils';
-import DataMineSection from '@/app/components/profile/DataMineSection';
 import type { CompanyProfile } from '@/lib/profile/company-profile';
 
 type ProfileClientProps = {
@@ -341,6 +339,18 @@ export default function ProfileClient({ profile }: ProfileClientProps) {
               <SiShopify className="h-3 w-3 text-[#5e8e3e]" />
               Manage Shopify
             </Link>
+            <Link
+              href="/profile/data"
+              className="inline-flex items-center gap-1 rounded-lg border border-black/[0.08] bg-white px-2.5 py-1.5 text-[11px] font-medium"
+            >
+              Data Mine
+            </Link>
+            <Link
+              href="/profile/analyze-ads"
+              className="inline-flex items-center gap-1 rounded-lg border border-black/[0.08] bg-white px-2.5 py-1.5 text-[11px] font-medium"
+            >
+              Analyze Ads
+            </Link>
             <button
               type="button"
               onClick={() => setModal('edit')}
@@ -607,17 +617,6 @@ export default function ProfileClient({ profile }: ProfileClientProps) {
               </Link>
             </p>
           )}
-        </ProfileSectionCard>
-
-        {/* Data Mine */}
-        <ProfileSectionCard
-          className="lg:col-span-12 min-h-[240px]"
-          bodyClassName="flex min-h-0 flex-1 flex-col overflow-hidden"
-          title="Data Mine"
-          icon={Database}
-          iconClassName="text-violet-600"
-        >
-          <DataMineSection />
         </ProfileSectionCard>
 
         {/* Security */}

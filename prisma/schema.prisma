@@ -64,6 +64,7 @@ model Company {
   loginActivities    LoginActivity[]
   brandEntity        BrandEntity?
   offerings          Offering[]
+  assetIntelligences AssetIntelligence[]
 
   @@index([slug])
   @@map("companies")
@@ -264,7 +265,8 @@ model Asset {
   title         String       @db.VarChar(500)
   filename      String       @db.VarChar(500)
   originalSize  BigInt
-  status        AssetStatus  @default(UPLOADING)
+  status              AssetStatus         @default(UPLOADING)
+  intelligenceStatus  IntelligenceStatus  @default(NONE)
   r2Key         String       @db.VarChar(500)
   r2Bucket      String       @db.VarChar(255)
   resolution    String?      @db.VarChar(20)
@@ -290,17 +292,66 @@ model Asset {
   metaCreatives MetaCreative[]
   streamQueue   StreamQueue[]
   adPublishJobs AdPublishJob[]
-
+  assetIntelligence AssetIntelligence?
 
   @@index([companyId])
   @@index([bulkUploadId])
   @@index([assetBucketId])
   @@index([assetType])
   @@index([status])
+  @@index([intelligenceStatus])
   @@index([assetType, companyId])
   @@index([createdAt(sort: Desc)])
   @@map("assets")
 }
+
+model AssetIntelligence {
+  id                String          @id @default(cuid())
+  assetId           String
+  language          String?         @db.VarChar(10)
+  contentType       String?         @db.VarChar(100)
+  durationSeconds   Int?
+  theme             String?         @db.VarChar(255)
+  sentiment         String?         @db.VarChar(50)
+  intensityScore    Float?
+  spiritualElements Boolean         @default(false)
+  titlePrimary      String?         @db.VarChar(500)
+  shortSummary      String?
+  longDescription   String?
+  tags              String[]        @default([])
+  tone              String[]        @default([])
+  topics            String[]        @default([])
+  targetAudience    String[]        @default([])
+  bestPlatforms     String[]        @default([])
+  visualContext     String[]        @default([])
+  videoGenres       String[]        @default([])
+  titleVariants     Json?           @default("{}")
+  chapters          Json?           @default("[]")
+  shortsHooks       Json?           @default("[]")
+  missRobustaInsights   Json?           @default("[]")
+  modelVersion      String?         @db.VarChar(50)
+  confidence        Float?
+  processedAt       DateTime        @default(now()) @db.Timestamptz(3)
+  companyId         String
+  createdAt         DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime        @updatedAt @db.Timestamptz(3)
+
+  asset             Asset           @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  company           Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([assetId])
+  @@index([assetId])
+  @@index([companyId])
+  @@index([language])
+  @@index([sentiment])
+  @@index([theme])
+  @@index([contentType])
+  @@index([spiritualElements])
+  @@index([processedAt(sort: Desc)])
+  @@map("asset_intelligence")
+}
+
+
 model StreamQueue {
   id          String            @id @default(cuid())
   assetId     String
@@ -966,6 +1017,14 @@ enum AssetStatus {
   READY
   ERROR
   ARCHIVED
+}
+
+enum IntelligenceStatus {
+  NONE
+  PENDING
+  PROCESSING
+  READY
+  FAILED
 }
 
 enum UploadSource {

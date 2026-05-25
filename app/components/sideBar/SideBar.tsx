@@ -13,6 +13,8 @@ import {
   ShieldCheck, ScrollText,   MessageSquare,
   LayoutTemplate,
   User,
+  Database,
+  Sparkles,
   X,
 } from 'lucide-react';
 import ChatsHistoryList from '@/app/components/chats/ChatsHistoryList';
@@ -84,7 +86,7 @@ const MAIN_SECTIONS: MainSection[] = [
   // { id: 'createAd',  label: 'Create Ad', icon: PlusCircle,  hasSecondary: false },
   { id: 'gallery',   label: 'Gallery',   icon: IconGallery, hasSecondary: true },
   { id: 'report',    label: 'Report',    icon: BarChart3,   hasSecondary: true },
-  { id: 'profile',   label: 'Profile',   icon: User,        hasSecondary: false },
+  { id: 'profile',   label: 'Profile',   icon: User,        hasSecondary: true },
   { id: 'workspace', label: 'Workspace', icon: Settings,    hasSecondary: true, hidden: true },
 ];
 
@@ -161,13 +163,17 @@ const SecondaryNavItem = ({
   icon: Icon,
   label,
   href,
+  exact = false,
 }: {
   icon: IconComponentType;
   label: string;
   href: string;
+  exact?: boolean;
 }) => {
   const pathname = usePathname();
-  const isActive = pathname === href || (href !== '/' && pathname?.startsWith(href));
+  const isActive = exact
+    ? pathname === href
+    : pathname === href || (href !== '/' && pathname?.startsWith(href));
 
   return (
     <Link
@@ -438,6 +444,20 @@ const SecondarySidebarContent = ({
         <>
           <SectionLabel label="Account" />
           {/* <SecondaryNavItem icon={Settings} label="Settings" href="/workspace/settings" /> */}
+        </>
+      );
+
+    case 'profile':
+      return (
+        <>
+          <SectionLabel label="Profile" />
+          <SecondaryNavItem icon={User} label="Overview" href="/profile" exact />
+          <SecondaryNavItem icon={Database} label="Data Mine" href="/profile/data" />
+          <SecondaryNavItem
+            icon={Sparkles}
+            label="Analyze Latest Ads"
+            href="/profile/analyze-ads"
+          />
         </>
       );
 
