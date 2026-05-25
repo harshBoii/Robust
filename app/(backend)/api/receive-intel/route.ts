@@ -32,12 +32,6 @@ function authorizeIntelWebhook(req: NextRequest): NextResponse | null {
 }
 
 export async function POST(req: NextRequest) {
-  const denied = authorizeIntelWebhook(req);
-  if (denied) return denied;
-
-  if (process.env.NODE_ENV === 'production' && !process.env.INTEL_WEBHOOK_SECRET?.trim()) {
-    console.warn('[receive-intel] INTEL_WEBHOOK_SECRET is not set in production');
-  }
 
   let body: unknown;
   try {
