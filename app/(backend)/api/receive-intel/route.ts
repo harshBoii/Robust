@@ -36,13 +36,16 @@ export async function POST(req: NextRequest) {
   let body: unknown;
   try {
     body = await req.json();
+    console.log('body', body);
   } catch {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
 
   try {
     const payload = parseIntelPayload(body);
+    console.log('payload', payload);
     await upsertAssetIntelligence(payload);
+    console.log('upserted');
     return NextResponse.json({ success: true });
   } catch (e) {
     if (e instanceof IntelWebhookError) {
