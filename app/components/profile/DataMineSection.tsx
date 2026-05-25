@@ -180,6 +180,14 @@ export default function DataMineSection() {
   }, [load]);
 
   const saveSeedInputs = async () => {
+    if (!website.trim()) {
+      toast.push({
+        title: 'Website required',
+        message: 'Website URL cannot be empty.',
+        kind: 'error',
+      });
+      return;
+    }
     setSavingInputs(true);
     try {
       const { dataMine } = await json<{ dataMine: DataMineSnapshot }>(
@@ -207,6 +215,14 @@ export default function DataMineSection() {
   };
 
   const runAutoFill = async () => {
+    if (!website.trim()) {
+      toast.push({
+        title: 'Website required',
+        message: 'Enter and save a website URL before auto-fill.',
+        kind: 'error',
+      });
+      return;
+    }
     setSeeding(true);
     try {
       const { dataMine } = await json<{ dataMine: DataMineSnapshot }>(
@@ -378,7 +394,7 @@ export default function DataMineSection() {
         </p>
         <div className="grid gap-2 sm:grid-cols-2">
           <label className="block">
-            <span className="font-ui text-[10px] text-muted-foreground">Website URL</span>
+            <span className="font-ui text-[10px] text-muted-foreground">Website URL *</span>
             <input
               className={`${inputClass} mt-0.5`}
               value={website}
@@ -387,7 +403,9 @@ export default function DataMineSection() {
             />
           </label>
           <label className="block">
-            <span className="font-ui text-[10px] text-muted-foreground">LinkedIn URL</span>
+            <span className="font-ui text-[10px] text-muted-foreground">
+              LinkedIn URL <span className="font-normal text-muted-foreground/70">(optional)</span>
+            </span>
             <input
               className={`${inputClass} mt-0.5`}
               value={linkedinUrl}
@@ -399,7 +417,7 @@ export default function DataMineSection() {
         <div className="mt-2 flex flex-wrap gap-2">
           <button
             type="button"
-            disabled={savingInputs}
+            disabled={savingInputs || !website.trim()}
             onClick={() => void saveSeedInputs()}
             className="rounded-lg border border-black/[0.08] bg-white px-3 py-1.5 text-[11px] font-semibold disabled:opacity-60"
           >
@@ -407,7 +425,7 @@ export default function DataMineSection() {
           </button>
           <button
             type="button"
-            disabled={seeding}
+            disabled={seeding || !website.trim()}
             onClick={() => void runAutoFill()}
             className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-[11px] font-semibold text-primary-foreground disabled:opacity-60"
           >

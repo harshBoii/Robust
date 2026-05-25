@@ -56,6 +56,10 @@ export async function PATCH(request: Request) {
 
   const companyId = session!.companyId;
 
+  if (website !== undefined && !website) {
+    return NextResponse.json({ error: 'Website URL is required' }, { status: 400 });
+  }
+
   try {
     if (hasCompanyFields) {
       await prisma.company.update({

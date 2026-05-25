@@ -6,7 +6,7 @@ const SEED_TIMEOUT_MS = 120_000;
 
 export type SeedMicroserviceInput = {
   websiteUrl: string;
-  linkedinUrl: string;
+  linkedinUrl?: string;
   sessionId: string;
 };
 
@@ -28,7 +28,7 @@ export async function callCompanySeedMicroservice(
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
       body: JSON.stringify({
         website_url: input.websiteUrl,
-        linkedin_url: input.linkedinUrl,
+        ...(input.linkedinUrl ? { linkedin_url: input.linkedinUrl } : {}),
         session_id: input.sessionId,
       }),
       signal: controller.signal,

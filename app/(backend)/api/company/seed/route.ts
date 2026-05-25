@@ -21,12 +21,12 @@ export async function POST() {
   }
 
   const website = company.website?.trim();
-  const linkedinUrl = company.linkedinUrl?.trim();
+  const linkedinUrl = company.linkedinUrl?.trim() || undefined;
 
-  if (!website || !linkedinUrl) {
+  if (!website) {
     return NextResponse.json(
       {
-        error: 'Website and LinkedIn URL are required before auto-fill. Save them in Data Mine first.',
+        error: 'Website URL is required before auto-fill. Save it in Data Mine first.',
       },
       { status: 400 },
     );
