@@ -2,6 +2,7 @@ import 'server-only';
 
 import type { MetaAdCreativeDetails } from '@/lib/meta/client';
 import { getMetaAdCreativeDetails } from '@/lib/meta/client';
+import { logMetaCreativeProgress } from '@/lib/meta/creative-log';
 import { requireMetaAdAccountId } from '@/lib/meta/integration-token';
 import { prisma } from '@/lib/prisma';
 
@@ -158,6 +159,12 @@ export async function linkWinningAdCreatives(
 
   const winners = await listWinningMetaAds(companyId, 15);
 
+  logMetaCreativeProgress('link', 'start', {
+    companyId,
+    winnerCount: winners.length,
+    target: TARGET_LINKED,
+  });
+
   const result: LinkWinningCreativesResult = {
     linked: 0,
     alreadyLinked: 0,
@@ -172,8 +179,15 @@ export async function linkWinningAdCreatives(
 
   let totalWithGallery = 0;
 
-  for (const winner of winners) {
+  for (let i = 0; i < winners.length; i++) {
+    const winner = winners[i]!;
     if (totalWithGallery >= TARGET_LINKED) break;
+
+    logMetaCreativeProgress('link', `ad ${i + 1}/${winners.length}`, {
+      metaAdId: winner.metaAdId,
+      spend: winner.spend,
+      hasLinkedAsset: winner.hasLinkedAsset,
+    });
 
     if (winner.hasLinkedAsset && winner.assetId) {
       result.alreadyLinked += 1;
@@ -192,6 +206,12 @@ export async function linkWinningAdCreatives(
         companyId,
         metaAdId: winner.metaAdId,
       });
+      logMetaCreativeProgress('link', 'creative details parsed', {
+        metaAdId: winner.metaAdId,
+        metaCreativeId: metaDetails.metaCreativeId,
+        imageHash: metaDetails.imageHash,
+        videoId: metaDetails.videoId,
+      });
     } catch (e) {
       result.metaFetchFailed += 1;
       result.details.push({
@@ -202,11 +222,18 @@ export async function linkWinningAdCreatives(
       continue;
     }
 
-    if (!metaDetails.imageHash && !metaDetails.videoId) {
+    const hasMedia =
+      metaDetails.imageHash ||
+      metaDetails.videoId ||
+      metaDetails.imageUrl ||
+      metaDetails.thumbnailUrl;
+
+    if (!hasMedia) {
       result.noMediaOnMeta += 1;
       result.details.push({
         metaAdId: winner.metaAdId,
         status: 'no_media_on_meta',
+        message: 'No image_hash, video_id, image_url, or thumbnail on Meta creative',
       });
       continue;
     }
@@ -229,6 +256,10 @@ export async function linkWinningAdCreatives(
     });
 
     if (media?.assetId) {
+      logMetaCreativeProgress('link', 'matched existing MetaMedia', {
+        metaAdId: winner.metaAdId,
+        assetId: media.assetId,
+      });
       const existing = await prisma.asset.findFirst({
         where: { id: media.assetId, companyId },
         select: { id: true, status: true, assetType: true, r2Key: true },
@@ -243,6 +274,9 @@ export async function linkWinningAdCreatives(
     }
 
     if (!assetId) {
+      logMetaCreativeProgress('link', 'importing from Meta', {
+        metaAdId: winner.metaAdId,
+      });
       try {
         const imp = await importMetaCreativeToGallery({
           companyId,
@@ -274,6 +308,11 @@ export async function linkWinningAdCreatives(
     }
 
     try {
+      logMetaCreativeProgress('link', 'attach MetaCreative + MetaAd', {
+        metaAdId: winner.metaAdId,
+        assetId,
+        imported,
+      });
       await attachCreativeToAd({
         metaIntegrationId: integration.id,
         metaAdDbId: winner.metaAdDbId,
@@ -311,6 +350,15 @@ export async function linkWinningAdCreatives(
     }
     totalWithGallery += 1;
   }
+
+  logMetaCreativeProgress('link', 'complete', {
+    linked: result.linked,
+    imported: result.imported,
+    alreadyLinked: result.alreadyLinked,
+    importFailed: result.importFailed,
+    noGalleryMatch: result.noGalleryMatch,
+    totalWithGallery,
+  });
 
   return result;
 }

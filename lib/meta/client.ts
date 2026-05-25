@@ -1,6 +1,12 @@
 import 'server-only';
 
 import { toMetaPacingTypeParam } from '@/lib/meta/adset-preset-meta';
+import {
+  logMetaCreativeProgress,
+  logMetaCreativeRequest,
+  logMetaCreativeResponse,
+  redactMetaGraphUrl,
+} from '@/lib/meta/creative-log';
 import { metaErrorFromGraph } from '@/lib/meta/errors';
 import { resolveMetaGraphAccessToken } from '@/lib/meta/integration-token';
 
@@ -153,10 +159,16 @@ async function resolveMetaFetchToken(auth?: MetaGraphAuth): Promise<string> {
 type MetaFetchInit = RequestInit &
   MetaGraphAuth & {
     searchParams?: Record<string, string>;
+    /** Log request/response under [meta-creative] (asset intelligence import). */
+    creativeLog?: {
+      operation: string;
+      metaAdId?: string;
+    };
   };
 
 async function metaFetch<T>(path: string, init?: MetaFetchInit): Promise<T> {
-  const { searchParams, companyId, accessToken, ...fetchInit } = init ?? {};
+  const { searchParams, companyId, accessToken, creativeLog, ...fetchInit } =
+    init ?? {};
   const token = await resolveMetaFetchToken({ companyId, accessToken });
   const url = new URL(`${META_GRAPH_BASE}${path}`);
   url.searchParams.set('access_token', token);
@@ -172,6 +184,18 @@ async function metaFetch<T>(path: string, init?: MetaFetchInit): Promise<T> {
     logMetaCreateRequest(createLabel, url, searchParams);
   }
 
+  const started = Date.now();
+  if (creativeLog) {
+    logMetaCreativeRequest(creativeLog.operation, {
+      method,
+      path,
+      url: redactMetaGraphUrl(url),
+      searchParams,
+      metaAdId: creativeLog.metaAdId,
+      companyId,
+    });
+  }
+
   const res = await fetch(url, {
     ...fetchInit,
     headers: {
@@ -182,6 +206,16 @@ async function metaFetch<T>(path: string, init?: MetaFetchInit): Promise<T> {
   });
 
   const json = (await res.json()) as MetaGraphResponse<T>;
+
+  if (creativeLog) {
+    logMetaCreativeResponse(creativeLog.operation, {
+      status: res.status,
+      durationMs: Date.now() - started,
+      body: json,
+      error: json.error?.message,
+    });
+  }
+
   if (createLabel) {
     logMetaCreateResponse(createLabel, res.status, json);
   }
@@ -291,15 +325,19 @@ export type MetaAdCreativeDetails = {
   metaCreativeId: string | null;
   imageHash: string | null;
   videoId: string | null;
+  /** Direct image URL from creative node (non-hash ads). */
+  imageUrl: string | null;
   thumbnailUrl: string | null;
   headline: string | null;
   primaryText: string | null;
   description: string | null;
   ctaType: string | null;
   landingUrl: string | null;
+  /** catalog / dynamic product (template_data) */
+  isCatalogCreative: boolean;
 };
 
-function parseObjectStorySpec(spec: unknown): {
+type ParsedCreativeFields = {
   imageHash: string | null;
   videoId: string | null;
   headline: string | null;
@@ -307,54 +345,203 @@ function parseObjectStorySpec(spec: unknown): {
   description: string | null;
   ctaType: string | null;
   landingUrl: string | null;
-} {
-  const empty = {
-    imageHash: null as string | null,
-    videoId: null as string | null,
-    headline: null as string | null,
-    primaryText: null as string | null,
-    description: null as string | null,
-    ctaType: null as string | null,
-    landingUrl: null as string | null,
-  };
+  isCatalogCreative: boolean;
+};
 
+function emptyParsedFields(): ParsedCreativeFields {
+  return {
+    imageHash: null,
+    videoId: null,
+    headline: null,
+    primaryText: null,
+    description: null,
+    ctaType: null,
+    landingUrl: null,
+    isCatalogCreative: false,
+  };
+}
+
+function ctaFromBlock(block: Record<string, unknown> | undefined): string | null {
+  const cta = block?.call_to_action as Record<string, unknown> | undefined;
+  return typeof cta?.type === 'string' ? cta.type : null;
+}
+
+function parseAssetFeedSpec(spec: unknown): Pick<
+  ParsedCreativeFields,
+  'imageHash' | 'videoId'
+> {
+  if (!spec || typeof spec !== 'object') {
+    return { imageHash: null, videoId: null };
+  }
+  const o = spec as Record<string, unknown>;
+  const images = Array.isArray(o.images) ? o.images : [];
+  const videos = Array.isArray(o.videos) ? o.videos : [];
+  const firstImg = images[0] as Record<string, unknown> | undefined;
+  const firstVid = videos[0] as Record<string, unknown> | undefined;
+  return {
+    imageHash:
+      typeof firstImg?.hash === 'string'
+        ? firstImg.hash
+        : typeof o.image_hash === 'string'
+          ? o.image_hash
+          : null,
+    videoId:
+      typeof firstVid?.video_id === 'string'
+        ? firstVid.video_id
+        : typeof o.video_id === 'string'
+          ? o.video_id
+          : null,
+  };
+}
+
+function mergeParsedFields(
+  base: ParsedCreativeFields,
+  extra: Partial<ParsedCreativeFields>,
+): ParsedCreativeFields {
+  return {
+    imageHash: extra.imageHash ?? base.imageHash,
+    videoId: extra.videoId ?? base.videoId,
+    headline: extra.headline ?? base.headline,
+    primaryText: extra.primaryText ?? base.primaryText,
+    description: extra.description ?? base.description,
+    ctaType: extra.ctaType ?? base.ctaType,
+    landingUrl: extra.landingUrl ?? base.landingUrl,
+    isCatalogCreative: extra.isCatalogCreative ?? base.isCatalogCreative,
+  };
+}
+
+function parseObjectStorySpec(spec: unknown): ParsedCreativeFields {
+  const empty = emptyParsedFields();
   if (!spec || typeof spec !== 'object') return empty;
   const o = spec as Record<string, unknown>;
   const linkData = o.link_data as Record<string, unknown> | undefined;
   const videoData = o.video_data as Record<string, unknown> | undefined;
-
-  const ctaFrom = (block: Record<string, unknown> | undefined) => {
-    const cta = block?.call_to_action as Record<string, unknown> | undefined;
-    return typeof cta?.type === 'string' ? cta.type : null;
-  };
+  const templateData = o.template_data as Record<string, unknown> | undefined;
+  const assetFeed = parseAssetFeedSpec(o.asset_feed_spec);
 
   if (linkData && typeof linkData === 'object') {
-    return {
+    return mergeParsedFields(empty, {
+      ...assetFeed,
       imageHash:
         typeof linkData.image_hash === 'string' ? linkData.image_hash : null,
-      videoId: null,
       headline: typeof linkData.name === 'string' ? linkData.name : null,
       primaryText: typeof linkData.message === 'string' ? linkData.message : null,
       description:
         typeof linkData.description === 'string' ? linkData.description : null,
-      ctaType: ctaFrom(linkData),
+      ctaType: ctaFromBlock(linkData),
       landingUrl: typeof linkData.link === 'string' ? linkData.link : null,
-    };
+    });
   }
 
   if (videoData && typeof videoData === 'object') {
-    return {
-      imageHash: null,
+    return mergeParsedFields(empty, {
+      ...assetFeed,
       videoId: typeof videoData.video_id === 'string' ? videoData.video_id : null,
       headline: typeof videoData.title === 'string' ? videoData.title : null,
       primaryText: typeof videoData.message === 'string' ? videoData.message : null,
-      description: null,
-      ctaType: ctaFrom(videoData),
+      ctaType: ctaFromBlock(videoData),
       landingUrl: typeof videoData.link === 'string' ? videoData.link : null,
-    };
+    });
+  }
+
+  if (templateData && typeof templateData === 'object') {
+    return mergeParsedFields(empty, {
+      headline: typeof templateData.name === 'string' ? templateData.name : null,
+      primaryText:
+        typeof templateData.message === 'string' ? templateData.message : null,
+      ctaType: ctaFromBlock(templateData),
+      landingUrl: typeof templateData.link === 'string' ? templateData.link : null,
+      isCatalogCreative: true,
+      ...assetFeed,
+    });
+  }
+
+  if (assetFeed.imageHash || assetFeed.videoId) {
+    return mergeParsedFields(empty, assetFeed);
   }
 
   return empty;
+}
+
+function normalizeObjectStorySpec(spec: unknown): unknown {
+  if (typeof spec === 'string') {
+    try {
+      return JSON.parse(spec) as unknown;
+    } catch {
+      return undefined;
+    }
+  }
+  return spec;
+}
+
+/** Fetch AdCreative node when ad-level payload lacks image_hash / video_id. */
+async function fetchMetaCreativeNodeDetails(
+  input: { metaCreativeId: string; metaAdId: string } & MetaGraphAuth,
+): Promise<{
+  imageHash: string | null;
+  videoId: string | null;
+  imageUrl: string | null;
+  thumbnailUrl: string | null;
+  headline: string | null;
+  primaryText: string | null;
+  description: string | null;
+  ctaType: string | null;
+  landingUrl: string | null;
+  isCatalogCreative: boolean;
+}> {
+  const fields = [
+    'id',
+    'thumbnail_url',
+    'image_url',
+    'video_id',
+    'object_story_spec',
+    'asset_feed_spec',
+  ].join(',');
+
+  const row = await metaFetch<{
+    id?: string;
+    thumbnail_url?: string;
+    image_url?: string;
+    video_id?: string;
+    object_story_spec?: unknown;
+    asset_feed_spec?: unknown;
+  }>(`/${input.metaCreativeId}`, {
+    method: 'GET',
+    companyId: input.companyId,
+    accessToken: input.accessToken,
+    searchParams: { fields },
+    creativeLog: {
+      operation: 'creative_by_id',
+      metaAdId: input.metaAdId,
+    },
+  });
+
+  const spec = normalizeObjectStorySpec(row.object_story_spec);
+  const parsed = mergeParsedFields(
+    parseObjectStorySpec(spec),
+    parseAssetFeedSpec(row.asset_feed_spec),
+  );
+
+  return {
+    imageHash: parsed.imageHash,
+    videoId:
+      parsed.videoId ??
+      (typeof row.video_id === 'string' ? row.video_id : null),
+    imageUrl: typeof row.image_url === 'string' ? row.image_url : null,
+    thumbnailUrl: typeof row.thumbnail_url === 'string' ? row.thumbnail_url : null,
+    headline: parsed.headline,
+    primaryText: parsed.primaryText,
+    description: parsed.description,
+    ctaType: parsed.ctaType,
+    landingUrl: parsed.landingUrl,
+    isCatalogCreative: parsed.isCatalogCreative,
+  };
+}
+
+function hasResolvableMedia(d: MetaAdCreativeDetails): boolean {
+  return Boolean(
+    d.imageHash || d.videoId || d.imageUrl || d.thumbnailUrl,
+  );
 }
 
 /** Live Meta fields for linking gallery assets to ads via image_hash / video_id. */
@@ -379,26 +566,58 @@ export async function getMetaAdCreativeDetails(
     companyId: input.companyId,
     accessToken: input.accessToken,
     searchParams: { fields },
+    creativeLog: {
+      operation: 'ad_creative_details',
+      metaAdId: input.metaAdId,
+    },
   });
 
-  let spec = row.creative?.object_story_spec;
-  if (typeof spec === 'string') {
-    try {
-      spec = JSON.parse(spec) as unknown;
-    } catch {
-      spec = undefined;
-    }
-  }
-
+  const spec = normalizeObjectStorySpec(row.creative?.object_story_spec);
   const parsed = parseObjectStorySpec(spec);
 
-  return {
+  let details: MetaAdCreativeDetails = {
     metaAdId: input.metaAdId,
     adName: row.name ?? null,
     metaCreativeId: row.creative?.id ?? null,
+    imageUrl: null,
     thumbnailUrl: row.creative?.thumbnail_url ?? null,
     ...parsed,
   };
+
+  if (!hasResolvableMedia(details) && details.metaCreativeId) {
+    const node = await fetchMetaCreativeNodeDetails({
+      companyId: input.companyId,
+      accessToken: input.accessToken,
+      metaCreativeId: details.metaCreativeId,
+      metaAdId: input.metaAdId,
+    });
+    details = {
+      ...details,
+      imageHash: details.imageHash ?? node.imageHash,
+      videoId: details.videoId ?? node.videoId,
+      imageUrl: node.imageUrl ?? details.imageUrl,
+      thumbnailUrl: node.thumbnailUrl ?? details.thumbnailUrl,
+      headline: details.headline ?? node.headline,
+      primaryText: details.primaryText ?? node.primaryText,
+      description: details.description ?? node.description,
+      ctaType: details.ctaType ?? node.ctaType,
+      landingUrl: details.landingUrl ?? node.landingUrl,
+      isCatalogCreative: details.isCatalogCreative || node.isCatalogCreative,
+    };
+  }
+
+  logMetaCreativeProgress('ad_creative_details', 'parsed', {
+    metaAdId: details.metaAdId,
+    metaCreativeId: details.metaCreativeId,
+    imageHash: details.imageHash,
+    videoId: details.videoId,
+    imageUrl: Boolean(details.imageUrl),
+    thumbnailUrl: Boolean(details.thumbnailUrl),
+    isCatalogCreative: details.isCatalogCreative,
+    hasHeadline: Boolean(details.headline),
+  });
+
+  return details;
 }
 
 /** Resolve downloadable image URL for an ad account image hash. */
@@ -415,6 +634,10 @@ export async function getMetaAdImageDownloadUrl(
     searchParams: {
       hashes: hashesParam,
       fields: 'hash,url,permalink_url',
+    },
+    creativeLog: {
+      operation: 'adimages',
+      metaAdId: input.imageHash,
     },
   });
 
@@ -436,6 +659,10 @@ export async function getMetaVideoSourceUrl(
     companyId: input.companyId,
     accessToken: input.accessToken,
     searchParams: { fields: 'source' },
+    creativeLog: {
+      operation: 'video_source',
+      metaAdId: input.videoId,
+    },
   });
   if (!resp.source?.trim()) {
     throw new Error('Meta did not return a video source URL');

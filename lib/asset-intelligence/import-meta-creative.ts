@@ -12,6 +12,10 @@ import {
   getMetaVideoSourceUrl,
   type MetaAdCreativeDetails,
 } from '@/lib/meta/client';
+import {
+  logMetaCreativeDownload,
+  logMetaCreativeProgress,
+} from '@/lib/meta/creative-log';
 import { resolveMetaGraphAccessToken } from '@/lib/meta/integration-token';
 import { prisma } from '@/lib/prisma';
 
@@ -31,8 +35,12 @@ function extensionFromMime(mimeType: string, fallback: string): string {
 async function downloadMediaBytes(
   url: string,
   accessToken: string,
+  metaAdId: string,
+  kind: 'image' | 'video',
 ): Promise<{ bytes: Uint8Array; mimeType: string }> {
+  const started = Date.now();
   const parsed = new URL(url);
+  const urlHost = parsed.hostname;
   if (
     !parsed.searchParams.has('access_token') &&
     (parsed.hostname.includes('facebook.com') ||
@@ -62,6 +70,16 @@ async function downloadMediaBytes(
     throw new Error('Downloaded Meta creative is empty');
   }
 
+  logMetaCreativeDownload({
+    metaAdId,
+    kind,
+    status: res.status,
+    bytes: buf.byteLength,
+    mimeType,
+    durationMs: Date.now() - started,
+    urlHost,
+  });
+
   return { bytes: buf, mimeType };
 }
 
@@ -86,27 +104,64 @@ export async function importMetaCreativeToGallery(
   const token = await resolveMetaGraphAccessToken(input.companyId);
   const { metaDetails } = input;
 
+  logMetaCreativeProgress('import', 'start', {
+    metaAdId: metaDetails.metaAdId,
+    imageHash: metaDetails.imageHash,
+    videoId: metaDetails.videoId,
+    imageUrl: Boolean(metaDetails.imageUrl),
+    thumbnailUrl: Boolean(metaDetails.thumbnailUrl),
+    isCatalogCreative: metaDetails.isCatalogCreative,
+  });
+
   let downloadUrl: string;
   let assetType: AssetType;
+  let importSource: 'video_id' | 'image_hash' | 'image_url' | 'thumbnail';
 
   if (metaDetails.videoId) {
     assetType = 'VIDEO';
+    importSource = 'video_id';
+    logMetaCreativeProgress('import', 'resolve video source URL', {
+      videoId: metaDetails.videoId,
+    });
     downloadUrl = await getMetaVideoSourceUrl({
       companyId: input.companyId,
       videoId: metaDetails.videoId,
     });
   } else if (metaDetails.imageHash) {
     assetType = 'IMAGE';
+    importSource = 'image_hash';
+    logMetaCreativeProgress('import', 'resolve image download URL', {
+      imageHash: metaDetails.imageHash,
+    });
     downloadUrl = await getMetaAdImageDownloadUrl({
       companyId: input.companyId,
       adAccountId: input.adAccountId,
       imageHash: metaDetails.imageHash,
     });
+  } else if (metaDetails.imageUrl) {
+    assetType = 'IMAGE';
+    importSource = 'image_url';
+    downloadUrl = metaDetails.imageUrl;
+    logMetaCreativeProgress('import', 'use creative image_url', { importSource });
+  } else if (metaDetails.thumbnailUrl) {
+    assetType = 'IMAGE';
+    importSource = 'thumbnail';
+    downloadUrl = metaDetails.thumbnailUrl;
+    logMetaCreativeProgress('import', 'use creative thumbnail_url (catalog/dynamic)', {
+      importSource,
+      isCatalogCreative: metaDetails.isCatalogCreative,
+    });
   } else {
-    throw new Error('No image_hash or video_id on Meta creative');
+    throw new Error('No downloadable media URL on Meta creative');
   }
 
-  const { bytes, mimeType } = await downloadMediaBytes(downloadUrl, token);
+  logMetaCreativeProgress('import', 'download bytes', { assetType });
+  const { bytes, mimeType } = await downloadMediaBytes(
+    downloadUrl,
+    token,
+    metaDetails.metaAdId,
+    assetType === 'VIDEO' ? 'video' : 'image',
+  );
   const ext = extensionFromMime(
     mimeType,
     assetType === 'VIDEO' ? 'mp4' : 'jpg',
@@ -119,6 +174,7 @@ export async function importMetaCreativeToGallery(
     input.adTitle ??
     'Imported Meta ad';
 
+  logMetaCreativeProgress('import', 'upload to R2', { r2Key, bytes: bytes.byteLength });
   await r2.send(
     new PutObjectCommand({
       Bucket: bucket,
@@ -146,17 +202,26 @@ export async function importMetaCreativeToGallery(
       uploadSource: UploadSource.URL,
       metadata: {
         importedFromMeta: true,
+        importSource,
         metaAdId: metaDetails.metaAdId,
         imageHash: metaDetails.imageHash,
         videoId: metaDetails.videoId,
+        isCatalogCreative: metaDetails.isCatalogCreative,
       },
     },
     select: { id: true, assetType: true },
   });
 
   if (assetType === 'VIDEO') {
+    logMetaCreativeProgress('import', 'enqueue Stream', { assetId: asset.id });
     await enqueueAssetStreamUpload(asset.id, 'HIGH');
   }
+
+  logMetaCreativeProgress('import', 'done', {
+    metaAdId: metaDetails.metaAdId,
+    assetId: asset.id,
+    assetType,
+  });
 
   return { assetId: asset.id, assetType: asset.assetType };
 }
