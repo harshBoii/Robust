@@ -21,9 +21,10 @@ export class WinnersQueryError extends Error {
   }
 }
 
-/** Winning ads from DB metrics (requires prior dashboard refresh). */
-export async function listWinningMetaAds(
+/** Ads for a signal tier from DB metrics (requires prior dashboard refresh). */
+export async function listMetaAdsBySignal(
   companyId: string,
+  statusSignal: string,
   limit = 10,
 ): Promise<WinningMetaAdRow[]> {
   const integration = await prisma.metaIntegration.findUnique({
@@ -37,7 +38,7 @@ export async function listWinningMetaAds(
 
   const metrics = await prisma.metaAdMetrics.findMany({
     where: {
-      statusSignal: 'WINNER',
+      statusSignal,
       datePreset: 'maximum',
     },
     orderBy: [{ spend: 'desc' }, { recordedAt: 'desc' }],
@@ -49,10 +50,7 @@ export async function listWinningMetaAds(
   });
 
   if (!metrics.length) {
-    throw new WinnersQueryError(
-      'No winning ads found. Refresh the dashboard to sync Meta performance data.',
-      400,
-    );
+    return [];
   }
 
   const metaAdIds = metrics.map((m) => m.metaAdId);
@@ -89,9 +87,19 @@ export async function listWinningMetaAds(
     if (rows.length >= limit) break;
   }
 
+  return rows;
+}
+
+/** Winning ads from DB metrics (requires prior dashboard refresh). */
+export async function listWinningMetaAds(
+  companyId: string,
+  limit = 10,
+): Promise<WinningMetaAdRow[]> {
+  const rows = await listMetaAdsBySignal(companyId, 'WINNER', limit);
+
   if (!rows.length) {
     throw new WinnersQueryError(
-      'No winning ads in workspace. Refresh the dashboard after connecting Meta.',
+      'No winning ads found. Refresh the dashboard to sync Meta performance data.',
       400,
     );
   }

@@ -5,10 +5,9 @@ import { getAppOrigin } from '@/lib/app-origin';
 import { prisma } from '@/lib/prisma';
 
 import { isAssetReadyForIntelligence } from './asset-ready';
+import { pickVideoAssetIdsForAnalysis } from './select-video-ads';
 import type { TopWinningAsset } from './types';
-import { listWinningMetaAds, WinnersQueryError } from './winners';
-
-const REQUIRED_COUNT = 3;
+import { WinnersQueryError } from './winners';
 
 export { WinnersQueryError as TopWinningError };
 
@@ -20,30 +19,15 @@ function buildDownloadUrl(origin: string, assetId: string, assetType: AssetType)
   return `${base}/api/assets/${assetId}/download`;
 }
 
+/** Top video ads for analysis: WINNER → FATIGUE → UNDERPERFORMER (max 3, min 1). */
 export async function getTopWinningAssets(companyId: string): Promise<TopWinningAsset[]> {
-  const winners = await listWinningMetaAds(companyId, 20);
-
-  const orderedAssetIds: string[] = [];
-  const seen = new Set<string>();
-
-  for (const w of winners) {
-    if (!w.assetId || !w.hasLinkedAsset || seen.has(w.assetId)) continue;
-    seen.add(w.assetId);
-    orderedAssetIds.push(w.assetId);
-    if (orderedAssetIds.length >= REQUIRED_COUNT) break;
-  }
-
-  if (orderedAssetIds.length < REQUIRED_COUNT) {
-    throw new WinnersQueryError(
-      `Only ${orderedAssetIds.length} winning ad(s) with gallery assets found (need ${REQUIRED_COUNT}). Run “Link creatives” to import from Meta.`,
-      400,
-    );
-  }
+  const orderedAssetIds = await pickVideoAssetIdsForAnalysis(companyId);
 
   const assets = await prisma.asset.findMany({
     where: {
       id: { in: orderedAssetIds },
       companyId,
+      assetType: 'VIDEO',
     },
     select: { id: true, assetType: true, status: true, r2Key: true },
   });
@@ -56,7 +40,7 @@ export async function getTopWinningAssets(companyId: string): Promise<TopWinning
     const asset = assetById.get(assetId);
     if (!asset || !isAssetReadyForIntelligence(asset)) {
       throw new WinnersQueryError(
-        `Winning asset ${assetId} is missing or not ready for download.`,
+        `Video asset ${assetId} is missing or not ready for download.`,
         400,
       );
     }

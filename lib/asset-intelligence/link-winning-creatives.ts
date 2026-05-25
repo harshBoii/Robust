@@ -7,9 +7,13 @@ import { requireMetaAdAccountId } from '@/lib/meta/integration-token';
 import { prisma } from '@/lib/prisma';
 
 import { importMetaCreativeToGallery } from './import-meta-creative';
-import { listWinningMetaAds, WinnersQueryError } from './winners';
+import {
+  listMetaAdCandidatesBySignalPriority,
+  MAX_VIDEOS_FOR_ANALYSIS,
+} from './select-video-ads';
+import { WinnersQueryError } from './winners';
 
-const TARGET_LINKED = 3;
+const TARGET_LINKED = MAX_VIDEOS_FOR_ANALYSIS;
 
 export type LinkWinningCreativesResult = {
   linked: number;
@@ -29,7 +33,8 @@ export type LinkWinningCreativesResult = {
       | 'no_gallery_match'
       | 'no_media_on_meta'
       | 'meta_fetch_failed'
-      | 'import_failed';
+      | 'import_failed'
+      | 'skipped_non_video';
     assetId?: string;
     message?: string;
   }>;
@@ -157,11 +162,11 @@ export async function linkWinningAdCreatives(
   });
   const defaultLanding = company?.website?.trim() || 'https://example.com';
 
-  const winners = await listWinningMetaAds(companyId, 15);
+  const candidates = await listMetaAdCandidatesBySignalPriority(companyId);
 
   logMetaCreativeProgress('link', 'start', {
     companyId,
-    winnerCount: winners.length,
+    candidateCount: candidates.length,
     target: TARGET_LINKED,
   });
 
@@ -173,23 +178,35 @@ export async function linkWinningAdCreatives(
     metaFetchFailed: 0,
     noMediaOnMeta: 0,
     importFailed: 0,
-    winningAdsConsidered: winners.length,
+    winningAdsConsidered: candidates.length,
     details: [],
   };
 
   let totalWithGallery = 0;
 
-  for (let i = 0; i < winners.length; i++) {
-    const winner = winners[i]!;
+  for (let i = 0; i < candidates.length; i++) {
+    const winner = candidates[i]!;
     if (totalWithGallery >= TARGET_LINKED) break;
 
-    logMetaCreativeProgress('link', `ad ${i + 1}/${winners.length}`, {
+    logMetaCreativeProgress('link', `ad ${i + 1}/${candidates.length}`, {
       metaAdId: winner.metaAdId,
       spend: winner.spend,
       hasLinkedAsset: winner.hasLinkedAsset,
     });
 
     if (winner.hasLinkedAsset && winner.assetId) {
+      const linkedAsset = await prisma.asset.findFirst({
+        where: { id: winner.assetId, companyId },
+        select: { assetType: true },
+      });
+      if (linkedAsset?.assetType !== 'VIDEO') {
+        result.details.push({
+          metaAdId: winner.metaAdId,
+          status: 'skipped_non_video',
+          message: 'Linked asset is not a video — skipped',
+        });
+        continue;
+      }
       result.alreadyLinked += 1;
       totalWithGallery += 1;
       result.details.push({
@@ -222,9 +239,18 @@ export async function linkWinningAdCreatives(
       continue;
     }
 
+    if (!metaDetails.videoId) {
+      result.details.push({
+        metaAdId: winner.metaAdId,
+        status: 'skipped_non_video',
+        message: 'No video_id on Meta creative — image ad skipped',
+      });
+      continue;
+    }
+
     const hasMedia =
-      metaDetails.imageHash ||
       metaDetails.videoId ||
+      metaDetails.imageHash ||
       metaDetails.imageUrl ||
       metaDetails.thumbnailUrl;
 
@@ -265,9 +291,8 @@ export async function linkWinningAdCreatives(
         select: { id: true, status: true, assetType: true, r2Key: true },
       });
       if (
-        existing &&
-        (existing.status === 'READY' ||
-          (existing.assetType === 'VIDEO' && existing.r2Key))
+        existing?.assetType === 'VIDEO' &&
+        (existing.status === 'READY' || existing.r2Key)
       ) {
         assetId = existing.id;
       }
@@ -303,6 +328,19 @@ export async function linkWinningAdCreatives(
       result.details.push({
         metaAdId: winner.metaAdId,
         status: 'no_gallery_match',
+      });
+      continue;
+    }
+
+    const linkedVideo = await prisma.asset.findFirst({
+      where: { id: assetId, companyId, assetType: 'VIDEO' },
+      select: { id: true },
+    });
+    if (!linkedVideo) {
+      result.details.push({
+        metaAdId: winner.metaAdId,
+        status: 'skipped_non_video',
+        message: 'Gallery asset is not a video — skipped',
       });
       continue;
     }

@@ -164,7 +164,7 @@ export default function AnalyzeLatestAdsSection() {
     setAssets([]);
     setSteps([
       { state: 'active', label: 'Fetching media from Meta and importing…' },
-      { state: 'idle', label: 'Fetch winning Meta ads' },
+      { state: 'idle', label: 'Fetch video ads for analysis' },
       { state: 'idle', label: 'Send to Asset Intelligence' },
       { state: 'idle', label: 'Wait for analysis results' },
     ]);
@@ -184,24 +184,24 @@ export default function AnalyzeLatestAdsSection() {
       if (link.readyForAnalysis) {
         setStep(0, {
           state: 'done',
-          label: `Linked ${linkedTotal} winning ads to gallery ✓${importNote}`,
+          label: `Linked ${linkedTotal} video ad(s) to gallery ✓${importNote}`,
         });
       } else {
         setStep(0, {
           state: 'done',
-          label: `Linked ${linkedTotal}/3 — ${link.importFailed || link.noGalleryMatch} could not import`,
+          label: `Linked ${linkedTotal} video ad(s) — some could not import`,
         });
         if (link.importFailed > 0 || link.noGalleryMatch > 0) {
           toast.push({
             title: 'Partial link',
             message:
-              'Some winning ads could not be imported from Meta (permissions, format, or missing source URL).',
+              'Some video ads could not be imported from Meta (permissions, format, or missing source URL).',
             kind: 'info',
           });
         }
       }
 
-      setStep(1, { state: 'active', label: 'Fetching top Meta ads…' });
+      setStep(1, { state: 'active', label: 'Fetching video ads…' });
 
       const top = await json<{ assets: TopWinningAsset[] }>(
         await fetch('/api/ads/top-winning', { credentials: 'include' }),
@@ -210,7 +210,7 @@ export default function AnalyzeLatestAdsSection() {
       setAssets(fetched);
       setStep(1, {
         state: 'done',
-        label: `Fetched ${fetched.length} winning ads ✓`,
+        label: `Fetched ${fetched.length} video ad${fetched.length === 1 ? '' : 's'} ✓`,
       });
       setStep(2, { state: 'active', label: 'Sending to Asset Intelligence…' });
 
