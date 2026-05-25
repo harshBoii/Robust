@@ -4,6 +4,7 @@ import type { AssetType } from '@/app/generated/prisma/client';
 import { getAppOrigin } from '@/lib/app-origin';
 import { prisma } from '@/lib/prisma';
 
+import { isAssetReadyForIntelligence } from './asset-ready';
 import type { TopWinningAsset } from './types';
 import { listWinningMetaAds, WinnersQueryError } from './winners';
 
@@ -34,7 +35,7 @@ export async function getTopWinningAssets(companyId: string): Promise<TopWinning
 
   if (orderedAssetIds.length < REQUIRED_COUNT) {
     throw new WinnersQueryError(
-      `Only ${orderedAssetIds.length} winning ad(s) with gallery assets found (need ${REQUIRED_COUNT}). Run “Link creatives” or publish matching assets from Robust.`,
+      `Only ${orderedAssetIds.length} winning ad(s) with gallery assets found (need ${REQUIRED_COUNT}). Run “Link creatives” to import from Meta.`,
       400,
     );
   }
@@ -43,9 +44,8 @@ export async function getTopWinningAssets(companyId: string): Promise<TopWinning
     where: {
       id: { in: orderedAssetIds },
       companyId,
-      status: 'READY',
     },
-    select: { id: true, assetType: true },
+    select: { id: true, assetType: true, status: true, r2Key: true },
   });
 
   const assetById = new Map(assets.map((a) => [a.id, a]));
@@ -54,9 +54,9 @@ export async function getTopWinningAssets(companyId: string): Promise<TopWinning
 
   for (const assetId of orderedAssetIds) {
     const asset = assetById.get(assetId);
-    if (!asset) {
+    if (!asset || !isAssetReadyForIntelligence(asset)) {
       throw new WinnersQueryError(
-        `Winning asset ${assetId} is missing or not READY in gallery.`,
+        `Winning asset ${assetId} is missing or not ready for download.`,
         400,
       );
     }

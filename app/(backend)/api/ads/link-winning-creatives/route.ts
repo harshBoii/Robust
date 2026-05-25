@@ -17,7 +17,7 @@ export async function POST() {
   try {
     const result = await linkWinningAdCreatives(session.companyId);
     const readyForAnalysis =
-      result.linked + result.alreadyLinked >= 3;
+      result.linked + result.alreadyLinked + result.imported >= 3;
 
     return NextResponse.json({
       ...result,

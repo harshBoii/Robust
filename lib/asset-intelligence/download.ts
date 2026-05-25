@@ -7,6 +7,7 @@ import type { AssetType } from '@/app/generated/prisma/client';
 import { r2 } from '@/lib/cloudfare/r2';
 import { prisma } from '@/lib/prisma';
 
+import { isAssetReadyForIntelligence } from './asset-ready';
 import { formatBytes } from './format-size';
 import type { AssetDownloadResponse, DownloadAssetBlock } from './types';
 
@@ -80,7 +81,10 @@ export async function buildAssetDownloadResponse(
     throw new AssetDownloadError('Asset file not available', 409);
   }
 
-  if (asset.status === 'PROCESSING' || asset.status === 'UPLOADING') {
+  if (asset.status === 'UPLOADING') {
+    throw new AssetDownloadError('Asset still uploading', 409);
+  }
+  if (!isAssetReadyForIntelligence(asset)) {
     throw new AssetDownloadError('Asset still processing', 409);
   }
 

@@ -15,7 +15,9 @@ type Step = {
 type LinkCreativesResponse = {
   linked: number;
   alreadyLinked: number;
+  imported: number;
   noGalleryMatch: number;
+  importFailed: number;
   readyForAnalysis: boolean;
 };
 
@@ -69,7 +71,7 @@ function StepRow({ step }: { step: Step }) {
 const POLL_MS = 3000;
 
 const INITIAL_STEPS: Step[] = [
-  { state: 'idle', label: 'Link Meta creatives to gallery' },
+  { state: 'idle', label: 'Fetch from Meta and link to gallery' },
   { state: 'idle', label: 'Fetch winning Meta ads' },
   { state: 'idle', label: 'Send to Asset Intelligence' },
   { state: 'idle', label: 'Wait for analysis results' },
@@ -135,7 +137,7 @@ export default function AnalyzeLatestAdsSection() {
     setRunning(true);
     setAssets([]);
     setSteps([
-      { state: 'active', label: 'Fetching creatives from Meta…' },
+      { state: 'active', label: 'Fetching media from Meta and importing…' },
       { state: 'idle', label: 'Fetch winning Meta ads' },
       { state: 'idle', label: 'Send to Asset Intelligence' },
       { state: 'idle', label: 'Wait for analysis results' },
@@ -149,22 +151,25 @@ export default function AnalyzeLatestAdsSection() {
         }),
       );
 
-      const linkedTotal = link.linked + link.alreadyLinked;
+      const linkedTotal =
+        link.linked + link.alreadyLinked + (link.imported ?? 0);
+      const importNote =
+        link.imported > 0 ? ` (${link.imported} imported from Meta)` : '';
       if (link.readyForAnalysis) {
         setStep(0, {
           state: 'done',
-          label: `Linked ${linkedTotal} winning ads to gallery ✓`,
+          label: `Linked ${linkedTotal} winning ads to gallery ✓${importNote}`,
         });
       } else {
         setStep(0, {
           state: 'done',
-          label: `Linked ${linkedTotal}/3 — some ads have no matching gallery upload`,
+          label: `Linked ${linkedTotal}/3 — ${link.importFailed || link.noGalleryMatch} could not import`,
         });
-        if (link.noGalleryMatch > 0) {
+        if (link.importFailed > 0 || link.noGalleryMatch > 0) {
           toast.push({
             title: 'Partial link',
             message:
-              'Publish winning creatives from Robust (same media Meta uses) then run again.',
+              'Some winning ads could not be imported from Meta (permissions, format, or missing source URL).',
             kind: 'info',
           });
         }

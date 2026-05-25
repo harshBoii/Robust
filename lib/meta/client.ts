@@ -401,6 +401,48 @@ export async function getMetaAdCreativeDetails(
   };
 }
 
+/** Resolve downloadable image URL for an ad account image hash. */
+export async function getMetaAdImageDownloadUrl(
+  input: { adAccountId: string; imageHash: string } & MetaGraphAuth,
+): Promise<string> {
+  const hashesParam = JSON.stringify([input.imageHash]);
+  const resp = await metaFetch<{
+    data?: Array<{ hash?: string; url?: string; permalink_url?: string }>;
+  }>(`/${input.adAccountId}/adimages`, {
+    method: 'GET',
+    companyId: input.companyId,
+    accessToken: input.accessToken,
+    searchParams: {
+      hashes: hashesParam,
+      fields: 'hash,url,permalink_url',
+    },
+  });
+
+  const row =
+    resp.data?.find((r) => r.hash === input.imageHash) ?? resp.data?.[0];
+  const url = row?.url ?? row?.permalink_url;
+  if (!url) {
+    throw new Error('Meta did not return a download URL for this image hash');
+  }
+  return url;
+}
+
+/** Resolve temporary video source URL from Meta video id. */
+export async function getMetaVideoSourceUrl(
+  input: { videoId: string } & MetaGraphAuth,
+): Promise<string> {
+  const resp = await metaFetch<{ source?: string }>(`/${input.videoId}`, {
+    method: 'GET',
+    companyId: input.companyId,
+    accessToken: input.accessToken,
+    searchParams: { fields: 'source' },
+  });
+  if (!resp.source?.trim()) {
+    throw new Error('Meta did not return a video source URL');
+  }
+  return resp.source.trim();
+}
+
 export type MetaAdAccount = { id: string; name?: string };
 export type MetaPage = { id: string; name?: string };
 
