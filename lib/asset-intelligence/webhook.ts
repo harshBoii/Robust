@@ -22,12 +22,6 @@ function pickAssetId(raw: Record<string, unknown>): string | null {
   return null;
 }
 
-function pickCompanyId(raw: Record<string, unknown>): string | null {
-  if (typeof raw.companyId === 'string' && raw.companyId.trim()) return raw.companyId.trim();
-  if (typeof raw.company_id === 'string' && raw.company_id.trim()) return raw.company_id.trim();
-  return null;
-}
-
 export function parseIntelPayload(body: unknown): IntelWebhookPayload {
   const wrapped =
     typeof body === 'object' && body !== null && 'payload' in body
@@ -40,15 +34,13 @@ export function parseIntelPayload(body: unknown): IntelWebhookPayload {
 
   const raw = wrapped as Record<string, unknown>;
   const assetId = pickAssetId(raw);
-  const companyId = pickCompanyId(raw);
-  if (!assetId || !companyId) {
-    throw new IntelWebhookError('assetId and companyId are required');
+  if (!assetId) {
+    throw new IntelWebhookError('assetId is required');
   }
 
   const parsed = intelWebhookPayloadSchema.safeParse({
     ...raw,
     assetId,
-    companyId,
   });
 
   if (!parsed.success) {
@@ -67,13 +59,13 @@ function jsonField(
 }
 
 export async function upsertAssetIntelligence(payload: IntelWebhookPayload): Promise<void> {
-  const asset = await prisma.asset.findFirst({
-    where: { id: payload.assetId, companyId: payload.companyId },
+  const asset = await prisma.asset.findUnique({
+    where: { id: payload.assetId },
     select: { id: true, companyId: true },
   });
 
   if (!asset) {
-    throw new IntelWebhookError('Asset not found for company', 404);
+    throw new IntelWebhookError('Asset not found', 404);
   }
 
   const processedAt =
@@ -111,7 +103,7 @@ export async function upsertAssetIntelligence(payload: IntelWebhookPayload): Pro
     modelVersion: payload.modelVersion ?? null,
     confidence: payload.confidence ?? null,
     processedAt,
-    companyId: payload.companyId,
+    companyId: asset.companyId,
   };
 
   await prisma.$transaction([

@@ -39,6 +39,7 @@ export type MetaAdInsightRow = {
 };
 
 export type MetaCreative = {
+  id?: string;
   thumbnail_url?: string;
 };
 
@@ -283,7 +284,7 @@ export async function getAdsWithInsights(
     'campaign_id',
     'adset_id',
     'created_time',
-    'creative{thumbnail_url}',
+    'creative{id,thumbnail_url}',
     'campaign{id,name,objective,status,daily_budget}',
     'adset{id,name,status,daily_budget}',
     `insights.${insightsParts.join('.')}`,

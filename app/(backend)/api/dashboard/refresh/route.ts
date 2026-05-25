@@ -7,6 +7,7 @@ import {
   daysBetweenUtc,
   type MetaActionRow,
 } from '@/lib/dashboard/row-metrics';
+import { syncAdThumbnailsFromRefresh } from '@/lib/dashboard/sync-ad-thumbnails';
 import { getAdsWithInsights } from '@/lib/meta/client';
 import { getSession } from '@/lib/auth/session';
 import { requireMetaAdAccountId } from '@/lib/meta/integration-token';
@@ -195,6 +196,7 @@ export async function POST() {
       name: src?.name ?? '',
       status: src?.status ?? null,
       thumbnailUrl: src?.creative?.thumbnail_url ?? null,
+      metaCreativeId: src?.creative?.id ?? null,
       campaignId: src?.campaign_id ?? null,
       campaignName: campaignData?.name ?? src?.campaign_id ?? null,
       campaignObjective: campaignData?.objective ?? 'UNKNOWN',
@@ -347,6 +349,16 @@ export async function POST() {
         },
       });
     }),
+  );
+
+  await syncAdThumbnailsFromRefresh(
+    metaIntegration.id,
+    rows.map((r) => ({
+      adId: r.adId,
+      name: r.name,
+      thumbnailUrl: r.thumbnailUrl,
+      metaCreativeId: r.metaCreativeId,
+    })),
   );
 
   // ── Persist modeled metrics (today + maximum) ─────────────────────────────

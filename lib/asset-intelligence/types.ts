@@ -29,7 +29,7 @@ export type ProcessFromApiPayload = {
 export const intelWebhookPayloadSchema = z
   .object({
     assetId: z.string().min(1),
-    companyId: z.string().min(1),
+    companyId: z.string().min(1).optional(),
     language: z.string().optional().nullable(),
     contentType: z.string().optional().nullable(),
     durationSeconds: z.coerce.number().optional().nullable(),
