@@ -19,9 +19,19 @@ const PUBLIC_PATH_PREFIXES = [
   "/api/mcpServer",
   /** Stream queue reconcile (Bearer STREAM_QUEUE_RECONCILE_SECRET outside development). */
   "/api/public/stream-queue",
+  /** Asset Intelligence microservice webhook (optional x-intel-secret). */
+  "/api/receive-intel",
+  /** Video download metadata for microservice (presigned R2 JSON). */
+  "/api/videos",
 ] as const;
 
+/** GET /api/assets/{id}/download only — not /url or /status. */
+function isPublicAssetDownloadPath(pathname: string): boolean {
+  return /^\/api\/assets\/[^/]+\/download$/.test(pathname);
+}
+
 function isPublicPath(pathname: string): boolean {
+  if (isPublicAssetDownloadPath(pathname)) return true;
   return PUBLIC_PATH_PREFIXES.some(
     (p) => pathname === p || pathname.startsWith(`${p}/`),
   );

@@ -55,6 +55,11 @@ export async function callProcessFromApi(input: ProcessFromApiInput): Promise<st
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), PROCESS_TIMEOUT_MS);
 
+  console.log('[asset-intelligence] POST /process-from-api request', {
+    url,
+    payload,
+  });
+
   try {
     const res = await fetch(url, {
       method: 'POST',
@@ -70,6 +75,12 @@ export async function callProcessFromApi(input: ProcessFromApiInput): Promise<st
     } catch {
       throw new Error(`Microservice returned invalid JSON (${res.status})`);
     }
+
+    console.log('[asset-intelligence] POST /process-from-api response', {
+      status: res.status,
+      assetId: input.assetId,
+      body,
+    });
 
     if (!res.ok) {
       const errMsg =
@@ -100,9 +111,14 @@ export async function callProcessFromApi(input: ProcessFromApiInput): Promise<st
 export async function callProcessFromApiBatch(
   inputs: ProcessFromApiInput[],
 ): Promise<string[]> {
+  console.log('[asset-intelligence] batch analyze', {
+    count: inputs.length,
+    assetIds: inputs.map((a) => a.assetId),
+  });
   const jobIds: string[] = [];
   for (const input of inputs) {
     jobIds.push(await callProcessFromApi(input));
   }
+  console.log('[asset-intelligence] batch complete', { jobIds });
   return jobIds;
 }
