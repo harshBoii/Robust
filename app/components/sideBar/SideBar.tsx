@@ -734,9 +734,6 @@ export default function AppSidebar({
             >
               <IconLogOut className="w-[18px] h-[18px]" />
             </button>
-            <span className="font-ui text-[9px] leading-none text-muted-foreground/40">
-              Out
-            </span>
           </div>
         </div>
       </aside>
