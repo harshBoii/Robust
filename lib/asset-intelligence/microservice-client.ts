@@ -12,7 +12,7 @@ export type ProcessFromApiInput = {
 };
 
 function buildApiUrl(origin: string, assetId: string, mediaType: ProcessFromApiInput['mediaType']): string {
-  const base = origin.replace(/\/$/, '');
+  const base = process.env.NEXT_PUBLIC_APP_URL?.trim() || '';
   if (mediaType === 'VIDEO') {
     return `${base}/api/videos/${assetId}/download`;
   }
