@@ -12,6 +12,13 @@ type Step = {
   label: string;
 };
 
+type LinkCreativesResponse = {
+  linked: number;
+  alreadyLinked: number;
+  noGalleryMatch: number;
+  readyForAnalysis: boolean;
+};
+
 async function json<T>(res: Response): Promise<T> {
   const data = (await res.json()) as T & { error?: string };
   if (!res.ok) throw new Error(data.error ?? 'Request failed');
@@ -61,6 +68,13 @@ function StepRow({ step }: { step: Step }) {
 
 const POLL_MS = 3000;
 
+const INITIAL_STEPS: Step[] = [
+  { state: 'idle', label: 'Link Meta creatives to gallery' },
+  { state: 'idle', label: 'Fetch winning Meta ads' },
+  { state: 'idle', label: 'Send to Asset Intelligence' },
+  { state: 'idle', label: 'Wait for analysis results' },
+];
+
 export default function AnalyzeLatestAdsSection() {
   const toast = useToast();
   const [expanded, setExpanded] = useState(false);
@@ -68,11 +82,7 @@ export default function AnalyzeLatestAdsSection() {
   const [assets, setAssets] = useState<TopWinningAsset[]>([]);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const [steps, setSteps] = useState<Step[]>([
-    { state: 'idle', label: 'Fetch winning Meta ads' },
-    { state: 'idle', label: 'Send to Asset Intelligence' },
-    { state: 'idle', label: 'Wait for analysis results' },
-  ]);
+  const [steps, setSteps] = useState<Step[]>(INITIAL_STEPS);
 
   const clearPoll = useCallback(() => {
     if (pollRef.current) {
@@ -100,18 +110,18 @@ export default function AnalyzeLatestAdsSection() {
               credentials: 'include',
             }),
           );
-          setStep(2, {
+          setStep(3, {
             state: 'active',
             label: `${data.ready}/${total} analyzed…`,
           });
           if (data.ready >= total) {
             clearPoll();
-            setStep(2, { state: 'done', label: `${total}/${total} analyzed ✓` });
+            setStep(3, { state: 'done', label: `${total}/${total} analyzed ✓` });
             setRunning(false);
           }
         } catch {
           clearPoll();
-          setStep(2, { state: 'error', label: 'Failed to check analysis status' });
+          setStep(3, { state: 'error', label: 'Failed to check analysis status' });
           setRunning(false);
         }
       }, POLL_MS);
@@ -125,22 +135,53 @@ export default function AnalyzeLatestAdsSection() {
     setRunning(true);
     setAssets([]);
     setSteps([
-      { state: 'active', label: 'Fetching top Meta ads…' },
+      { state: 'active', label: 'Fetching creatives from Meta…' },
+      { state: 'idle', label: 'Fetch winning Meta ads' },
       { state: 'idle', label: 'Send to Asset Intelligence' },
       { state: 'idle', label: 'Wait for analysis results' },
     ]);
 
     try {
+      const link = await json<LinkCreativesResponse>(
+        await fetch('/api/ads/link-winning-creatives', {
+          method: 'POST',
+          credentials: 'include',
+        }),
+      );
+
+      const linkedTotal = link.linked + link.alreadyLinked;
+      if (link.readyForAnalysis) {
+        setStep(0, {
+          state: 'done',
+          label: `Linked ${linkedTotal} winning ads to gallery ✓`,
+        });
+      } else {
+        setStep(0, {
+          state: 'done',
+          label: `Linked ${linkedTotal}/3 — some ads have no matching gallery upload`,
+        });
+        if (link.noGalleryMatch > 0) {
+          toast.push({
+            title: 'Partial link',
+            message:
+              'Publish winning creatives from Robust (same media Meta uses) then run again.',
+            kind: 'info',
+          });
+        }
+      }
+
+      setStep(1, { state: 'active', label: 'Fetching top Meta ads…' });
+
       const top = await json<{ assets: TopWinningAsset[] }>(
         await fetch('/api/ads/top-winning', { credentials: 'include' }),
       );
       const fetched = top.assets;
       setAssets(fetched);
-      setStep(0, {
+      setStep(1, {
         state: 'done',
         label: `Fetched ${fetched.length} winning ads ✓`,
       });
-      setStep(1, { state: 'active', label: 'Sending to Asset Intelligence…' });
+      setStep(2, { state: 'active', label: 'Sending to Asset Intelligence…' });
 
       await json<{ jobIds: string[] }>(
         await fetch('/api/ads/analyze', {
@@ -151,8 +192,8 @@ export default function AnalyzeLatestAdsSection() {
         }),
       );
 
-      setStep(1, { state: 'done', label: 'Sent to analysis ✓' });
-      setStep(2, { state: 'active', label: `0/${fetched.length} analyzed…` });
+      setStep(2, { state: 'done', label: 'Sent to analysis ✓' });
+      setStep(3, { state: 'active', label: `0/${fetched.length} analyzed…` });
 
       const ids = fetched.map((a) => a.assetId);
       pollIntelligenceStatus(ids, fetched.length);
@@ -165,7 +206,7 @@ export default function AnalyzeLatestAdsSection() {
       );
       if (initial.ready >= initial.total) {
         clearPoll();
-        setStep(2, {
+        setStep(3, {
           state: 'done',
           label: `${initial.total}/${initial.total} analyzed ✓`,
         });
@@ -211,7 +252,7 @@ export default function AnalyzeLatestAdsSection() {
         </div>
       )}
 
-      {assets.length > 0 && !running && steps[2]?.state === 'done' && (
+      {assets.length > 0 && !running && steps[3]?.state === 'done' && (
         <p className="font-body text-[11px] text-muted-foreground">
           Intelligence saved for {assets.length} asset{assets.length === 1 ? '' : 's'}.
         </p>

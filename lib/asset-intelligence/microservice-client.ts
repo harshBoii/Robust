@@ -39,11 +39,16 @@ function extractJobId(body: unknown): string | null {
   return null;
 }
 
-export async function callProcessFromApi(input: ProcessFromApiInput): Promise<string> {
-  const base = process.env.MICROSERVICE_URL?.trim();
+function getAssetIntelligenceMicroserviceBase(): string {
+  const base = process.env.ASSET_INTELLIGENCE_MICROSERVICE_URL?.trim();
   if (!base) {
-    throw new Error('MICROSERVICE_URL is not configured');
+    throw new Error('ASSET_INTELLIGENCE_MICROSERVICE_URL is not configured');
   }
+  return base;
+}
+
+export async function callProcessFromApi(input: ProcessFromApiInput): Promise<string> {
+  const base = getAssetIntelligenceMicroserviceBase();
 
   const url = `${base.replace(/\/$/, '')}/process-from-api`;
   const payload = buildPayload(input);

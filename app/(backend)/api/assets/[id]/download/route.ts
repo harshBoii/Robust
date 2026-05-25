@@ -20,9 +20,9 @@ function parseDownloadOptions(req: NextRequest) {
 
 export async function GET(
   req: NextRequest,
-  context: { params: Promise<{ assetId: string }> },
+  context: { params: Promise<{ id: string }> },
 ) {
-  const { assetId } = await context.params;
+  const { id: assetId } = await context.params;
 
   try {
     const data = await buildAssetDownloadResponse(assetId, parseDownloadOptions(req));

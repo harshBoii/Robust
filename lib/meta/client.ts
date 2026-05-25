@@ -285,6 +285,122 @@ export async function updateAdStatus(
   });
 }
 
+export type MetaAdCreativeDetails = {
+  metaAdId: string;
+  adName: string | null;
+  metaCreativeId: string | null;
+  imageHash: string | null;
+  videoId: string | null;
+  thumbnailUrl: string | null;
+  headline: string | null;
+  primaryText: string | null;
+  description: string | null;
+  ctaType: string | null;
+  landingUrl: string | null;
+};
+
+function parseObjectStorySpec(spec: unknown): {
+  imageHash: string | null;
+  videoId: string | null;
+  headline: string | null;
+  primaryText: string | null;
+  description: string | null;
+  ctaType: string | null;
+  landingUrl: string | null;
+} {
+  const empty = {
+    imageHash: null as string | null,
+    videoId: null as string | null,
+    headline: null as string | null,
+    primaryText: null as string | null,
+    description: null as string | null,
+    ctaType: null as string | null,
+    landingUrl: null as string | null,
+  };
+
+  if (!spec || typeof spec !== 'object') return empty;
+  const o = spec as Record<string, unknown>;
+  const linkData = o.link_data as Record<string, unknown> | undefined;
+  const videoData = o.video_data as Record<string, unknown> | undefined;
+
+  const ctaFrom = (block: Record<string, unknown> | undefined) => {
+    const cta = block?.call_to_action as Record<string, unknown> | undefined;
+    return typeof cta?.type === 'string' ? cta.type : null;
+  };
+
+  if (linkData && typeof linkData === 'object') {
+    return {
+      imageHash:
+        typeof linkData.image_hash === 'string' ? linkData.image_hash : null,
+      videoId: null,
+      headline: typeof linkData.name === 'string' ? linkData.name : null,
+      primaryText: typeof linkData.message === 'string' ? linkData.message : null,
+      description:
+        typeof linkData.description === 'string' ? linkData.description : null,
+      ctaType: ctaFrom(linkData),
+      landingUrl: typeof linkData.link === 'string' ? linkData.link : null,
+    };
+  }
+
+  if (videoData && typeof videoData === 'object') {
+    return {
+      imageHash: null,
+      videoId: typeof videoData.video_id === 'string' ? videoData.video_id : null,
+      headline: typeof videoData.title === 'string' ? videoData.title : null,
+      primaryText: typeof videoData.message === 'string' ? videoData.message : null,
+      description: null,
+      ctaType: ctaFrom(videoData),
+      landingUrl: typeof videoData.link === 'string' ? videoData.link : null,
+    };
+  }
+
+  return empty;
+}
+
+/** Live Meta fields for linking gallery assets to ads via image_hash / video_id. */
+export async function getMetaAdCreativeDetails(
+  input: { metaAdId: string } & MetaGraphAuth,
+): Promise<MetaAdCreativeDetails> {
+  const fields = [
+    'name',
+    'creative{id,thumbnail_url,object_story_spec}',
+  ].join(',');
+
+  const row = await metaFetch<{
+    id?: string;
+    name?: string;
+    creative?: {
+      id?: string;
+      thumbnail_url?: string;
+      object_story_spec?: unknown;
+    };
+  }>(`/${input.metaAdId}`, {
+    method: 'GET',
+    companyId: input.companyId,
+    accessToken: input.accessToken,
+    searchParams: { fields },
+  });
+
+  let spec = row.creative?.object_story_spec;
+  if (typeof spec === 'string') {
+    try {
+      spec = JSON.parse(spec) as unknown;
+    } catch {
+      spec = undefined;
+    }
+  }
+
+  const parsed = parseObjectStorySpec(spec);
+
+  return {
+    metaAdId: input.metaAdId,
+    adName: row.name ?? null,
+    metaCreativeId: row.creative?.id ?? null,
+    thumbnailUrl: row.creative?.thumbnail_url ?? null,
+    ...parsed,
+  };
+}
+
 export type MetaAdAccount = { id: string; name?: string };
 export type MetaPage = { id: string; name?: string };
 

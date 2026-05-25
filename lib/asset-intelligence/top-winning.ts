@@ -5,8 +5,11 @@ import { getAppOrigin } from '@/lib/app-origin';
 import { prisma } from '@/lib/prisma';
 
 import type { TopWinningAsset } from './types';
+import { listWinningMetaAds, WinnersQueryError } from './winners';
 
 const REQUIRED_COUNT = 3;
+
+export { WinnersQueryError as TopWinningError };
 
 function buildDownloadUrl(origin: string, assetId: string, assetType: AssetType): string {
   const base = origin.replace(/\/$/, '');
@@ -16,79 +19,22 @@ function buildDownloadUrl(origin: string, assetId: string, assetType: AssetType)
   return `${base}/api/assets/${assetId}/download`;
 }
 
-export class TopWinningError extends Error {
-  constructor(
-    message: string,
-    public readonly status: 400 | 404 = 400,
-  ) {
-    super(message);
-    this.name = 'TopWinningError';
-  }
-}
-
 export async function getTopWinningAssets(companyId: string): Promise<TopWinningAsset[]> {
-  const integration = await prisma.metaIntegration.findUnique({
-    where: { companyId },
-    select: { id: true },
-  });
-
-  if (!integration) {
-    throw new TopWinningError('Meta integration not connected', 400);
-  }
-
-  const ads = await prisma.metaAd.findMany({
-    where: {
-      metaIntegrationId: integration.id,
-      creative: { assetId: { not: null } },
-    },
-    select: {
-      metaAdId: true,
-      creative: { select: { assetId: true } },
-    },
-  });
-
-  if (!ads.length) {
-    throw new TopWinningError(
-      'No linked gallery assets on Meta ads. Publish creatives with assets first.',
-      400,
-    );
-  }
-
-  const adIdToAssetId = new Map<string, string>();
-  for (const ad of ads) {
-    const assetId = ad.creative?.assetId;
-    if (assetId) adIdToAssetId.set(ad.metaAdId, assetId);
-  }
-
-  const metrics = await prisma.metaAdMetrics.findMany({
-    where: {
-      metaAdId: { in: [...adIdToAssetId.keys()] },
-      statusSignal: 'WINNER',
-      datePreset: 'maximum',
-    },
-    orderBy: [{ spend: 'desc' }, { recordedAt: 'desc' }],
-  });
-
-  if (!metrics.length) {
-    throw new TopWinningError(
-      'No winning ads found. Refresh the dashboard to sync Meta performance data.',
-      400,
-    );
-  }
+  const winners = await listWinningMetaAds(companyId, 20);
 
   const orderedAssetIds: string[] = [];
   const seen = new Set<string>();
-  for (const m of metrics) {
-    const assetId = adIdToAssetId.get(m.metaAdId);
-    if (!assetId || seen.has(assetId)) continue;
-    seen.add(assetId);
-    orderedAssetIds.push(assetId);
+
+  for (const w of winners) {
+    if (!w.assetId || !w.hasLinkedAsset || seen.has(w.assetId)) continue;
+    seen.add(w.assetId);
+    orderedAssetIds.push(w.assetId);
     if (orderedAssetIds.length >= REQUIRED_COUNT) break;
   }
 
   if (orderedAssetIds.length < REQUIRED_COUNT) {
-    throw new TopWinningError(
-      `Only ${orderedAssetIds.length} winning ad(s) with gallery assets found (need ${REQUIRED_COUNT}). Refresh dashboard or adjust winner rules.`,
+    throw new WinnersQueryError(
+      `Only ${orderedAssetIds.length} winning ad(s) with gallery assets found (need ${REQUIRED_COUNT}). Run “Link creatives” or publish matching assets from Robust.`,
       400,
     );
   }
@@ -109,7 +55,7 @@ export async function getTopWinningAssets(companyId: string): Promise<TopWinning
   for (const assetId of orderedAssetIds) {
     const asset = assetById.get(assetId);
     if (!asset) {
-      throw new TopWinningError(
+      throw new WinnersQueryError(
         `Winning asset ${assetId} is missing or not READY in gallery.`,
         400,
       );

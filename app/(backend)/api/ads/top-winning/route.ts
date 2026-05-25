@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 
-import { getTopWinningAssets, TopWinningError } from '@/lib/asset-intelligence/top-winning';
+import {
+  getTopWinningAssets,
+  TopWinningError,
+} from '@/lib/asset-intelligence/top-winning';
 import { getSession } from '@/lib/auth/session';
 
 export const dynamic = 'force-dynamic';
