@@ -2,7 +2,7 @@ import 'server-only';
 
 import { z } from 'zod';
 
-import { completeJsonResponses } from '@/lib/assistant/openai-json';
+import { completeJsonResponses, parseLlmJson } from '@/lib/assistant/openai-json';
 
 import { VIDEO_SCRIPT_MODEL, VIDEO_SCRIPT_REASONING_EFFORT } from './models';
 import type {
@@ -134,6 +134,6 @@ export async function generateVideoScript(input: GenerateScriptInput): Promise<G
     user: userParts.join('\n\n'),
   });
 
-  const parsed = outputSchema.parse(JSON.parse(raw));
+  const parsed = outputSchema.parse(parseLlmJson(raw));
   return parsed;
 }

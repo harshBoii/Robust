@@ -8,6 +8,32 @@ const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 export type ReasoningEffort = 'low' | 'medium' | 'high' | 'xhigh';
 
+/** Responses API requires the word "json" in input when using text.format json_object. */
+function withJsonModeUserMessage(user: string): string {
+  if (/\bjson\b/i.test(user)) return user;
+  return `${user}\n\nRespond with a single valid JSON object only (keys per instructions; no markdown fences).`;
+}
+
+/** Parse LLM output that may be raw JSON or wrapped in markdown fences. */
+export function parseLlmJson<T = unknown>(raw: string): T {
+  const trimmed = raw.trim();
+  if (!trimmed) throw new Error('Empty LLM response');
+
+  try {
+    return JSON.parse(trimmed) as T;
+  } catch {
+    const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i);
+    if (fenced?.[1]) return JSON.parse(fenced[1].trim()) as T;
+
+    const start = trimmed.indexOf('{');
+    const end = trimmed.lastIndexOf('}');
+    if (start >= 0 && end > start) {
+      return JSON.parse(trimmed.slice(start, end + 1)) as T;
+    }
+    throw new Error('Failed to parse JSON from LLM response');
+  }
+}
+
 function extractResponsesOutputText(response: unknown): string {
   if (typeof response !== 'object' || response === null) return '{}';
   const r = response as Record<string, unknown>;
@@ -38,11 +64,13 @@ export async function completeJsonResponses(params: {
   user: string;
   reasoning?: { effort: ReasoningEffort };
 }): Promise<string> {
+  const userContent = withJsonModeUserMessage(params.user);
+
   const response = await openai.responses.create({
     model: params.model,
     reasoning: params.reasoning ?? { effort: 'xhigh' },
     instructions: params.system,
-    input: [{ role: 'user', content: params.user }],
+    input: [{ role: 'user', content: userContent }],
     text: { format: { type: 'json_object' } },
   });
 
