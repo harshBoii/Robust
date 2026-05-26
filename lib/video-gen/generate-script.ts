@@ -37,9 +37,8 @@ const CREATIVE_RULES = `Creative principles (follow at least one):
 Strategy vs execution note: "Break a myth", "Sell emotions", and "Use contrast/irony" are brand strategy choices. "Exaggerate a core truth" and "Oomph moment" are execution techniques. Choose the strategy first, then apply an execution technique on top of it.`;
 
 const AUDIENCE_RULES = `Audience & tone (India):
-- Write for an Indian audience: culturally legible settings, relatable daily-life contexts, and natural Indian English or light Hinglish only when it genuinely fits the brand.
-  - Bad Hinglish (forced): "Yaar, try karo na!" — Good (natural): "Ek baar try karo"
-  - Avoid forced slang or performative desi-ness.
+- Write for an Indian audience: culturally legible settings, relatable daily-life contexts, and natural Indian English 
+
 
 - Humor, family, festivals, value-for-money, trust, and aspiration should feel authentic to India — not generic Western tropes.
 
