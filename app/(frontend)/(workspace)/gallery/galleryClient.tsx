@@ -18,6 +18,7 @@ import {
   RefreshCw,
   Check,
   X,
+  Download,
 } from "lucide-react";
 
 type AssetType = "VIDEO" | "IMAGE" | "DOCUMENT";
@@ -401,6 +402,7 @@ export default function GalleryClient({
   const [error, setError] = useState<string | null>(null);
   const [preview, setPreview] = useState<PreviewState>(null);
   const [openingId, setOpeningId] = useState<string | null>(null);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>("flat");
   const [openFolder, setOpenFolder] = useState<BulkGroup | null>(null);
   const [analyzeBusy, setAnalyzeBusy] = useState(false);
@@ -541,6 +543,49 @@ export default function GalleryClient({
     }
   }, [openFolder?.bulk?.id, loadAssets]);
 
+  const downloadAsset = async (asset: GalleryAsset) => {
+    setDownloadingId(asset.id);
+    setError(null);
+    try {
+      const endpoint =
+        asset.assetType === "VIDEO"
+          ? `/api/videos/${asset.id}/download`
+          : `/api/assets/${asset.id}/download`;
+      const res = await fetch(endpoint, { credentials: "include" });
+      const data = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        message?: string;
+        download?: { url: string; filename: string };
+      };
+      if (!res.ok) {
+        throw new Error(data.error ?? data.message ?? "Download failed");
+      }
+      const url = data.download?.url;
+      const filename =
+        data.download?.filename ?? asset.filename ?? `asset-${asset.id}`;
+      if (!url) throw new Error("No download URL returned");
+
+      try {
+        const fileRes = await fetch(url);
+        if (!fileRes.ok) throw new Error("Could not fetch file");
+        const blob = await fileRes.blob();
+        const blobUrl = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = blobUrl;
+        a.download = filename;
+        a.click();
+        URL.revokeObjectURL(blobUrl);
+      } catch {
+        window.open(url, "_blank", "noopener,noreferrer");
+      }
+    } catch (e) {
+      console.error(e);
+      setError(e instanceof Error ? e.message : "Download failed");
+    } finally {
+      setDownloadingId(null);
+    }
+  };
+
   const openAsset = async (asset: GalleryAsset) => {
     setOpeningId(asset.id);
     try {
@@ -589,42 +634,47 @@ export default function GalleryClient({
 
   const renderAssetCard = (asset: GalleryAsset) => {
     const usageTags = getUsageTags(asset);
+    const isBusy = openingId === asset.id || downloadingId === asset.id;
     return (
-      <button
+      <div
         key={asset.id}
-        type="button"
-        disabled={openingId === asset.id}
-        onClick={() => void openAsset(asset)}
-        className="group glass-card overflow-hidden rounded-2xl p-0 text-left transition hover:border-primary/30 disabled:opacity-60"
+        className="group glass-card overflow-hidden rounded-2xl p-0 text-left transition hover:border-primary/30"
       >
-        <div className="relative aspect-video w-full bg-[var(--glass-hover)]">
-          {asset.thumbnailUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={asset.thumbnailUrl}
-              alt=""
-              className="h-full w-full object-cover"
-            />
-          ) : (
-            <div className="flex h-full w-full items-center justify-center text-muted-foreground">
-              {asset.assetType === "VIDEO" ? (
-                <Film className="h-10 w-10 opacity-40" />
-              ) : asset.assetType === "IMAGE" ? (
-                <ImageIcon className="h-10 w-10 opacity-40" />
-              ) : (
-                <FileText className="h-10 w-10 opacity-40" />
-              )}
-            </div>
-          )}
-          {asset.assetType === "VIDEO" && (
-            <span className="absolute bottom-2 right-2 inline-flex items-center gap-1 rounded-full bg-black/60 px-2 py-0.5 text-[10px] font-semibold text-white">
-              <Play className="h-3 w-3" /> Stream
+        <button
+          type="button"
+          disabled={isBusy}
+          onClick={() => void openAsset(asset)}
+          className="block w-full text-left disabled:opacity-60"
+        >
+          <div className="relative aspect-video w-full bg-[var(--glass-hover)]">
+            {asset.thumbnailUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={asset.thumbnailUrl}
+                alt=""
+                className="h-full w-full object-cover"
+              />
+            ) : (
+              <div className="flex h-full w-full items-center justify-center text-muted-foreground">
+                {asset.assetType === "VIDEO" ? (
+                  <Film className="h-10 w-10 opacity-40" />
+                ) : asset.assetType === "IMAGE" ? (
+                  <ImageIcon className="h-10 w-10 opacity-40" />
+                ) : (
+                  <FileText className="h-10 w-10 opacity-40" />
+                )}
+              </div>
+            )}
+            {asset.assetType === "VIDEO" && (
+              <span className="absolute bottom-2 right-2 inline-flex items-center gap-1 rounded-full bg-black/60 px-2 py-0.5 text-[10px] font-semibold text-white">
+                <Play className="h-3 w-3" /> Stream
+              </span>
+            )}
+            <span className="absolute left-2 top-2 rounded-md bg-black/55 px-1.5 py-0.5 text-[10px] font-medium uppercase text-white">
+              {asset.status}
             </span>
-          )}
-          <span className="absolute left-2 top-2 rounded-md bg-black/55 px-1.5 py-0.5 text-[10px] font-medium uppercase text-white">
-            {asset.status}
-          </span>
-        </div>
+          </div>
+        </button>
         <div className="space-y-1 px-4 py-3">
           <p className="truncate font-medium text-foreground">
             {asset.title || asset.filename}
@@ -642,8 +692,21 @@ export default function GalleryClient({
               ))}
             </div>
           )}
+          <button
+            type="button"
+            disabled={isBusy}
+            onClick={() => void downloadAsset(asset)}
+            className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-[var(--glass-border)] px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition hover:border-primary/30 hover:bg-[var(--glass-hover)] hover:text-foreground disabled:opacity-50"
+          >
+            {downloadingId === asset.id ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Download className="h-3.5 w-3.5" />
+            )}
+            Download
+          </button>
         </div>
-      </button>
+      </div>
     );
   };
 
