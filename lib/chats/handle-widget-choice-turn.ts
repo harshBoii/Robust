@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { classifyWidgetChoice } from '@/lib/chats/classify-widget-choice';
+import { prisma } from '@/lib/prisma';
 import {
   appendChatMessages,
   getChatSession,
@@ -19,6 +20,12 @@ import {
   optionsForImageGenStep,
 } from '@/lib/image-gen/widget-choice-options';
 import { parseImageGenState } from '@/lib/image-gen/state';
+import {
+  dispatchForVideoGenChoice,
+  optionsForVideoGenStep,
+  videoGenStepDescription,
+} from '@/lib/video-gen/widget-choice-options';
+import { parseVideoGenState } from '@/lib/video-gen/state';
 
 async function userMsg(sessionId: string, content: string): Promise<SerializedMessage> {
   const [row] = await appendChatMessages(sessionId, [{ role: 'USER', content }]);
@@ -176,6 +183,52 @@ function dispatchForAdsChoice(
     default:
       return null;
   }
+}
+
+export async function tryHandleVideoGenWidgetChoiceTurn(
+  sessionId: string,
+  companyId: string,
+  text: string,
+): Promise<OrchestratorResult | null> {
+  const session = await getChatSession(sessionId, companyId);
+  if (!session) return null;
+
+  const workflowState = parseWorkflowState(session.workflowState);
+  const vg = parseVideoGenState(workflowState);
+  if (!vg) return null;
+
+  let libraryAssets: Array<{ id: string; title: string }> | undefined;
+  if (vg.step === 'adLibraryPick') {
+    const rows = await prisma.asset.findMany({
+      where: { companyId, assetType: 'VIDEO' },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+      select: { id: true, title: true },
+    });
+    libraryAssets = rows;
+  }
+
+  const options = optionsForVideoGenStep(vg, { libraryAssets });
+  if (!options?.length) return null;
+
+  const { matched, optionId } = await classifyWidgetChoice({
+    userText: text,
+    stepDescription: videoGenStepDescription(vg.step),
+    options,
+  });
+  if (!matched || !optionId) return null;
+
+  const dispatch = dispatchForVideoGenChoice(vg.step, optionId);
+  if (!dispatch) return null;
+
+  const { handleVideoGenAction } = await import('@/lib/video-gen/orchestrator');
+  return handleVideoGenAction(
+    sessionId,
+    companyId,
+    dispatch.action,
+    dispatch.payload,
+    text,
+  );
 }
 
 export async function tryHandleAdsWidgetChoiceTurn(

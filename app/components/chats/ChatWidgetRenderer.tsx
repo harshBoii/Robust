@@ -4,7 +4,6 @@ import type { WorkflowState } from '@/lib/chats/types';
 import type { GroupModel } from '@/app/components/createAd/types';
 
 import { isWidgetActive } from '@/lib/chats/widget-stale';
-import { isVideoGenWidgetActive } from '@/lib/video-gen/widget-active';
 
 import { MediaAnalyzingWidget } from './MediaAnalyzingWidget';
 import {
@@ -80,10 +79,7 @@ export function ChatWidgetRenderer({
 
   const payload = (widgetPayload ?? {}) as Record<string, unknown>;
   const groups = (workflowState.groups ?? payload.groups) as GroupModel[] | undefined;
-  const isVideoGenWidget = widgetType.startsWith('videoGen');
-  const active = isVideoGenWidget
-    ? currentStep === 'videoGen' && isVideoGenWidgetActive(widgetType, workflowState.videoGen)
-    : isWidgetActive(widgetType, currentStep);
+  const active = isWidgetActive(widgetType, currentStep, workflowState);
 
   if (widgetType === 'mediaAnalyzing') {
     return <MediaAnalyzingWidget groups={groups} isActive={active} />;

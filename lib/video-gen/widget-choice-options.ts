@@ -2,112 +2,99 @@ import 'server-only';
 
 import type { WidgetChoiceOption } from '@/lib/chats/classify-widget-choice';
 
-import type { VideoGenActionType, VideoGenAdCategory, VideoGenState } from './types';
+import type { VideoGenActionType, VideoGenState } from './types';
 import { VIDEO_GEN_AD_CATEGORIES } from './types';
 
 export function videoGenStepDescription(step: VideoGenState['step']): string {
   switch (step) {
     case 'routing':
-      return 'Choose a video ad creation path';
+      return 'Choose how to create your video ad';
     case 'offeringPick':
-      return 'Choose which offering to promote';
+      return 'Which offering or product to promote';
     case 'adTypePick':
-      return 'Choose the type of video ad';
+      return 'What type of video ad to create';
     case 'adLibraryPick':
-      return 'Choose a video ad from your library to replicate';
+      return 'Which existing video ad to replicate';
     default:
       return step;
   }
 }
 
-export function optionsForVideoGenStep(vg: VideoGenState): WidgetChoiceOption[] | null {
+export function optionsForVideoGenStep(
+  vg: VideoGenState,
+  extras?: { libraryAssets?: Array<{ id: string; title: string }> },
+): WidgetChoiceOption[] | null {
   switch (vg.step) {
     case 'routing':
       return [
-        { optionId: 'mrAdicasso', label: 'Mr. Adicasso', description: 'AI masterpiece from scratch' },
-        { optionId: 'learnAndBuild', label: 'Learn and Build', description: 'From top performers' },
-        { optionId: 'replicate', label: 'Replicate an Ad', description: 'Match an existing ad' },
+        {
+          optionId: 'mrAdicasso',
+          label: 'Mr. Adicasso',
+          description: 'AI-driven creative from brand context',
+        },
+        {
+          optionId: 'learnAndBuild',
+          label: 'Learn and Build',
+          description: 'From top performing ads',
+        },
+        {
+          optionId: 'replicate',
+          label: 'Replicate an Ad',
+          description: 'Match an existing ad',
+        },
       ];
-    case 'offeringPick': {
-      const offerings = vg.companyContext?.offerings ?? [];
-      return offerings.map((o) => ({
+    case 'offeringPick':
+      return (vg.companyContext?.offerings ?? []).map((o) => ({
         optionId: o.id,
         label: o.name,
         description: o.description ?? undefined,
       }));
-    }
     case 'adTypePick':
       return VIDEO_GEN_AD_CATEGORIES.map((c) => ({
         optionId: c.id,
         label: c.label,
       }));
+    case 'adLibraryPick':
+      return (extras?.libraryAssets ?? []).map((a) => ({
+        optionId: a.id,
+        label: a.title,
+      }));
     default:
       return null;
   }
 }
+
+export type VideoGenChoiceDispatch = {
+  action: VideoGenActionType;
+  payload: Record<string, unknown>;
+};
 
 export function dispatchForVideoGenChoice(
   step: VideoGenState['step'],
   optionId: string,
-): { action: VideoGenActionType; payload: Record<string, unknown> } | null {
+): VideoGenChoiceDispatch | null {
   switch (step) {
     case 'routing':
-      return { action: 'videoGen.subpathChosen', payload: { subpath: optionId } };
+      if (optionId === 'mrAdicasso' || optionId === 'learnAndBuild' || optionId === 'replicate') {
+        return { action: 'videoGen.subpathChosen', payload: { subpath: optionId } };
+      }
+      return null;
     case 'offeringPick':
-      return { action: 'videoGen.offeringSelected', payload: { offeringId: optionId } };
+      if (optionId) {
+        return { action: 'videoGen.offeringSelected', payload: { offeringId: optionId } };
+      }
+      return null;
     case 'adTypePick':
-      return {
-        action: 'videoGen.adTypeSelected',
-        payload: { category: optionId as VideoGenAdCategory },
-      };
+      if (optionId) {
+        return { action: 'videoGen.adTypeSelected', payload: { category: optionId } };
+      }
+      return null;
+    case 'adLibraryPick':
+      if (optionId) {
+        return { action: 'videoGen.adSelected', payload: { assetId: optionId } };
+      }
+      return null;
     default:
       return null;
   }
-}
-
-/** Fast path: match typed text to offering/category without LLM. */
-export function matchVideoGenTextToChoice(
-  vg: VideoGenState,
-  text: string,
-): { action: VideoGenActionType; payload: Record<string, unknown> } | null {
-  const t = text.trim().toLowerCase();
-  if (!t) return null;
-
-  if (vg.step === 'offeringPick' && vg.companyContext) {
-    const offering = vg.companyContext.offerings.find(
-      (o) =>
-        o.name.toLowerCase() === t ||
-        o.name.toLowerCase().includes(t) ||
-        t.includes(o.name.toLowerCase()),
-    );
-    if (offering) {
-      return { action: 'videoGen.offeringSelected', payload: { offeringId: offering.id } };
-    }
-  }
-
-  if (vg.step === 'adTypePick') {
-    const cat = VIDEO_GEN_AD_CATEGORIES.find(
-      (c) =>
-        c.label.toLowerCase() === t ||
-        c.label.toLowerCase().includes(t) ||
-        c.id.toLowerCase() === t.replace(/\s+/g, ''),
-    );
-    if (cat) {
-      return { action: 'videoGen.adTypeSelected', payload: { category: cat.id } };
-    }
-  }
-
-  if (vg.step === 'routing') {
-    if (/adicasso|picasso|from scratch|masterpiece/.test(t)) {
-      return { action: 'videoGen.subpathChosen', payload: { subpath: 'mrAdicasso' } };
-    }
-    if (/learn|build|top perform|winning/.test(t)) {
-      return { action: 'videoGen.subpathChosen', payload: { subpath: 'learnAndBuild' } };
-    }
-    if (/replicat|existing|library/.test(t)) {
-      return { action: 'videoGen.subpathChosen', payload: { subpath: 'replicate' } };
-    }
-  }
-
-  return null;
 }

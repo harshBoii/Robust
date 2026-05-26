@@ -23,14 +23,12 @@ import {
   runSingleAssetIntelligence,
   runTopAdsIntelligencePipeline,
 } from './run-top-ads-intelligence';
-import { tryHandleVideoGenWidgetChoiceTurn } from './handle-widget-choice-turn';
 import {
   initialVideoGenState,
   mergeVideoGenIntoWorkflow,
   parseVideoGenState,
   sanitizeWorkflowStateForClient,
 } from './state';
-import { matchVideoGenTextToChoice } from './widget-choice-options';
 import type {
   VideoGenActionType,
   VideoGenAdCategory,
@@ -368,6 +366,31 @@ export async function startSubpath(
   return packageResult(updated, nextState, newMessages);
 }
 
+function matchOfferingByText(
+  vg: VideoGenState,
+  text: string,
+): string | null {
+  const q = text.trim().toLowerCase();
+  if (!q) return null;
+  for (const o of vg.companyContext?.offerings ?? []) {
+    if (o.name.toLowerCase() === q || o.name.toLowerCase().includes(q) || q.includes(o.name.toLowerCase())) {
+      return o.id;
+    }
+  }
+  return null;
+}
+
+function matchAdCategoryByText(text: string): VideoGenAdCategory | null {
+  const q = text.trim().toLowerCase();
+  if (!q) return null;
+  for (const c of VIDEO_GEN_AD_CATEGORIES) {
+    if (c.label.toLowerCase() === q || c.label.toLowerCase().includes(q) || q.includes(c.id.toLowerCase())) {
+      return c.id;
+    }
+  }
+  return null;
+}
+
 export async function handleVideoGenMessage(
   sessionId: string,
   companyId: string,
@@ -376,21 +399,60 @@ export async function handleVideoGenMessage(
   const session = await getChatSession(sessionId, companyId);
   if (!session) throw new Error('Session not found');
 
-  const workflowState = parseWorkflowState(session.workflowState);
-  let vg = getVg(workflowState);
-
-  const quickMatch = matchVideoGenTextToChoice(vg, text);
-  if (quickMatch) {
-    return handleVideoGenAction(sessionId, companyId, quickMatch.action, quickMatch.payload, text);
-  }
-
-  const widgetChoiceResult = await tryHandleVideoGenWidgetChoiceTurn(sessionId, companyId, text);
+  const { tryHandleVideoGenWidgetChoiceTurn } = await import(
+    '@/lib/chats/handle-widget-choice-turn'
+  );
+  const widgetChoiceResult = await tryHandleVideoGenWidgetChoiceTurn(
+    sessionId,
+    companyId,
+    text,
+  );
   if (widgetChoiceResult) return widgetChoiceResult;
 
+  const workflowState = parseWorkflowState(session.workflowState);
+  let vg = getVg(workflowState);
   const newMessages: SerializedMessage[] = [];
   newMessages.push(await userMsg(sessionId, text));
 
-  if (vg.step === 'trendPick') {
+  if (vg.step === 'offeringPick') {
+    const offeringId = matchOfferingByText(vg, text);
+    if (offeringId) {
+      return handleVideoGenAction(
+        sessionId,
+        companyId,
+        'videoGen.offeringSelected',
+        { offeringId },
+        text,
+      );
+    }
+    newMessages.push(
+      await assistantMsg(
+        session.id,
+        'Pick an offering from the list above, or type the exact product name.',
+        'videoGenOfferingPicker',
+        { offerings: vg.companyContext?.offerings ?? [] },
+      ),
+    );
+  } else if (vg.step === 'adTypePick') {
+    const category = matchAdCategoryByText(text);
+    if (category) {
+      return handleVideoGenAction(
+        sessionId,
+        companyId,
+        'videoGen.adTypeSelected',
+        { category },
+        text,
+      );
+    }
+    newMessages.push(
+      await assistantMsg(
+        session.id,
+        'Pick an ad type from the buttons above, or type one of the format names (e.g. UGC, Pain Point Ad).',
+        'videoGenAdTypePicker',
+        { categories: VIDEO_GEN_AD_CATEGORIES },
+      ),
+    );
+  } else if (vg.step === 'trendPick') {
     vg.trendTopic = text.trim();
     vg.step = 'durationInput';
     newMessages.push(
@@ -430,33 +492,6 @@ export async function handleVideoGenMessage(
     } else {
       vg = await runScriptGeneration(session, vg, newMessages, { changeFeedback: text });
     }
-  } else if (vg.step === 'offeringPick') {
-    newMessages.push(
-      await assistantMsg(
-        session.id,
-        'Pick an offering from the buttons above, or type the offering name exactly.',
-        'videoGenOfferingPicker',
-        { offerings: vg.companyContext?.offerings ?? [] },
-      ),
-    );
-  } else if (vg.step === 'adTypePick') {
-    newMessages.push(
-      await assistantMsg(
-        session.id,
-        'Pick an ad type from the buttons above, or type one (e.g. "UGC" or "Pain Point Ad").',
-        'videoGenAdTypePicker',
-        { categories: VIDEO_GEN_AD_CATEGORIES },
-      ),
-    );
-  } else if (vg.step === 'adLibraryPick') {
-    newMessages.push(
-      await assistantMsg(
-        session.id,
-        'Select a video from the library above to continue.',
-        'videoGenAdLibraryPicker',
-        { assets: await loadReplicateLibrary(session.companyId) },
-      ),
-    );
   } else if (vg.step === 'routing') {
     newMessages.push(
       await assistantMsg(
@@ -472,9 +507,21 @@ export async function handleVideoGenMessage(
         },
       ),
     );
+  } else if (vg.step === 'adLibraryPick') {
+    newMessages.push(
+      await assistantMsg(
+        session.id,
+        'Select a video from the library above, or type part of its title.',
+        'videoGenAdLibraryPicker',
+        { assets: await loadReplicateLibrary(session.companyId) },
+      ),
+    );
   } else {
     newMessages.push(
-      await assistantMsg(session.id, 'Use the buttons above to continue, or tell me what you’d like to change.'),
+      await assistantMsg(
+        session.id,
+        'Use the controls above to continue, or describe what you’d like to change.',
+      ),
     );
   }
 
@@ -510,9 +557,6 @@ export async function handleVideoGenAction(
 
     case 'videoGen.offeringSelected': {
       const offeringId = String(payload.offeringId ?? '');
-      if (vg.step === 'adTypePick' && vg.offeringId === offeringId) {
-        break;
-      }
       vg.offeringId = offeringId;
       if (vg.companyContext) {
         vg.companyContext = applyOfferingToContext(vg.companyContext, offeringId);
@@ -530,14 +574,7 @@ export async function handleVideoGenAction(
     }
 
     case 'videoGen.adTypeSelected': {
-      const category = payload.category as VideoGenAdCategory;
-      if (vg.step === 'durationInput' && vg.adCategory === category) {
-        break;
-      }
-      if (vg.step === 'trendPick' && vg.adCategory === category) {
-        break;
-      }
-      vg.adCategory = category;
+      vg.adCategory = payload.category as VideoGenAdCategory;
       if (vg.adCategory === 'trendInduced') {
         vg.step = 'trendPick';
         newMessages.push(
