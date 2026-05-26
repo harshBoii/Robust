@@ -10,11 +10,7 @@ import {
   updateChatSession,
   type DbChatSession,
 } from '@/lib/chats/repository';
-import {
-  shouldSkipActionUserBubble,
-  shouldSkipVideoGenWidgetUserBubble,
-} from '@/lib/chats/user-message-policy';
-import { tryHandleVideoGenWidgetChoiceTurn } from './handle-widget-choice-turn';
+import { shouldSkipActionUserBubble } from '@/lib/chats/user-message-policy';
 import { parseWorkflowState, serializeMessage, serializeSession } from '@/lib/chats/serialize';
 import type { OrchestratorResult, SerializedMessage, WorkflowState } from '@/lib/chats/types';
 
@@ -27,12 +23,14 @@ import {
   runSingleAssetIntelligence,
   runTopAdsIntelligencePipeline,
 } from './run-top-ads-intelligence';
+import { tryHandleVideoGenWidgetChoiceTurn } from './handle-widget-choice-turn';
 import {
   initialVideoGenState,
   mergeVideoGenIntoWorkflow,
   parseVideoGenState,
   sanitizeWorkflowStateForClient,
 } from './state';
+import { matchVideoGenTextToChoice } from './widget-choice-options';
 import type {
   VideoGenActionType,
   VideoGenAdCategory,
@@ -370,18 +368,6 @@ export async function startSubpath(
   return packageResult(updated, nextState, newMessages);
 }
 
-function isEchoOfLastWidgetSelection(
-  messages: DbChatSession['messages'],
-  text: string,
-): boolean {
-  const trimmed = text.trim();
-  if (!trimmed) return false;
-  const lastUser = [...(messages ?? [])].reverse().find((m) => m.role === 'USER');
-  if (!lastUser?.content?.trim() || lastUser.content.trim() !== trimmed) return false;
-  const last = messages?.[messages.length - 1];
-  return last?.role === 'ASSISTANT';
-}
-
 export async function handleVideoGenMessage(
   sessionId: string,
   companyId: string,
@@ -393,16 +379,12 @@ export async function handleVideoGenMessage(
   const workflowState = parseWorkflowState(session.workflowState);
   let vg = getVg(workflowState);
 
-  if (isEchoOfLastWidgetSelection(session.messages, text)) {
-    const updated = await persist(session, mergeVideoGenIntoWorkflow(workflowState, vg));
-    return packageResult(updated, mergeVideoGenIntoWorkflow(workflowState, vg), []);
+  const quickMatch = matchVideoGenTextToChoice(vg, text);
+  if (quickMatch) {
+    return handleVideoGenAction(sessionId, companyId, quickMatch.action, quickMatch.payload, text);
   }
 
-  const widgetChoiceResult = await tryHandleVideoGenWidgetChoiceTurn(
-    sessionId,
-    companyId,
-    text,
-  );
+  const widgetChoiceResult = await tryHandleVideoGenWidgetChoiceTurn(sessionId, companyId, text);
   if (widgetChoiceResult) return widgetChoiceResult;
 
   const newMessages: SerializedMessage[] = [];
@@ -448,6 +430,33 @@ export async function handleVideoGenMessage(
     } else {
       vg = await runScriptGeneration(session, vg, newMessages, { changeFeedback: text });
     }
+  } else if (vg.step === 'offeringPick') {
+    newMessages.push(
+      await assistantMsg(
+        session.id,
+        'Pick an offering from the buttons above, or type the offering name exactly.',
+        'videoGenOfferingPicker',
+        { offerings: vg.companyContext?.offerings ?? [] },
+      ),
+    );
+  } else if (vg.step === 'adTypePick') {
+    newMessages.push(
+      await assistantMsg(
+        session.id,
+        'Pick an ad type from the buttons above, or type one (e.g. "UGC" or "Pain Point Ad").',
+        'videoGenAdTypePicker',
+        { categories: VIDEO_GEN_AD_CATEGORIES },
+      ),
+    );
+  } else if (vg.step === 'adLibraryPick') {
+    newMessages.push(
+      await assistantMsg(
+        session.id,
+        'Select a video from the library above to continue.',
+        'videoGenAdLibraryPicker',
+        { assets: await loadReplicateLibrary(session.companyId) },
+      ),
+    );
   } else if (vg.step === 'routing') {
     newMessages.push(
       await assistantMsg(
@@ -489,10 +498,7 @@ export async function handleVideoGenAction(
   const newMessages: SerializedMessage[] = [];
 
   const displayUserText = userMessage?.trim();
-  const skipUserBubble =
-    shouldSkipVideoGenWidgetUserBubble(action) ||
-    shouldSkipActionUserBubble(session.messages, action);
-  if (displayUserText && !skipUserBubble) {
+  if (displayUserText && !shouldSkipActionUserBubble(session.messages, action)) {
     newMessages.push(await userMsg(sessionId, displayUserText));
   }
 
@@ -504,15 +510,12 @@ export async function handleVideoGenAction(
 
     case 'videoGen.offeringSelected': {
       const offeringId = String(payload.offeringId ?? '');
-      if (vg.step !== 'offeringPick' && vg.offeringId === offeringId) {
+      if (vg.step === 'adTypePick' && vg.offeringId === offeringId) {
         break;
       }
       vg.offeringId = offeringId;
       if (vg.companyContext) {
         vg.companyContext = applyOfferingToContext(vg.companyContext, offeringId);
-      }
-      if (vg.step === 'adTypePick' && vg.adCategory == null) {
-        break;
       }
       vg.step = 'adTypePick';
       newMessages.push(
@@ -528,10 +531,10 @@ export async function handleVideoGenAction(
 
     case 'videoGen.adTypeSelected': {
       const category = payload.category as VideoGenAdCategory;
-      if (
-        vg.adCategory === category &&
-        (vg.step === 'durationInput' || vg.step === 'trendPick' || vg.step === 'reviewScript')
-      ) {
+      if (vg.step === 'durationInput' && vg.adCategory === category) {
+        break;
+      }
+      if (vg.step === 'trendPick' && vg.adCategory === category) {
         break;
       }
       vg.adCategory = category;

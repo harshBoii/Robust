@@ -88,7 +88,8 @@ async function pollSessionAfterInitialSend(
       const hasUser = msgs.some((m) => m.role === 'user' && m.content?.trim() === want);
       const routed =
         data.session.currentStep !== 'intent' ||
-        Boolean(data.session.workflowState?.imageGen);
+        Boolean(data.session.workflowState?.imageGen) ||
+        Boolean(data.session.workflowState?.videoGen);
       if (hasUser || routed) return data.session;
     }
     await new Promise((r) => setTimeout(r, 400));

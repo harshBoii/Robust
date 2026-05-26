@@ -1,26 +1,10 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 import type { ChatWidgetDispatch } from './ChatWidgets';
 
 type SubpathOption = { id: string; label: string; description: string };
-
-function useSingleFireAction(onAction: ChatWidgetDispatch) {
-  const lockRef = useRef(false);
-  return useCallback(
-    (action: string, payload: Record<string, unknown>, label?: string) => {
-      if (lockRef.current) return;
-      lockRef.current = true;
-      void Promise.resolve(onAction(action, payload, label)).finally(() => {
-        window.setTimeout(() => {
-          lockRef.current = false;
-        }, 800);
-      });
-    },
-    [onAction],
-  );
-}
 
 export function VideoGenSubpathChoiceWidget({
   payload,
@@ -29,7 +13,6 @@ export function VideoGenSubpathChoiceWidget({
   payload: Record<string, unknown>;
   onAction: ChatWidgetDispatch;
 }) {
-  const fire = useSingleFireAction(onAction);
   const subpaths = (payload.subpaths as SubpathOption[]) ?? [];
   return (
     <div className="grid gap-2 sm:grid-cols-1">
@@ -37,10 +20,7 @@ export function VideoGenSubpathChoiceWidget({
         <button
           key={s.id}
           type="button"
-          onClick={(e) => {
-            e.preventDefault();
-            fire('videoGen.subpathChosen', { subpath: s.id }, s.label);
-          }}
+          onClick={() => void onAction('videoGen.subpathChosen', { subpath: s.id }, s.label)}
           className="rounded-xl border border-border/60 bg-background/80 px-4 py-3 text-left transition hover:border-primary/40 hover:bg-primary/5"
         >
           <div className="text-[14px] font-medium text-foreground">{s.label}</div>
@@ -58,7 +38,6 @@ export function VideoGenOfferingPickerWidget({
   payload: Record<string, unknown>;
   onAction: ChatWidgetDispatch;
 }) {
-  const fire = useSingleFireAction(onAction);
   const offerings =
     (payload.offerings as Array<{ id: string; name: string; description?: string | null }>) ?? [];
   return (
@@ -67,10 +46,7 @@ export function VideoGenOfferingPickerWidget({
         <button
           key={o.id}
           type="button"
-          onClick={(e) => {
-            e.preventDefault();
-            fire('videoGen.offeringSelected', { offeringId: o.id }, o.name);
-          }}
+          onClick={() => void onAction('videoGen.offeringSelected', { offeringId: o.id }, o.name)}
           className="rounded-lg border border-border/50 px-3 py-2 text-left text-[13px] hover:border-primary/40"
         >
           <div className="font-medium">{o.name}</div>
@@ -90,7 +66,6 @@ export function VideoGenAdTypePickerWidget({
   payload: Record<string, unknown>;
   onAction: ChatWidgetDispatch;
 }) {
-  const fire = useSingleFireAction(onAction);
   const categories =
     (payload.categories as Array<{ id: string; label: string }>) ?? [];
   return (
@@ -99,10 +74,9 @@ export function VideoGenAdTypePickerWidget({
         <button
           key={c.id}
           type="button"
-          onClick={(e) => {
-            e.preventDefault();
-            fire('videoGen.adTypeSelected', { category: c.id }, c.label);
-          }}
+          onClick={() =>
+            void onAction('videoGen.adTypeSelected', { category: c.id }, c.label)
+          }
           className="rounded-full border border-border/50 px-3 py-1.5 text-[12px] font-medium hover:border-primary/40 hover:bg-primary/5"
         >
           {c.label}
@@ -119,7 +93,6 @@ export function VideoGenScriptReviewWidget({
   payload: Record<string, unknown>;
   onAction: ChatWidgetDispatch;
 }) {
-  const fire = useSingleFireAction(onAction);
   const adScript = typeof payload.adScript === 'string' ? payload.adScript : '';
   const [feedback, setFeedback] = useState('');
 
@@ -133,10 +106,7 @@ export function VideoGenScriptReviewWidget({
       <div className="flex flex-wrap gap-2">
         <button
           type="button"
-          onClick={(e) => {
-            e.preventDefault();
-            fire('videoGen.scriptApproved', {}, 'Approve script');
-          }}
+          onClick={() => void onAction('videoGen.scriptApproved', {}, 'Approve script')}
           className="rounded-full bg-primary px-4 py-2 text-[13px] font-medium text-primary-foreground"
         >
           Approve & generate video
@@ -181,7 +151,6 @@ export function VideoGenAdLibraryPickerWidget({
   payload: Record<string, unknown>;
   onAction: ChatWidgetDispatch;
 }) {
-  const fire = useSingleFireAction(onAction);
   const assets = (payload.assets as LibraryAsset[]) ?? [];
   if (!assets.length) {
     return (
@@ -196,10 +165,7 @@ export function VideoGenAdLibraryPickerWidget({
         <button
           key={a.id}
           type="button"
-          onClick={(e) => {
-            e.preventDefault();
-            fire('videoGen.adSelected', { assetId: a.id }, a.title);
-          }}
+          onClick={() => void onAction('videoGen.adSelected', { assetId: a.id }, a.title)}
           className="flex gap-2 rounded-lg border border-border/50 p-2 text-left hover:border-primary/40"
         >
           {a.thumbnailUrl ? (
