@@ -1,5 +1,7 @@
 import 'server-only';
 
+import { handleUserFacingLlmError } from '@/lib/assistant/user-facing-llm-error';
+
 import { generateImage } from './generate-image';
 import { storeGeneratedImage } from './store-generated';
 import type { ImageGenState, ImageGenVariant } from './types';
@@ -63,7 +65,7 @@ async function generateOneWithRetry(input: {
       return {
         ...input.variant,
         status: 'failed' as const,
-        error: secondErr instanceof Error ? secondErr.message : String(secondErr),
+        error: handleUserFacingLlmError('image-gen/batch-generate', secondErr),
       };
     }
   }

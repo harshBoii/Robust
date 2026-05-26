@@ -1,5 +1,7 @@
 import 'server-only';
 
+import { LLM_USER_REPLY_PRIVACY_RULES } from '@/lib/assistant/user-facing-llm-error';
+
 import { buildActionCatalogText } from './action-catalog';
 import { buildAgentStepsCatalogText } from './agent-steps';
 import type { ChatWorkflowStep } from './types';
@@ -44,6 +46,8 @@ You respond with JSON only: reply, **required nextStep**, optional memory, optio
 6. **nextStep drives the UI** — The executor maps nextStep to the widget. After preset.build in the same turn, use nextStep choose_media or review_preset as appropriate.
 
 7. **Do not use intent.ack** — Use nextStep choose_media instead.
+
+${LLM_USER_REPLY_PRIVACY_RULES}
 
 ## Examples
 

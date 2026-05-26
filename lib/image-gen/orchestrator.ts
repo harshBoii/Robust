@@ -1,5 +1,9 @@
 import 'server-only';
 
+import {
+  handleUserFacingLlmError,
+  sanitizeUserFacingLlmError,
+} from '@/lib/assistant/user-facing-llm-error';
 import { prisma } from '@/lib/prisma';
 import {
   appendChatMessages,
@@ -515,7 +519,7 @@ async function runGenerateBase(
       ),
     );
   } catch (e) {
-    workflowState.lastOperationError = e instanceof Error ? e.message : 'Generation failed';
+    workflowState.lastOperationError = handleUserFacingLlmError('image-gen/generate-base', e);
     ig.step = 'collectFields';
     newMessages.push(
       await assistantMsg(
@@ -554,13 +558,15 @@ async function runTemplateGenerateFlow(
     const out = ig.templateOutputs?.[0];
 
     if (!succeeded || !out?.assetId) {
-      const detail = out?.error?.trim() || 'The model returned no image.';
+      const detail =
+        out?.error?.trim() ||
+        sanitizeUserFacingLlmError('The model returned no image.');
       workflowState.lastOperationError = detail;
       ig.step = 'templateNotes';
       newMessages.push(
         await assistantMsg(
           session.id,
-          `Generation didn't complete (${detail}). Adjust your notes and try again — JPEG or PNG uploads work best.`,
+          "Generation didn't complete. Adjust your notes and try again — JPEG or PNG uploads work best.",
         ),
       );
     } else {
@@ -592,7 +598,7 @@ async function runTemplateGenerateFlow(
       );
     }
   } catch (e) {
-    workflowState.lastOperationError = e instanceof Error ? e.message : 'Generation failed';
+    workflowState.lastOperationError = handleUserFacingLlmError('image-gen/template-generate-flow', e);
     ig.step = 'templateNotes';
     newMessages.push(
       await assistantMsg(
@@ -635,7 +641,7 @@ async function runGenerateIdeas(
       ),
     );
   } catch (e) {
-    workflowState.lastOperationError = e instanceof Error ? e.message : 'Failed to generate ideas';
+    workflowState.lastOperationError = handleUserFacingLlmError('image-gen/generate-ideas', e);
     ig.step = 'collectFields';
     newMessages.push(await assistantMsg(session.id, 'Could not generate ideas. Please try again.'));
   }
@@ -709,7 +715,7 @@ async function runGenerateVariants(
       ),
     );
   } catch (e) {
-    workflowState.lastOperationError = e instanceof Error ? e.message : 'Batch generation failed';
+    workflowState.lastOperationError = handleUserFacingLlmError('image-gen/batch-generate', e);
   }
 
   nextWorkflow = mergeImageGenIntoWorkflow(workflowState, ig);
@@ -846,7 +852,7 @@ async function runProductOnModelGenerate(
       ),
     );
   } catch (e) {
-    workflowState.lastOperationError = e instanceof Error ? e.message : 'Generation failed';
+    workflowState.lastOperationError = handleUserFacingLlmError('image-gen/generate-on-model', e);
     ig.step = 'poseSelect';
     newMessages.push(await assistantMsg(session.id, 'Generation failed — try another pose or background.'));
   }

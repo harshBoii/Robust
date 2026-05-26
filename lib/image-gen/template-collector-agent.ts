@@ -3,6 +3,7 @@ import 'server-only';
 import { z } from 'zod';
 
 import { completeJsonChatWithHistory } from '@/lib/assistant/openai-json';
+import { LLM_USER_REPLY_PRIVACY_RULES } from '@/lib/assistant/user-facing-llm-error';
 import { getTemplateById } from '@/lib/templates/catalog';
 
 import { TEMPLATE_COLLECTOR_MODEL } from './models';
@@ -95,6 +96,8 @@ The user has already uploaded their image. Your job:
 If the user says they have no changes, or says generate/go/ready, set readyToGenerate true and additionalRequest empty.
 If they describe what they want, set readyToGenerate true and put their full request in additionalRequest.
 On the first message after upload (synthetic trigger), welcome them and ask for optional requests only.
+
+${LLM_USER_REPLY_PRIVACY_RULES}
 
 Respond JSON only:
 {

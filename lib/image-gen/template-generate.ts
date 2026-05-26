@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { handleUserFacingLlmError } from '@/lib/assistant/user-facing-llm-error';
 import { getTemplateById } from '@/lib/templates/catalog';
 import type { TemplateDefinition } from '@/lib/templates/types';
 
@@ -67,7 +68,7 @@ async function generateOneWithRetry(input: {
       return {
         label: input.label,
         status: 'failed' as const,
-        error: secondErr instanceof Error ? secondErr.message : String(secondErr),
+        error: handleUserFacingLlmError('image-gen/template-generate', secondErr),
       };
     }
   }

@@ -632,8 +632,8 @@ export function ImageGenVariantGridWidget({
               />
             </div>
           ) : (
-            <div className="flex aspect-square items-center justify-center rounded bg-muted text-[11px] text-muted-foreground">
-              {v.status === 'failed' ? v.error ?? 'Failed' : 'Pending'}
+            <div className="flex aspect-square items-center justify-center rounded bg-muted px-2 text-center text-[11px] text-muted-foreground">
+              {v.status === 'failed' ? 'Generation failed' : 'Pending'}
             </div>
           )}
           {v.status === 'failed' && (

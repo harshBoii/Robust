@@ -3,6 +3,7 @@ import 'server-only';
 import { z } from 'zod';
 
 import { completeJsonChatWithHistory } from '@/lib/assistant/openai-json';
+import { LLM_USER_REPLY_PRIVACY_RULES } from '@/lib/assistant/user-facing-llm-error';
 
 import { IMAGE_COLLECTOR_MODEL, MAX_COLLECTOR_TURNS } from './models';
 import type { ImageGenState } from './types';
@@ -52,6 +53,8 @@ Rules:
 - If the user's message already contains missing fields, extract them and do not re-ask.
 - When all required fields are present, set complete=true and reply with a brief confirmation.
 - copyCount defaults to 4 for variant flows if user says "a few" without a number.
+
+${LLM_USER_REPLY_PRIVACY_RULES}
 
 Respond JSON only:
 {
