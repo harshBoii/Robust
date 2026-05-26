@@ -65,6 +65,7 @@ model Company {
   brandEntity        BrandEntity?
   offerings          Offering[]
   assetIntelligences AssetIntelligence[]
+  videoGenerationJobs VideoGenerationJob[]
 
   @@index([slug])
   @@map("companies")
@@ -293,6 +294,7 @@ model Asset {
   streamQueue   StreamQueue[]
   adPublishJobs AdPublishJob[]
   assetIntelligence AssetIntelligence?
+  videoGenerationJobs VideoGenerationJob[]
 
   @@index([companyId])
   @@index([bulkUploadId])
@@ -922,6 +924,37 @@ model AdPublishJob {
   @@map("ad_publish_jobs")
 }
 
+// ================================================================
+// HEYGEN VIDEO GENERATION
+// ================================================================
+
+model VideoGenerationJob {
+  id              String            @id @default(cuid())
+  companyId       String
+  script          String            @db.Text
+  avatarId        String            @default("auto") @db.VarChar(64)
+  voiceId         String            @default("auto") @db.VarChar(64)
+  heygenStatus    VideoGenJobStatus @default(PENDING)
+  heygenError     String?           @db.Text
+  heygenVideoId   String?           @db.VarChar(255)
+  progressMessage String?           @db.VarChar(500)
+  downloadUrl     String?           @db.VarChar(2000)
+  playbackUrl     String?           @db.VarChar(2000)
+  thumbnailUrl    String?           @db.VarChar(1000)
+  assetId         String?
+  metadata        Json              @default("{}")
+  createdAt       DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime          @updatedAt @db.Timestamptz(3)
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  asset   Asset?  @relation(fields: [assetId], references: [id], onDelete: SetNull)
+
+  @@index([companyId, heygenStatus])
+  @@index([heygenVideoId])
+  @@index([assetId])
+  @@map("video_generation_jobs")
+}
+
 /// One rule per type per company — toggled on/off via UI
 model AdAutomationRule {
   id               String    @id @default(cuid())
@@ -1039,6 +1072,7 @@ enum UploadSource {
 enum ChatPathType {
   ADS
   IMAGE_GEN
+  VIDEO_GEN
 }
 
 enum BulkUploadStatus {
@@ -1097,6 +1131,13 @@ enum PublishJobStatus {
   PUBLISHED
   FAILED
   CANCELLED
+}
+
+enum VideoGenJobStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
 }
 
 enum StreamQueueStatus {

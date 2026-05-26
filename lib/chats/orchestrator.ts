@@ -13,6 +13,14 @@ import {
 import { parseImageGenState } from '@/lib/image-gen/state';
 import type { ImageGenActionType } from '@/lib/image-gen/types';
 import { IMAGE_GEN_ACTIONS } from '@/lib/image-gen/types';
+import {
+  handleVideoGenAction,
+  handleVideoGenMessage,
+  initVideoGenFromFirstMessage,
+} from '@/lib/video-gen/orchestrator';
+import { parseVideoGenState } from '@/lib/video-gen/state';
+import type { VideoGenActionType } from '@/lib/video-gen/types';
+import { VIDEO_GEN_ACTIONS } from '@/lib/video-gen/types';
 
 import { runAdAgentTurn } from './agent-turn';
 import { buildGuidedReply } from './guided-replies';
@@ -160,11 +168,14 @@ function packageOrchestratorResult(
   };
 }
 
-function sessionPathType(session: DbChatSession): 'ADS' | 'IMAGE_GEN' | null {
+function sessionPathType(session: DbChatSession): 'ADS' | 'IMAGE_GEN' | 'VIDEO_GEN' | null {
   const pt = (session as DbChatSession & { pathType?: string | null }).pathType;
   if (pt === 'IMAGE_GEN') return 'IMAGE_GEN';
+  if (pt === 'VIDEO_GEN') return 'VIDEO_GEN';
   if (pt === 'ADS') return 'ADS';
-  if (parseImageGenState(parseWorkflowState(session.workflowState))) return 'IMAGE_GEN';
+  const state = parseWorkflowState(session.workflowState);
+  if (parseVideoGenState(state)) return 'VIDEO_GEN';
+  if (parseImageGenState(state)) return 'IMAGE_GEN';
   return null;
 }
 
@@ -190,6 +201,10 @@ export async function handleChatMessage(
     return handleImageGenMessage(sessionId, companyId, text);
   }
 
+  if (pathType === 'VIDEO_GEN' || step === 'videoGen') {
+    return handleVideoGenMessage(sessionId, companyId, text);
+  }
+
   if (pathType === null && step === 'intent') {
     const route = await classifyTopLevelPath(text);
     if (route === 'imageGen') {
@@ -198,6 +213,13 @@ export async function handleChatMessage(
       const refreshed = await getChatSession(sessionId, companyId);
       if (!refreshed) throw new Error('Session not found');
       return initImageGenFromFirstMessage(refreshed, state, text);
+    }
+    if (route === 'videoGen') {
+      await userMsg(sessionId, text);
+      await updateChatSession(sessionId, companyId, { pathType: 'VIDEO_GEN' });
+      const refreshed = await getChatSession(sessionId, companyId);
+      if (!refreshed) throw new Error('Session not found');
+      return initVideoGenFromFirstMessage(refreshed, state, text);
     }
     await updateChatSession(sessionId, companyId, { pathType: 'ADS' });
   }
@@ -242,6 +264,20 @@ export async function handleChatAction(
 ): Promise<OrchestratorResult> {
   const session = await getChatSession(sessionId, companyId);
   if (!session) throw new Error('Session not found');
+
+  if (
+    VIDEO_GEN_ACTIONS.includes(action as VideoGenActionType) ||
+    sessionPathType(session) === 'VIDEO_GEN' ||
+    session.currentStep === 'videoGen'
+  ) {
+    return handleVideoGenAction(
+      sessionId,
+      companyId,
+      action as VideoGenActionType,
+      payload,
+      userMessage,
+    );
+  }
 
   if (
     IMAGE_GEN_ACTIONS.includes(action as ImageGenActionType) ||

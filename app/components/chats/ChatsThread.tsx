@@ -24,6 +24,15 @@ const IMAGE_GEN_GENERATING_STEPS = new Set([
   'generateTemplate',
 ]);
 
+const VIDEO_GEN_BUSY_STEPS = new Set([
+  'generatingScript',
+  'fetchTopAds',
+  'analyzingAds',
+  'runningIntel',
+  'heygenGenerating',
+  'heygenPolling',
+]);
+
 const statusEase = [0.22, 1, 0.36, 1] as const;
 
 export function ChatsThread({
@@ -70,8 +79,11 @@ export function ChatsThread({
     workflowState.imageGen?.step &&
       IMAGE_GEN_GENERATING_STEPS.has(workflowState.imageGen.step),
   );
+  const videoGenBusy = Boolean(
+    workflowState.videoGen?.step && VIDEO_GEN_BUSY_STEPS.has(workflowState.videoGen.step),
+  );
   const showThinkingPanel = Boolean(
-    hasOperationError || (loading && !showSavedEta && !imageGenGenerating),
+    hasOperationError || (loading && !showSavedEta && !imageGenGenerating && !videoGenBusy),
   );
   const baseStatusLabel = loading
     ? resolveChatStatusLabel(statusCtx)

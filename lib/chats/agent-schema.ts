@@ -6,6 +6,7 @@ import { AGENT_ACTIONABLE_STEPS } from './agent-steps';
 
 const chatWorkflowSteps = z.enum([
   'imageGen',
+  'videoGen',
   'intent',
   'mediaSource',
   'mediaUpload',

@@ -21,6 +21,8 @@ const PUBLIC_PATH_PREFIXES = [
   "/api/public/stream-queue",
   /** Asset Intelligence microservice webhook (optional x-intel-secret). */
   "/api/receive-intel",
+  /** HeyGen video agent webhook (optional x-heygen-secret). */
+  "/api/heygen/webhook",
   /** Video download metadata for microservice (presigned R2 JSON). */
   "/api/videos",
 ] as const;

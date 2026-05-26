@@ -43,6 +43,17 @@ import {
   ImageGenIdeaReviewWidget,
   ShopifyProductPickerWidget,
 } from './widgets/ImageGenWidgets';
+import {
+  VideoGenAdLibraryPickerWidget,
+  VideoGenAdTypePickerWidget,
+  VideoGenAnalyzingWidget,
+  VideoGenDoneWidget,
+  VideoGenGeneratingWidget,
+  VideoGenHeygenProgressWidget,
+  VideoGenOfferingPickerWidget,
+  VideoGenScriptReviewWidget,
+  VideoGenSubpathChoiceWidget,
+} from './widgets/VideoGenWidgets';
 
 export function ChatWidgetRenderer({
   widgetType,
@@ -252,6 +263,32 @@ export function ChatWidgetRenderer({
           onAction={onAction}
         />
       );
+    case 'videoGenSubpathChoice':
+      return <VideoGenSubpathChoiceWidget payload={payload} onAction={onAction} />;
+    case 'videoGenOfferingPicker':
+      return <VideoGenOfferingPickerWidget payload={payload} onAction={onAction} />;
+    case 'videoGenAdTypePicker':
+      return <VideoGenAdTypePickerWidget payload={payload} onAction={onAction} />;
+    case 'videoGenScriptReview':
+      return (
+        <VideoGenScriptReviewWidget payload={payload} onAction={onAction} />
+      );
+    case 'videoGenAdLibraryPicker':
+      return <VideoGenAdLibraryPickerWidget payload={payload} onAction={onAction} />;
+    case 'videoGenAnalyzing':
+      return <VideoGenAnalyzingWidget />;
+    case 'videoGenGenerating':
+      return <VideoGenGeneratingWidget />;
+    case 'videoGenHeygenProgress':
+      return (
+        <VideoGenHeygenProgressWidget
+          sessionId={sessionId}
+          payload={payload}
+          onAction={onAction}
+        />
+      );
+    case 'videoGenDone':
+      return <VideoGenDoneWidget payload={payload} />;
     default:
       return null;
   }

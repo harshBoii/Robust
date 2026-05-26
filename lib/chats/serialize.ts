@@ -1,3 +1,5 @@
+import { sanitizeWorkflowStateForClient } from '@/lib/video-gen/state';
+
 import type { DbChatMessage, DbChatSession } from './repository';
 import type { SerializedMessage, WorkflowState } from './types';
 
@@ -18,7 +20,9 @@ export function serializeMessage(m: DbChatMessage): SerializedMessage {
 }
 
 export function serializeSession(session: DbChatSession) {
-  const workflowState = parseWorkflowState(session.workflowState);
+  const workflowState = sanitizeWorkflowStateForClient(
+    parseWorkflowState(session.workflowState),
+  );
   return {
     id: session.id,
     title: session.title,

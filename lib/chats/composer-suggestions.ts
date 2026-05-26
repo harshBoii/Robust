@@ -23,7 +23,24 @@ export function composerSuggestions(
     return ['Draft campaign for me', '₹1500/day traffic campaign'];
   }
   if (step === 'intent') {
-    return ['Post an ad', "Mother's Day tier-2 India", 'Help me launch a campaign'];
+    return [
+      'Post an ad',
+      'Create a video ad',
+      "Mother's Day tier-2 India",
+      'Help me launch a campaign',
+    ];
+  }
+  if (step === 'videoGen') {
+    const vg = workflowState.videoGen;
+    if (vg?.step === 'durationInput') {
+      return ['Keep it short', 'Around 30 seconds', 'About 60 seconds'];
+    }
+    if (vg?.step === 'trendPick') {
+      return ['A trending sound', 'Seasonal trend', 'Viral challenge'];
+    }
+    if (vg?.step === 'reviewScript') {
+      return ['Approve', 'Make the hook stronger', 'More emotional tone'];
+    }
   }
   return undefined;
 }

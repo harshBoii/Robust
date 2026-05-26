@@ -1,4 +1,5 @@
 import type { ImageGenStep } from '@/lib/image-gen/types';
+import type { VideoGenStep } from '@/lib/video-gen/types';
 import type { ChatWorkflowStep, WorkflowState } from '@/lib/chats/types';
 
 /** Rotating status lines while the agent auto-fixes Meta / preset errors (Path A). */
@@ -173,8 +174,62 @@ const IMAGE_GEN_NEXT: readonly string[] = [
   'Routing to the right subpath…',
 ];
 
+const VIDEO_GEN_ROUTING: readonly string[] = [
+  'Choosing your video ad path…',
+  'Mr. Adicasso vs Learn and Build vs Replicate…',
+];
+
+const VIDEO_GEN_SCRIPT: readonly string[] = [
+  'Crafting your ad script…',
+  'Applying creative principles…',
+  'Writing the director brief (behind the scenes)…',
+];
+
+const VIDEO_GEN_INTEL: readonly string[] = [
+  'Studying your top performers…',
+  'Extracting winning hooks and pacing…',
+  'Building a creative brief from intelligence…',
+];
+
+const VIDEO_GEN_HEYGEN: readonly string[] = [
+  'Sending to HeyGen…',
+  'Rendering your video ad…',
+  'Almost ready — video processing…',
+];
+
+const VIDEO_GEN_GENERATING_STEPS = new Set<VideoGenStep>([
+  'generatingScript',
+  'fetchTopAds',
+  'analyzingAds',
+  'runningIntel',
+  'heygenGenerating',
+  'heygenPolling',
+]);
+
 function parseImageGen(workflowState: WorkflowState) {
   return workflowState.imageGen ?? null;
+}
+
+function parseVideoGen(workflowState: WorkflowState) {
+  return workflowState.videoGen ?? null;
+}
+
+function isVideoGenPath(ctx: ChatStatusContext): boolean {
+  if (ctx.currentStep === 'videoGen') return true;
+  return Boolean(parseVideoGen(ctx.workflowState));
+}
+
+function videoGenStatusPool(vg: NonNullable<ReturnType<typeof parseVideoGen>>): readonly string[] {
+  const { subpath, step } = vg;
+  if (step === 'heygenGenerating' || step === 'heygenPolling') return VIDEO_GEN_HEYGEN;
+  if (step === 'analyzingAds' || step === 'fetchTopAds' || step === 'runningIntel') {
+    return VIDEO_GEN_INTEL;
+  }
+  if (step === 'generatingScript' || step === 'reviewScript') return VIDEO_GEN_SCRIPT;
+  if (subpath === 'mrAdicasso' && (step === 'adTypePick' || step === 'durationInput')) {
+    return VIDEO_GEN_SCRIPT;
+  }
+  return VIDEO_GEN_ROUTING;
 }
 
 function isImageGenPath(ctx: ChatStatusContext): boolean {
@@ -288,6 +343,12 @@ export function resolveChatStatusMessages(ctx: ChatStatusContext): readonly stri
     return CHAT_FIXING_STATUS_MESSAGES;
   }
 
+  const vg = parseVideoGen(ctx.workflowState);
+  if (isVideoGenPath(ctx)) {
+    if (vg) return videoGenStatusPool(vg);
+    return VIDEO_GEN_ROUTING;
+  }
+
   const ig = parseImageGen(ctx.workflowState);
   if (ctx.currentStep === 'imageGen' || ig) {
     if (ig) return imageGenStatusPool(ig);
@@ -299,6 +360,14 @@ export function resolveChatStatusMessages(ctx: ChatStatusContext): readonly stri
 
 export function resolveChatStatusLabel(ctx: ChatStatusContext): string {
   if (ctx.busyTone === 'fixing') return 'Fixing…';
+
+  const vg = parseVideoGen(ctx.workflowState);
+  if ((isVideoGenPath(ctx) || vg) && vg && VIDEO_GEN_GENERATING_STEPS.has(vg.step)) {
+    if (vg.step === 'heygenGenerating' || vg.step === 'heygenPolling') return 'Generating video…';
+    if (vg.step === 'analyzingAds' || vg.step === 'runningIntel') return 'Analyzing…';
+    return 'Writing script…';
+  }
+  if (isVideoGenPath(ctx) || vg) return 'Video ads…';
 
   const ig = parseImageGen(ctx.workflowState);
   if ((ctx.currentStep === 'imageGen' || ig) && ig && IMAGE_GEN_GENERATING_STEPS.has(ig.step)) {

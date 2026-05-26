@@ -47,6 +47,14 @@ const ACTIONS: ChatActionType[] = [
   'imageGen.onModelAccepted',
   'imageGen.onModelRejected',
   'imageGen.pushToAds',
+  'videoGen.subpathChosen',
+  'videoGen.offeringSelected',
+  'videoGen.adTypeSelected',
+  'videoGen.trendSubmitted',
+  'videoGen.scriptApproved',
+  'videoGen.scriptChangeRequested',
+  'videoGen.adSelected',
+  'videoGen.retryIntel',
 ];
 
 export async function POST(

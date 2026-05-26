@@ -3,6 +3,7 @@ import type { AdsetPreset, CampaignPreset } from '@/app/components/manager/prese
 
 export type ChatWorkflowStep =
   | 'imageGen'
+  | 'videoGen'
   | 'intent'
   | 'mediaSource'
   | 'mediaUpload'
@@ -26,10 +27,13 @@ export type ChatWorkflowStep =
   | 'done';
 
 import type { ImageGenState } from '@/lib/image-gen/types';
+import type { VideoGenState } from '@/lib/video-gen/types';
 
 export type WorkflowState = {
   /** Path B image generation state (when pathType is IMAGE_GEN). */
   imageGen?: ImageGenState;
+  /** Video ad generation state (when pathType is VIDEO_GEN). */
+  videoGen?: VideoGenState;
   bulkUploadId?: string;
   assetIds?: string[];
   groups?: GroupModel[];
@@ -99,7 +103,18 @@ export type ImageGenWidgetType =
   | 'imageGenPushToAds'
   | 'imageGenNextStep';
 
-export type WidgetType = AdWidgetType | ImageGenWidgetType;
+export type VideoGenWidgetType =
+  | 'videoGenSubpathChoice'
+  | 'videoGenOfferingPicker'
+  | 'videoGenAdTypePicker'
+  | 'videoGenScriptReview'
+  | 'videoGenAdLibraryPicker'
+  | 'videoGenAnalyzing'
+  | 'videoGenGenerating'
+  | 'videoGenHeygenProgress'
+  | 'videoGenDone';
+
+export type WidgetType = AdWidgetType | ImageGenWidgetType | VideoGenWidgetType;
 
 export type ChatActionType =
   | 'intent.ack'
@@ -141,7 +156,15 @@ export type ChatActionType =
   | 'imageGen.poseSelected'
   | 'imageGen.onModelAccepted'
   | 'imageGen.onModelRejected'
-  | 'imageGen.pushToAds';
+  | 'imageGen.pushToAds'
+  | 'videoGen.subpathChosen'
+  | 'videoGen.offeringSelected'
+  | 'videoGen.adTypeSelected'
+  | 'videoGen.trendSubmitted'
+  | 'videoGen.scriptApproved'
+  | 'videoGen.scriptChangeRequested'
+  | 'videoGen.adSelected'
+  | 'videoGen.retryIntel';
 
 export type SerializedMessage = {
   id: string;
