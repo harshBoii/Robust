@@ -4,6 +4,17 @@ import type { DbChatMessage } from './repository';
  * Widget/selection actions that should not add a second user bubble when the user
  * just sent a free-text message (e.g. typed a product name, then picked a match).
  */
+/** Widget actions: client already shows an optimistic user bubble via dispatchAction. */
+export const VIDEO_GEN_WIDGET_ACTIONS_SKIP_SERVER_USER = new Set([
+  'videoGen.subpathChosen',
+  'videoGen.offeringSelected',
+  'videoGen.adTypeSelected',
+  'videoGen.trendSubmitted',
+  'videoGen.scriptApproved',
+  'videoGen.adSelected',
+  'videoGen.retryIntel',
+]);
+
 export const ACTIONS_SKIP_USER_BUBBLE_AFTER_TYPED = new Set([
   'imageGen.shopifySelected',
   'imageGen.existingAdSelected',

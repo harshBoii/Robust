@@ -4,6 +4,11 @@ import { useCallback, useEffect, useState } from 'react';
 
 import type { ChatWidgetDispatch } from './ChatWidgets';
 
+function WidgetPrompt({ title }: { title?: string }) {
+  if (!title?.trim()) return null;
+  return <p className="mb-3 text-[14px] leading-relaxed text-foreground/95">{title}</p>;
+}
+
 type SubpathOption = { id: string; label: string; description: string };
 
 export function VideoGenSubpathChoiceWidget({
@@ -14,8 +19,10 @@ export function VideoGenSubpathChoiceWidget({
   onAction: ChatWidgetDispatch;
 }) {
   const subpaths = (payload.subpaths as SubpathOption[]) ?? [];
+  const title = typeof payload.title === 'string' ? payload.title : undefined;
   return (
     <div className="grid gap-2 sm:grid-cols-1">
+      <WidgetPrompt title={title} />
       {subpaths.map((s) => (
         <button
           key={s.id}
@@ -38,10 +45,12 @@ export function VideoGenOfferingPickerWidget({
   payload: Record<string, unknown>;
   onAction: ChatWidgetDispatch;
 }) {
+  const title = typeof payload.title === 'string' ? payload.title : undefined;
   const offerings =
     (payload.offerings as Array<{ id: string; name: string; description?: string | null }>) ?? [];
   return (
     <div className="flex flex-col gap-2">
+      <WidgetPrompt title={title} />
       {offerings.map((o) => (
         <button
           key={o.id}
@@ -66,10 +75,13 @@ export function VideoGenAdTypePickerWidget({
   payload: Record<string, unknown>;
   onAction: ChatWidgetDispatch;
 }) {
+  const title = typeof payload.title === 'string' ? payload.title : undefined;
   const categories =
     (payload.categories as Array<{ id: string; label: string }>) ?? [];
   return (
-    <div className="flex flex-wrap gap-2">
+    <div className="space-y-3">
+      <WidgetPrompt title={title} />
+      <div className="flex flex-wrap gap-2">
       {categories.map((c) => (
         <button
           key={c.id}
@@ -82,6 +94,7 @@ export function VideoGenAdTypePickerWidget({
           {c.label}
         </button>
       ))}
+      </div>
     </div>
   );
 }
@@ -93,11 +106,13 @@ export function VideoGenScriptReviewWidget({
   payload: Record<string, unknown>;
   onAction: ChatWidgetDispatch;
 }) {
+  const title = typeof payload.title === 'string' ? payload.title : undefined;
   const adScript = typeof payload.adScript === 'string' ? payload.adScript : '';
   const [feedback, setFeedback] = useState('');
 
   return (
     <div className="space-y-3">
+      <WidgetPrompt title={title} />
       {adScript ? (
         <pre className="max-h-64 overflow-auto whitespace-pre-wrap rounded-lg border border-border/40 bg-muted/30 p-3 text-[13px] leading-relaxed">
           {adScript}
@@ -151,16 +166,22 @@ export function VideoGenAdLibraryPickerWidget({
   payload: Record<string, unknown>;
   onAction: ChatWidgetDispatch;
 }) {
+  const title = typeof payload.title === 'string' ? payload.title : undefined;
   const assets = (payload.assets as LibraryAsset[]) ?? [];
   if (!assets.length) {
     return (
-      <p className="text-[13px] text-muted-foreground">
-        No video ads in your library yet. Upload videos in Gallery first.
-      </p>
+      <div>
+        <WidgetPrompt title={title} />
+        <p className="text-[13px] text-muted-foreground">
+          No video ads in your library yet. Upload videos in Gallery first.
+        </p>
+      </div>
     );
   }
   return (
-    <div className="grid max-h-80 gap-2 overflow-y-auto sm:grid-cols-2">
+    <div>
+      <WidgetPrompt title={title} />
+      <div className="grid max-h-80 gap-2 overflow-y-auto sm:grid-cols-2">
       {assets.map((a) => (
         <button
           key={a.id}
@@ -182,22 +203,21 @@ export function VideoGenAdLibraryPickerWidget({
           </div>
         </button>
       ))}
+      </div>
     </div>
   );
 }
 
-export function VideoGenAnalyzingWidget() {
-  return (
-    <p className="text-[13px] text-muted-foreground animate-pulse">
-      Analyzing video ads… this may take a few minutes.
-    </p>
-  );
+export function VideoGenAnalyzingWidget({ payload }: { payload?: Record<string, unknown> }) {
+  const title =
+    typeof payload?.title === 'string' ? payload.title : 'Analyzing video ads… this may take a few minutes.';
+  return <p className="text-[13px] text-muted-foreground animate-pulse">{title}</p>;
 }
 
-export function VideoGenGeneratingWidget() {
-  return (
-    <p className="text-[13px] text-muted-foreground animate-pulse">Writing your ad script…</p>
-  );
+export function VideoGenGeneratingWidget({ payload }: { payload?: Record<string, unknown> }) {
+  const title =
+    typeof payload?.title === 'string' ? payload.title : 'Writing your ad script…';
+  return <p className="text-[13px] text-muted-foreground animate-pulse">{title}</p>;
 }
 
 export function VideoGenHeygenProgressWidget({
@@ -245,8 +265,11 @@ export function VideoGenHeygenProgressWidget({
     return () => window.clearInterval(id);
   }, [jobId, done, poll]);
 
+  const title = typeof payload.title === 'string' ? payload.title : undefined;
+
   return (
     <div className="space-y-2">
+      <WidgetPrompt title={title} />
       <p className="text-[13px] text-muted-foreground animate-pulse">{status}</p>
       {done ? (
         <a
