@@ -12,8 +12,9 @@ import {
 } from '@/lib/chats/repository';
 import {
   shouldSkipActionUserBubble,
-  VIDEO_GEN_WIDGET_ACTIONS_SKIP_SERVER_USER,
+  shouldSkipVideoGenWidgetUserBubble,
 } from '@/lib/chats/user-message-policy';
+import { tryHandleVideoGenWidgetChoiceTurn } from './handle-widget-choice-turn';
 import { parseWorkflowState, serializeMessage, serializeSession } from '@/lib/chats/serialize';
 import type { OrchestratorResult, SerializedMessage, WorkflowState } from '@/lib/chats/types';
 
@@ -67,16 +68,6 @@ async function assistantMsg(
   return serializeMessage(row);
 }
 
-/** Widget carries the prompt; avoid duplicating the same text in message content (ChatsMessage renders both). */
-async function assistantWidgetMsg(
-  sessionId: string,
-  widgetType: VideoGenWidgetType,
-  widgetPayload: Record<string, unknown>,
-  prompt: string,
-): Promise<SerializedMessage> {
-  return assistantMsg(sessionId, '', widgetType, { ...widgetPayload, title: prompt });
-}
-
 async function userMsg(sessionId: string, content: string): Promise<SerializedMessage> {
   const [row] = await appendChatMessages(sessionId, [{ role: 'USER', content }]);
   return serializeMessage(row);
@@ -126,7 +117,12 @@ async function runScriptGeneration(
   vg.step = 'generatingScript';
   vg.lastError = null;
   newMessages.push(
-    await assistantWidgetMsg(session.id, 'videoGenGenerating', { step: 'generatingScript' }, 'Writing your ad script…'),
+    await assistantMsg(
+      session.id,
+      'Writing your ad script…',
+      'videoGenGenerating',
+      { step: 'generatingScript' },
+    ),
   );
 
   try {
@@ -157,11 +153,11 @@ async function runScriptGeneration(
     vg.step = 'reviewScript';
 
     newMessages.push(
-      await assistantWidgetMsg(
+      await assistantMsg(
         session.id,
+        `Here's your ad script:\n\n${generated.adScript}\n\nReview it below. When you're happy, approve to start video generation.`,
         'videoGenScriptReview',
         { adScript: generated.adScript },
-        "Here's your ad script. Review it below — when you're happy, approve to start video generation.",
       ),
     );
   } catch (e) {
@@ -189,11 +185,11 @@ async function beginMrAdicasso(
   if (offerings.length > 1) {
     vg.step = 'offeringPick';
     newMessages.push(
-      await assistantWidgetMsg(
+      await assistantMsg(
         session.id,
+        'Mr. Adicasso is ready. Which offering should this video ad promote?',
         'videoGenOfferingPicker',
         { offerings },
-        'Mr. Adicasso is ready. Which offering should this video ad promote?',
       ),
     );
     return vg;
@@ -206,11 +202,11 @@ async function beginMrAdicasso(
 
   vg.step = 'adTypePick';
   newMessages.push(
-    await assistantWidgetMsg(
+    await assistantMsg(
       session.id,
+      'What type of video ad would you like to create?',
       'videoGenAdTypePicker',
       { categories: VIDEO_GEN_AD_CATEGORIES },
-      'What type of video ad would you like to create?',
     ),
   );
   return vg;
@@ -223,11 +219,11 @@ async function beginLearnAndBuild(
 ): Promise<VideoGenState> {
   vg.step = 'analyzingAds';
   newMessages.push(
-    await assistantWidgetMsg(
+    await assistantMsg(
       session.id,
+      'Fetching your top 3 performing video ads and analyzing what makes them work…',
       'videoGenAnalyzing',
       { phase: 'topAds' },
-      'Fetching your top 3 performing video ads and analyzing what makes them work…',
     ),
   );
 
@@ -239,8 +235,9 @@ async function beginLearnAndBuild(
   } catch (e) {
     vg.lastError = e instanceof Error ? e.message : 'Analysis failed';
     newMessages.push(
-      await assistantWidgetMsg(
+      await assistantMsg(
         session.id,
+        `${vg.lastError} You can retry from Profile → Analyze ads or pick another path.`,
         'videoGenSubpathChoice',
         {
           subpaths: [
@@ -249,14 +246,12 @@ async function beginLearnAndBuild(
             { id: 'replicate', label: 'Replicate an Ad', description: 'Match an existing ad' },
           ],
         },
-        `${vg.lastError} You can retry from Profile → Analyze ads or pick another path.`,
       ),
     );
     vg.step = 'routing';
     return vg;
   }
 }
-
 
 async function loadReplicateLibrary(companyId: string) {
   return prisma.asset.findMany({
@@ -289,9 +284,7 @@ export async function initVideoGenFromFirstMessage(
     !/learn|build|replicat|adicasso|picasso|top perform|existing ad/i.test(userText);
 
   if (!vague) {
-    return startSubpath(session, workflowState, hinted, userText.trim(), {
-      skipUserMessage: true,
-    });
+    return startSubpath(session, workflowState, hinted, undefined);
   }
 
   const vg: VideoGenState = {
@@ -300,8 +293,9 @@ export async function initVideoGenFromFirstMessage(
   };
 
   newMessages.push(
-    await assistantWidgetMsg(
+    await assistantMsg(
       session.id,
+      'Video Ad Generation — pick how you want to create your ad:',
       'videoGenSubpathChoice',
       {
         subpaths: [
@@ -322,7 +316,6 @@ export async function initVideoGenFromFirstMessage(
           },
         ],
       },
-      'Video Ad Generation — pick how you want to create your ad:',
     ),
   );
 
@@ -336,10 +329,9 @@ export async function startSubpath(
   workflowState: WorkflowState,
   subpath: VideoGenSubpath,
   userText?: string,
-  opts?: { skipUserMessage?: boolean },
 ): Promise<OrchestratorResult> {
   const newMessages: SerializedMessage[] = [];
-  if (userText?.trim() && !opts?.skipUserMessage) {
+  if (userText?.trim()) {
     newMessages.push(await userMsg(session.id, userText.trim()));
   }
 
@@ -364,11 +356,11 @@ export async function startSubpath(
     vg.step = 'adLibraryPick';
     const assets = await loadReplicateLibrary(session.companyId);
     newMessages.push(
-      await assistantWidgetMsg(
+      await assistantMsg(
         session.id,
+        'Pick a video ad from your library to replicate its creative DNA.',
         'videoGenAdLibraryPicker',
         { assets },
-        'Pick a video ad from your library to replicate its creative DNA.',
       ),
     );
   }
@@ -376,6 +368,18 @@ export async function startSubpath(
   const nextState = mergeVideoGenIntoWorkflow(workflowState, vg);
   const updated = await persist(session, nextState);
   return packageResult(updated, nextState, newMessages);
+}
+
+function isEchoOfLastWidgetSelection(
+  messages: DbChatSession['messages'],
+  text: string,
+): boolean {
+  const trimmed = text.trim();
+  if (!trimmed) return false;
+  const lastUser = [...(messages ?? [])].reverse().find((m) => m.role === 'USER');
+  if (!lastUser?.content?.trim() || lastUser.content.trim() !== trimmed) return false;
+  const last = messages?.[messages.length - 1];
+  return last?.role === 'ASSISTANT';
 }
 
 export async function handleVideoGenMessage(
@@ -388,6 +392,19 @@ export async function handleVideoGenMessage(
 
   const workflowState = parseWorkflowState(session.workflowState);
   let vg = getVg(workflowState);
+
+  if (isEchoOfLastWidgetSelection(session.messages, text)) {
+    const updated = await persist(session, mergeVideoGenIntoWorkflow(workflowState, vg));
+    return packageResult(updated, mergeVideoGenIntoWorkflow(workflowState, vg), []);
+  }
+
+  const widgetChoiceResult = await tryHandleVideoGenWidgetChoiceTurn(
+    sessionId,
+    companyId,
+    text,
+  );
+  if (widgetChoiceResult) return widgetChoiceResult;
+
   const newMessages: SerializedMessage[] = [];
   newMessages.push(await userMsg(sessionId, text));
 
@@ -416,11 +433,11 @@ export async function handleVideoGenMessage(
       vg.adCategory = intentCategory(intent.newCategory) ?? vg.adCategory;
       vg.step = 'adTypePick';
       newMessages.push(
-        await assistantWidgetMsg(
+        await assistantMsg(
           session.id,
+          'Pick a new ad type:',
           'videoGenAdTypePicker',
           { categories: VIDEO_GEN_AD_CATEGORIES },
-          'Pick a new ad type:',
         ),
       );
     } else if (intent.action === 'changeDuration') {
@@ -433,8 +450,9 @@ export async function handleVideoGenMessage(
     }
   } else if (vg.step === 'routing') {
     newMessages.push(
-      await assistantWidgetMsg(
+      await assistantMsg(
         session.id,
+        'Choose how you want to create your video ad:',
         'videoGenSubpathChoice',
         {
           subpaths: [
@@ -443,7 +461,6 @@ export async function handleVideoGenMessage(
             { id: 'replicate', label: 'Replicate an Ad', description: 'Match an existing ad' },
           ],
         },
-        'Choose how you want to create your video ad:',
       ),
     );
   } else {
@@ -472,41 +489,52 @@ export async function handleVideoGenAction(
   const newMessages: SerializedMessage[] = [];
 
   const displayUserText = userMessage?.trim();
-  const skipServerUser =
-    VIDEO_GEN_WIDGET_ACTIONS_SKIP_SERVER_USER.has(action) ||
+  const skipUserBubble =
+    shouldSkipVideoGenWidgetUserBubble(action) ||
     shouldSkipActionUserBubble(session.messages, action);
-  if (displayUserText && !skipServerUser) {
+  if (displayUserText && !skipUserBubble) {
     newMessages.push(await userMsg(sessionId, displayUserText));
   }
 
   switch (action) {
     case 'videoGen.subpathChosen': {
       const subpath = payload.subpath as VideoGenSubpath;
-      return startSubpath(session, workflowState, subpath, displayUserText ?? undefined, {
-        skipUserMessage: true,
-      });
+      return startSubpath(session, workflowState, subpath);
     }
 
     case 'videoGen.offeringSelected': {
       const offeringId = String(payload.offeringId ?? '');
+      if (vg.step !== 'offeringPick' && vg.offeringId === offeringId) {
+        break;
+      }
       vg.offeringId = offeringId;
       if (vg.companyContext) {
         vg.companyContext = applyOfferingToContext(vg.companyContext, offeringId);
       }
+      if (vg.step === 'adTypePick' && vg.adCategory == null) {
+        break;
+      }
       vg.step = 'adTypePick';
       newMessages.push(
-        await assistantWidgetMsg(
+        await assistantMsg(
           session.id,
+          'What type of video ad would you like to create?',
           'videoGenAdTypePicker',
           { categories: VIDEO_GEN_AD_CATEGORIES },
-          'What type of video ad would you like to create?',
         ),
       );
       break;
     }
 
     case 'videoGen.adTypeSelected': {
-      vg.adCategory = payload.category as VideoGenAdCategory;
+      const category = payload.category as VideoGenAdCategory;
+      if (
+        vg.adCategory === category &&
+        (vg.step === 'durationInput' || vg.step === 'trendPick' || vg.step === 'reviewScript')
+      ) {
+        break;
+      }
+      vg.adCategory = category;
       if (vg.adCategory === 'trendInduced') {
         vg.step = 'trendPick';
         newMessages.push(
@@ -544,11 +572,11 @@ export async function handleVideoGenAction(
       vg.replicateAssetId = assetId;
       vg.step = 'runningIntel';
       newMessages.push(
-        await assistantWidgetMsg(
+        await assistantMsg(
           session.id,
+          'Analyzing your selected ad…',
           'videoGenAnalyzing',
           { phase: 'single', assetId },
-          'Analyzing your selected ad…',
         ),
       );
       try {
@@ -557,11 +585,11 @@ export async function handleVideoGenAction(
       } catch (e) {
         vg.lastError = e instanceof Error ? e.message : 'Analysis failed';
         newMessages.push(
-          await assistantWidgetMsg(
+          await assistantMsg(
             session.id,
+            `${vg.lastError}`,
             'videoGenAdLibraryPicker',
             { assets: await loadReplicateLibrary(session.companyId) },
-            vg.lastError,
           ),
         );
         vg.step = 'adLibraryPick';
@@ -604,14 +632,14 @@ export async function handleVideoGenAction(
       }
 
       vg.step = 'heygenGenerating';
-        newMessages.push(
-          await assistantWidgetMsg(
-            session.id,
-            'videoGenHeygenProgress',
-            { status: 'starting' },
-            'Approved. Sending to HeyGen to generate your video…',
-          ),
-        );
+      newMessages.push(
+        await assistantMsg(
+          session.id,
+          'Approved. Sending to HeyGen to generate your video…',
+          'videoGenHeygenProgress',
+          { status: 'starting' },
+        ),
+      );
 
       try {
         const { jobId } = await startHeygenFromChat({
@@ -642,11 +670,11 @@ export async function handleVideoGenAction(
             );
           } else {
             newMessages.push(
-              await assistantWidgetMsg(
+              await assistantMsg(
                 session.id,
+                'Video generation is in progress. I’ll update you when it’s ready (this can take a few minutes).',
                 'videoGenHeygenProgress',
                 { jobId, heygenStatus: synced.heygenStatus, progressMessage: synced.progressMessage },
-                'Video generation is in progress. I’ll update you when it’s ready (this can take a few minutes).',
               ),
             );
           }
@@ -654,11 +682,11 @@ export async function handleVideoGenAction(
       } catch (e) {
         vg.lastError = e instanceof Error ? e.message : 'HeyGen failed';
         newMessages.push(
-          await assistantWidgetMsg(
+          await assistantMsg(
             session.id,
+            `Video generation failed: ${vg.lastError}. You can edit the script and try again.`,
             'videoGenScriptReview',
             { adScript: vg.adScript },
-            `Video generation failed: ${vg.lastError}. You can edit the script and try again.`,
           ),
         );
         vg.step = 'reviewScript';

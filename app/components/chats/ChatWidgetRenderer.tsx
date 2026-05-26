@@ -276,9 +276,9 @@ export function ChatWidgetRenderer({
     case 'videoGenAdLibraryPicker':
       return <VideoGenAdLibraryPickerWidget payload={payload} onAction={onAction} />;
     case 'videoGenAnalyzing':
-      return <VideoGenAnalyzingWidget payload={payload} />;
+      return <VideoGenAnalyzingWidget />;
     case 'videoGenGenerating':
-      return <VideoGenGeneratingWidget payload={payload} />;
+      return <VideoGenGeneratingWidget />;
     case 'videoGenHeygenProgress':
       return (
         <VideoGenHeygenProgressWidget

@@ -34,11 +34,17 @@ function isUserRole(role: string | undefined): boolean {
   return r === 'USER';
 }
 
+/** Video-gen widget clicks already add an optimistic user bubble on the client. */
+export function shouldSkipVideoGenWidgetUserBubble(action: string): boolean {
+  return VIDEO_GEN_WIDGET_ACTIONS_SKIP_SERVER_USER.has(action);
+}
+
 /** Skip persisting an action user line when the latest row is already the user's typed message. */
 export function shouldSkipActionUserBubble(
   messages: { role: string }[] | DbChatMessage[] | undefined,
   action: string,
 ): boolean {
+  if (shouldSkipVideoGenWidgetUserBubble(action)) return true;
   if (!ACTIONS_SKIP_USER_BUBBLE_AFTER_TYPED.has(action)) return false;
   const msgs = messages ?? [];
   if (!msgs.length) return false;
