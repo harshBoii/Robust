@@ -101,7 +101,9 @@ async function persist(
     pathType: 'VIDEO_GEN',
     workflowState,
   });
-  return { ...session, workflowState, currentStep: VIDEO_GEN_STEP };
+  const refreshed = await getChatSession(session.id, session.companyId);
+  if (!refreshed) throw new Error('Session not found');
+  return refreshed;
 }
 
 async function runScriptGeneration(
@@ -271,9 +273,7 @@ export async function initVideoGenFromFirstMessage(
   userText: string,
 ): Promise<OrchestratorResult> {
   const newMessages: SerializedMessage[] = [];
-  if (userText.trim()) {
-    newMessages.push(await userMsg(session.id, userText.trim()));
-  }
+  // User line is already persisted by handleChatMessage before routing here.
 
   const hinted = await classifyVideoGenSubpath(userText);
   const vague =

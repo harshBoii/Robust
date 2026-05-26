@@ -75,6 +75,17 @@ function mergeMessagesKeepingPendingUser(
   return [...serverMsgs, pendingUser];
 }
 
+function sessionHasAssistantReplyAfterUser(
+  msgs: SerializedMessage[],
+  userText: string,
+): boolean {
+  const want = userText.trim();
+  if (!want) return false;
+  const userIdx = msgs.findIndex((m) => m.role === 'user' && m.content?.trim() === want);
+  if (userIdx < 0) return false;
+  return msgs.slice(userIdx + 1).some((m) => m.role === 'assistant');
+}
+
 async function pollSessionAfterInitialSend(
   sessionId: string,
   initialText: string,
@@ -85,12 +96,7 @@ async function pollSessionAfterInitialSend(
     const data = (await res.json()) as { session?: ChatSessionData; error?: string };
     if (res.ok && data.session) {
       const msgs = data.session.messages ?? [];
-      const hasUser = msgs.some((m) => m.role === 'user' && m.content?.trim() === want);
-      const routed =
-        data.session.currentStep !== 'intent' ||
-        Boolean(data.session.workflowState?.imageGen) ||
-        Boolean(data.session.workflowState?.videoGen);
-      if (hasUser || routed) return data.session;
+      if (sessionHasAssistantReplyAfterUser(msgs, want)) return data.session;
     }
     await new Promise((r) => setTimeout(r, 400));
   }
@@ -154,7 +160,9 @@ export function useChatSession(sessionId: string, options?: UseChatSessionOption
       recoveredFromError?: boolean;
     }) => {
       setSession(result.session);
-      setMessages(result.messages);
+      setMessages((prev) =>
+        mergeMessagesKeepingPendingUser(result.messages ?? [], prev),
+      );
       clearInitialSendLock(sessionId);
       const err =
         result.operationError ??
