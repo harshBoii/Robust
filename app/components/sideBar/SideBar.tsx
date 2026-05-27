@@ -18,6 +18,7 @@ import {
   Leaf,
   X,
 } from 'lucide-react';
+import ThemeToggle from '@/app/components/UI/ThemeToggle';
 import ChatsHistoryList from '@/app/components/chats/ChatsHistoryList';
 import GalleryUploadZone from '@/app/(frontend)/(workspace)/gallery/GalleryUploadZone';
 import { SiMeta, SiShopify } from 'react-icons/si';
@@ -733,6 +734,9 @@ export default function AppSidebar({
               Terms
             </span>
           </div>
+
+          {/* Theme Toggle */}
+          <ThemeToggle />
 
           {/* Profile chip */}
           {displayName ? (
