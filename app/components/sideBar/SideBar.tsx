@@ -15,6 +15,7 @@ import {
   User,
   Database,
   Sparkles,
+  Leaf,
   X,
 } from 'lucide-react';
 import ChatsHistoryList from '@/app/components/chats/ChatsHistoryList';
@@ -85,6 +86,7 @@ const MAIN_SECTIONS: MainSection[] = [
   { id: 'manager',   label: 'Manager',   icon: IconManager, hasSecondary: true },
   // { id: 'createAd',  label: 'Create Ad', icon: PlusCircle,  hasSecondary: false },
   { id: 'gallery',   label: 'Gallery',   icon: IconGallery, hasSecondary: true },
+  { id: 'organic',   label: 'Organic Marketing', icon: Leaf, hasSecondary: true },
   { id: 'report',    label: 'Report',    icon: BarChart3,   hasSecondary: true },
   { id: 'profile',   label: 'Profile',   icon: User,        hasSecondary: true },
   { id: 'workspace', label: 'Workspace', icon: Settings,    hasSecondary: true, hidden: true },
@@ -439,6 +441,15 @@ const SecondarySidebarContent = ({
         </>
       );
 
+    case 'organic':
+      return (
+        <>
+          <SectionLabel label="Organic Marketing" />
+          <SecondaryNavItem icon={LayoutDashboard} label="Home" href="/organic/home" exact />
+          <SecondaryNavItem icon={LayoutDashboard} label="Overview" href="/organic" exact />
+        </>
+      );
+
     case 'workspace':
       return (
         <>
@@ -540,6 +551,7 @@ export default function AppSidebar({
       case 'manager':   return '/manager/post';
       // case 'createAd':  return '/create-ad';
       case 'gallery':   return '/gallery';
+      case 'organic':   return '/organic/home';
       case 'report':    return '/report';
       case 'profile':   return '/profile';
       case 'workspace': return '/workspace/settings';
@@ -589,6 +601,8 @@ export default function AppSidebar({
     else if (pathname?.startsWith('/create-ad')) setActiveSection('createAd');
     // eslint-disable-next-line react-hooks/set-state-in-effect
     else if (pathname?.startsWith('/gallery'))   setActiveSection('gallery');
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    else if (pathname?.startsWith('/organic'))   setActiveSection('organic');
     // eslint-disable-next-line react-hooks/set-state-in-effect
     else if (pathname?.startsWith('/report'))    setActiveSection('report');
     // eslint-disable-next-line react-hooks/set-state-in-effect
