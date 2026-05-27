@@ -66,6 +66,19 @@ model Company {
   offerings          Offering[]
   assetIntelligences AssetIntelligence[]
   videoGenerationJobs VideoGenerationJob[]
+  aeoGenerationProfiles   AeoGenerationProfile[]
+  aeoPages                AeoPage[]
+  citationBounties        CitationBounty[]
+  contentClusters         ContentCluster[]
+  geoDataSources          GeoDataSource[]
+  Citations               Citation[]
+  LlmRadarMetrics         LlmRadarMetric[]
+  llmTopics               LlmTopic[]
+  radarAssumption         RadarAssumption?
+  llmPromptMetrics        LlmPromptMetric[]
+  rivals                  CompanyRival[] @relation("CompanyRivals")
+  rivalOf                 CompanyRival[] @relation("CompanyRivalTargets")
+
 
   @@index([slug])
   @@map("companies")
@@ -97,8 +110,9 @@ model BrandEntity {
   createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt           DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  company   Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  offerings Offering[]
+  company               Company                @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  offerings             Offering[]
+  aeoGenerationProfiles AeoGenerationProfile[]
 
   @@map("brand_entities")
 }
@@ -293,8 +307,10 @@ model Asset {
   metaCreatives MetaCreative[]
   streamQueue   StreamQueue[]
   adPublishJobs AdPublishJob[]
-  assetIntelligence AssetIntelligence?
+  assetIntelligence   AssetIntelligence?
   videoGenerationJobs VideoGenerationJob[]
+  geoDataSource       GeoDataSource?
+  aeoPageSources      AeoPageSource[]
 
   @@index([companyId])
   @@index([bulkUploadId])
@@ -340,6 +356,7 @@ model AssetIntelligence {
 
   asset             Asset           @relation(fields: [assetId], references: [id], onDelete: Cascade)
   company           Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  aeoPageSources    AeoPageSource[]
 
   @@unique([assetId])
   @@index([assetId])
@@ -1026,8 +1043,438 @@ model Notification {
 }
 
 // ================================================================
+// Immortell Tables
+// ================================================================
+model AeoPage {
+  id                String        @id @default(cuid())
+  companyId         String
+  slug              String        @db.VarChar(255)
+  locale            String        @default("en") @db.VarChar(10)
+  pageType          AeoPageType   @default(DEFINITION)
+  status            AeoPageStatus @default(DRAFT)
+  title             String        @db.VarChar(500)
+  description       String
+  facts             Json          @default("[]")
+  faq               Json          @default("[]")
+  claims            Json          @default("[]")
+  summary           Json          @default("{}")
+  knowledgeGraph    Json          @default("{}")
+  seoTitle          String?       @db.VarChar(500)
+  seoDescription    String?
+  canonicalUrl      String?       @db.VarChar(1000)
+  /// Shopify Admin API GID for the blog article when published via approve-shopify
+  shopifyArticleGid String?       @db.VarChar(255)
+  clusterId         String?
+  publishedAt       DateTime?     @db.Timestamptz(3)
+  createdAt         DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime      @updatedAt @db.Timestamptz(3)
+
+  llm_prompt_id String?
+  llm_prompt    Prompt? @relation(fields: [llm_prompt_id], references: [id])
+
+  llm_topic_id String?
+  llm_topic    LlmTopic? @relation(fields: [llm_topic_id], references: [id])
+
+  generationProfiles AeoGenerationProfile[]
+  sources            AeoPageSource[]
+  cluster            ContentCluster?        @relation("ClusterPages", fields: [clusterId], references: [id])
+  company            Company                @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  citationBounties   CitationBounty?
+  pillarFor          ContentCluster?        @relation("PillarPage")
+  aeo_pages_A        AeoPage[]              @relation("RelatedAeoPages")
+  aeo_pages_B        AeoPage[]              @relation("RelatedAeoPages")
+
+  @@unique([companyId, slug, locale])
+  @@index([companyId])
+  @@index([status])
+  @@index([pageType])
+  @@index([clusterId])
+  @@index([companyId, status])
+  @@index([publishedAt(sort: Desc)])
+  @@map("aeo_pages")
+}
+
+model GeoDataSource {
+  id               String        @id @default(cuid())
+  companyId        String
+  sourceType       GeoSourceType
+  label            String        @db.VarChar(255)
+  assetId          String?       @unique
+  rawContent       String?
+  processedContent String?
+  isActive         Boolean       @default(true)
+  createdAt        DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime      @updatedAt @db.Timestamptz(3)
+  asset            Asset?        @relation(fields: [assetId], references: [id])
+  company          Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@index([sourceType])
+  @@map("geo_data_sources")
+}
+
+model AeoGenerationProfile {
+  id                     String       @id @default(cuid())
+  companyId              String
+  brandEntityId          String?
+  baseUrl                String       @db.VarChar(1000)
+  locale                 String       @default("en") @db.VarChar(10)
+  clusterId              String?      @db.VarChar(255)
+  existingSlugs          String[]     @default([])
+  defaultPageType        AeoPageType  @default(COMPARISON)
+  defaultQuery           String?
+  label                  String?      @db.VarChar(255)
+  slug                   String?      @db.VarChar(255)
+  lastGeneratedAeoPageId String?
+  lastRunAt              DateTime?    @db.Timestamptz(3)
+  createdAt              DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt              DateTime     @updatedAt @db.Timestamptz(3)
+  brandEntity            BrandEntity? @relation(fields: [brandEntityId], references: [id])
+  company                Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  lastGeneratedAeoPage   AeoPage?     @relation(fields: [lastGeneratedAeoPageId], references: [id])
+
+  @@index([companyId])
+  @@index([brandEntityId])
+  @@index([defaultPageType])
+  @@map("aeo_generation_profiles")
+}
+
+model AeoPageSource {
+  id                String             @id @default(cuid())
+  pageId            String
+  assetId           String?
+  intelligenceId    String?
+  contributionScore Float?
+  createdAt         DateTime           @default(now()) @db.Timestamptz(3)
+  asset             Asset?             @relation(fields: [assetId], references: [id])
+  intelligence      AssetIntelligence? @relation(fields: [intelligenceId], references: [id])
+  page              AeoPage            @relation(fields: [pageId], references: [id], onDelete: Cascade)
+
+  @@index([pageId])
+  @@index([assetId])
+  @@map("aeo_page_sources")
+}
+
+model ContentCluster {
+  id           String    @id @default(cuid())
+  companyId    String
+  name         String    @db.VarChar(255)
+  slug         String    @db.VarChar(255)
+  description  String?
+  pillarPageId String?   @unique
+  createdAt    DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime  @updatedAt @db.Timestamptz(3)
+  pages        AeoPage[] @relation("ClusterPages")
+  company      Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  pillarPage   AeoPage?  @relation("PillarPage", fields: [pillarPageId], references: [id])
+
+  @@unique([companyId, slug])
+  @@index([companyId])
+  @@map("content_clusters")
+}
+
+model CompanyRival {
+  id             String   @id @default(cuid())
+  companyId      String
+  rivalCompanyId String
+  createdAt      DateTime @default(now()) @db.Timestamptz(3)
+  company        Company  @relation("CompanyRivals", fields: [companyId], references: [id], onDelete: Cascade)
+  rivalCompany   Company  @relation("CompanyRivalTargets", fields: [rivalCompanyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, rivalCompanyId])
+  @@index([companyId])
+  @@index([rivalCompanyId])
+  @@map("company_rivals")
+}
+
+model Citation {
+  id            String          @id @default(cuid())
+  executionId   String
+  companyId     String?
+  mentionedName String          @db.VarChar(255)
+  rank          Int?
+  context       String?         @db.VarChar(100)
+  confidence    Float?
+  createdAt     DateTime        @default(now()) @db.Timestamptz(3)
+  company       Company?        @relation(fields: [companyId], references: [id])
+  execution     PromptExecution @relation(fields: [executionId], references: [id], onDelete: Cascade)
+
+  @@index([executionId])
+  @@index([companyId])
+  @@index([rank])
+  @@map("llm_citations")
+}
+
+model PromptExecution {
+  id         String     @id @default(cuid())
+  promptId   String
+  model      String     @db.VarChar(100)
+  response   String
+  executedAt DateTime   @default(now()) @db.Timestamptz(3)
+  citations  Citation[]
+  prompt     Prompt     @relation(fields: [promptId], references: [id], onDelete: Cascade)
+
+  @@index([promptId])
+  @@index([model])
+  @@index([executedAt])
+  @@map("llm_prompt_executions")
+}
+
+model Prompt {
+  id              String   @id @default(cuid())
+  query           String
+  topic           String?  @db.VarChar(255)
+  topicId         String?
+  reason          String?
+  expectedRevenue Float?
+  intent          String?  @db.VarChar(100)
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime @updatedAt @db.Timestamptz(3)
+  ishunted        Boolean  @default(false)
+
+  aeo_pages       AeoPage[]
+
+  executions       PromptExecution[]
+  llmTopic         LlmTopic?              @relation("LlmTopicPrompts", fields: [topicId], references: [id])
+  llmPromptMetrics LlmPromptMetric[]
+  revenue          PromptRevenue?
+  rivalByModel     PromptRivalByModel[]
+  rivalConsensus   PromptRivalConsensus[]
+
+  @@index([intent])
+  @@index([topic])
+  @@index([topicId])
+  @@map("llm_prompts")
+}
+
+model PromptRevenue {
+  id                 String   @id @default(cuid())
+  promptId           String   @unique
+  monthlyPromptReach Float?
+  visibilityWeight   Float?
+  ctr                Float?
+  cvr                Float?
+  aov                Float?
+  estimatedRevenue   Float?
+  createdAt          DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime @updatedAt @db.Timestamptz(3)
+  prompt             Prompt   @relation(fields: [promptId], references: [id], onDelete: Cascade)
+
+  @@index([estimatedRevenue])
+  @@map("llm_prompt_revenues")
+}
+
+model LlmTopic {
+  id               String            @id @default(cuid())
+  name             String            @db.VarChar(255)
+  description      String?
+  reason           String?
+  createdAt        DateTime          @default(now()) @db.Timestamptz(3)
+  difficulty       Difficulty        @default(MEDIUM)
+  companyId        String
+  prompts          Prompt[]          @relation("LlmTopicPrompts")
+  llmPromptMetrics LlmPromptMetric[]
+  aeo_pages        AeoPage[]
+  company          Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, name])
+  @@index([companyId])
+  @@map("llm_topics")
+}
+
+model PromptRivalByModel {
+  id          String   @id @default(cuid())
+  promptId    String
+  model       String   @db.VarChar(100)
+  companyName String   @db.VarChar(255)
+  rank        Int?
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @db.Timestamptz(3)
+  prompt      Prompt   @relation(fields: [promptId], references: [id], onDelete: Cascade)
+
+  @@unique([promptId, model, companyName])
+  @@index([promptId])
+  @@index([model])
+  @@map("llm_prompt_rivals_by_model")
+}
+
+model PromptRivalConsensus {
+  id          String   @id @default(cuid())
+  promptId    String
+  companyName String   @db.VarChar(255)
+  avgRank     Float?
+  mentions    Int      @default(0)
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @db.Timestamptz(3)
+  prompt      Prompt   @relation(fields: [promptId], references: [id], onDelete: Cascade)
+
+  @@unique([promptId, companyName])
+  @@index([promptId])
+  @@map("llm_prompt_rivals_consensus")
+}
+
+model LlmRadarMetric {
+  id             String   @id @default(cuid())
+  companyId      String
+  model          String   @db.VarChar(100)
+  shareOfVoice   Float?
+  top3Rate       Float?
+  queryCoverage  Float?
+  avgRank        Float?
+  calculatedAt   DateTime @default(now()) @db.Timestamptz(3)
+  competitorRank Float?
+  topicAuthority Float?
+  company        Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@index([model])
+  @@index([companyId, calculatedAt(sort: Desc)])
+  @@map("llm_radar_metrics")
+}
+
+model LlmPromptMetric {
+  id               String      @id @default(cuid())
+  companyId        String
+  promptId         String
+  topicId          String?
+  model            String      @db.VarChar(100)
+  latestRank       Int?
+  isMentioned      Boolean     @default(false)
+  estimatedReach   Int?
+  confidence       Float?
+  difficulty       Difficulty?
+  businessFit      Float?
+  opportunityScore Float?
+  estimatedRevenue Float?
+  actionType       String?     @db.VarChar(32)
+  rankTrend7d      Float?
+  rankTrend30d     Float?
+  modelGapFlag     Boolean     @default(false)
+  calculatedAt     DateTime    @default(now()) @db.Timestamptz(3)
+  company          Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  prompt           Prompt      @relation(fields: [promptId], references: [id], onDelete: Cascade)
+  llmTopic         LlmTopic?   @relation(fields: [topicId], references: [id], onDelete: SetNull)
+
+  @@unique([companyId, promptId, model])
+  @@index([companyId])
+  @@index([promptId])
+  @@index([calculatedAt(sort: Desc)])
+  @@map("llm_prompt_metrics")
+}
+
+/// Company-level CTR/CVR assumptions for prompt revenue estimates (edit UI later)
+model RadarAssumption {
+  id             String   @id @default(cuid())
+  companyId      String   @unique
+  /// Click-through from impression to site (ratio 0–1)
+  ctr            Float    @default(0.02)
+  /// Conversion to order (ratio 0–1), aligned with D2C defaults when unset on bounties
+  cvr            Float    @default(0.025)
+  aovMultiplier  Float    @default(1)
+  industryPreset String?  @db.VarChar(50)
+  createdAt      DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime @updatedAt @db.Timestamptz(3)
+  company        Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@map("radar_assumptions")
+}
+
+model CitationBounty {
+  id                String           @id @default(cuid())
+  companyId         String
+  query             String
+  intent            String?          @db.VarChar(255)
+  pageType          AeoPageType
+  confidence        Float
+  difficulty        BountyDifficulty @default(EASY)
+  estimatedReach    Int?
+  /// estimatedReach × (conversionRate ?? default) × (avgOrderValue ?? company AOV)
+  estimatedRevenue  Float?
+  /// Site / funnel conversion (e.g. 0.025); defaults applied in app when null
+  conversionRate    Float?
+  /// Snapshot AOV used for revenue estimate (often from Shopify catalog median)
+  avgOrderValue     Float?
+  suggestedCluster  String?          @db.VarChar(255)
+  status            BountyStatus     @default(OPEN)
+  huntedAt          DateTime?        @db.Timestamptz(3)
+  /// When generated content was published (e.g. AEO page go-live)
+  publishedAt       DateTime?        @db.Timestamptz(3)
+  aeoPageId         String?          @unique
+  generationContext Json             @default("{}")
+  createdAt         DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime         @updatedAt @db.Timestamptz(3)
+  aeoPage           AeoPage?         @relation(fields: [aeoPageId], references: [id])
+  company           Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@index([status])
+  @@index([confidence])
+  @@index([difficulty])
+  @@index([companyId, status])
+  @@index([companyId, status, confidence])
+  @@map("citation_bounties")
+}
+
+
+
+
+// ================================================================
 // ENUMS
 // ================================================================
+
+enum Frequency {
+  DAILY
+  WEEKLY
+  MID_MONTHLY
+  MID_WEEKLY
+  MONTHLY
+}
+
+enum Difficulty {
+EASY
+MEDIUM
+HARD
+}
+
+enum AeoPageType {
+DEFINITION
+HOW_TO
+COMPARISON
+FAQ
+USE_CASE
+THOUGHT_LEADERSHIP
+PILLAR_PAGE
+}
+
+enum AeoPageStatus {
+DRAFT
+REVIEW
+PUBLISHED
+ARCHIVED
+}
+
+enum BountyStatus {
+OPEN
+IN_PROGRESS
+HUNTED
+DISMISSED
+EXPIRED
+}
+
+
+enum BountyDifficulty {
+EASY
+MEDIUM
+HARD
+}
+
+enum GeoSourceType {
+  FILE
+  TEXT
+  URL
+}
+
 
 enum SubscriptionStatus {
   ACTIVE
