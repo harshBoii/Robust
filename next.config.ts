@@ -9,6 +9,7 @@ const nextConfig: NextConfig = {
       { protocol: "https", hostname: "*.fna.fbcdn.net" },
     ],
   },
+  basePath: '/robust',
 };
 
 export default nextConfig;
