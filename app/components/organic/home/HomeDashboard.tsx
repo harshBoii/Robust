@@ -92,7 +92,7 @@ export default function HomeDashboard({
     : null;
 
   return (
-    <div className="mx-auto min-h-[60vh] min-w-0 max-w-6xl px-4 pb-10 pt-2 md:px-6 print:max-w-none print:px-6">
+    <div className="min-h-[60vh] min-w-0 pb-10 pt-2 print:px-6">
       <HomeDashboardHeader calculatedDate={calculatedDate} />
 
       {!hasAnyData && (
