@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSession } from "@/lib/auth";
+import { getSession } from "@/lib/auth/session";
 import { huntBountyForCompany } from "@/lib/geo/bounty/huntForCompany";
 import { SubscriptionLimitError } from "@/lib/subscription/check-limit";
 
@@ -15,7 +15,7 @@ export async function POST(_request: NextRequest, context: { params: Promise<{ i
   try {
     const result = await huntBountyForCompany({ companyId, bountyId });
     return NextResponse.json({ success: true, aeoPageId: result.aeoPageId });
-  } catch (err) {
+  } catch (err: unknown) {
     if (err instanceof SubscriptionLimitError) {
       return NextResponse.json(
         { success: false, error: err.message, usage: err.usage },
@@ -28,4 +28,3 @@ export async function POST(_request: NextRequest, context: { params: Promise<{ i
     );
   }
 }
-

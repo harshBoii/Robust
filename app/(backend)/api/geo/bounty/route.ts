@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { getSession }   from "@/lib/auth"
+import { getSession }   from "@/lib/auth/session"
 import { runBountyJob } from "@/lib/microservice/jobs/bounty-jobs"
 import { SubscriptionLimitError } from "@/lib/subscription/check-limit"
 import { prisma } from "@/lib/prisma"

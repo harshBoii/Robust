@@ -176,7 +176,7 @@ export default async function BountyPage() {
   };
 
   return (
-    <div className="max-w-5xl mx-auto min-h-[60vh] px-6 pb-6 pt-2">
+    <div className="w-full min-h-[60vh] pb-6 pt-2">
       <BountyView initialNiches={niches} summary={summary} />
     </div>
   );

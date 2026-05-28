@@ -3,7 +3,6 @@ import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth/session";
 import { syncBountyRevenueForCompany } from "@/lib/geo/radar/bountySync";
 import { minimalMarkdownToHtml } from "@/lib/geo/bounty/markdownToHtmlForPublish";
-import { normalizeSiteUrlForPublish } from "@/lib/geo/bounty/normalizeSiteUrl";
 import { wpSafeFetch } from "@/lib/wordpress/client";
 
 export async function POST(
@@ -41,40 +40,6 @@ export async function POST(
       { success: false, error: "Bounty or generated page not found" },
       { status: 404 }
     );
-  }
-
-  const [wpIntegration, wcStore] = await Promise.all([
-    prisma.wordPressIntegration.findUnique({
-      where: { tenantId: companyId },
-      select: { siteUrl: true, status: true },
-    }),
-    prisma.wooCommerceStore.findFirst({
-      where: { companyId, status: "installed" },
-      orderBy: { installedAt: "desc" },
-      select: { storeUrl: true },
-    }),
-  ]);
-
-  if (!wpIntegration || wpIntegration.status !== "active") {
-    return NextResponse.json(
-      { success: false, error: "WordPress is not connected for this workspace" },
-      { status: 400 }
-    );
-  }
-
-  if (wcStore) {
-    const wpNorm = normalizeSiteUrlForPublish(wpIntegration.siteUrl);
-    const wcNorm = normalizeSiteUrlForPublish(wcStore.storeUrl);
-    if (wpNorm !== wcNorm) {
-      return NextResponse.json(
-        {
-          success: false,
-          error:
-            "WordPress site URL must match your WooCommerce store URL to publish from this bounty flow.",
-        },
-        { status: 400 }
-      );
-    }
   }
 
   const aeoPage = bounty.aeoPage;

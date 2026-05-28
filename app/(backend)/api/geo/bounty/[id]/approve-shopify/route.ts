@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSession } from "@/lib/auth";
+import { getSession } from "@/lib/auth/session";
 import { approveBountyToShopify } from "@/lib/geo/bounty/approveBountyToShopify";
 
 // ─── Route Handler ────────────────────────────────────────────────────────────

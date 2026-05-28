@@ -144,7 +144,7 @@ export function BountyTable({
                     <button
                       type="button"
                       onClick={() => setModalBounty(row)}
-                      className="btn-primary inline-flex items-center gap-1.5 text-xs py-1.5 px-3"
+                      className="glass-button-primary inline-flex items-center gap-1.5 text-xs py-1.5 px-3"
                     >
                       Hunt
                     </button>

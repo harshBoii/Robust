@@ -138,7 +138,7 @@ function GetCitedRow({ prompt }: { prompt: BountyNichePrompt }) {
           type="button"
           onClick={handleGetCited}
           disabled={state === "loading"}
-          className="btn-primary inline-flex items-center gap-1.5 text-sm py-1.5 px-3"
+          className="glass-button-primary inline-flex items-center gap-1.5 text-sm py-1.5 px-3"
         >
           {state === "loading" ? (
             <>
