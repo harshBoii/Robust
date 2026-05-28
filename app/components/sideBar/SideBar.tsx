@@ -90,12 +90,9 @@ const MAIN_SECTIONS: MainSection[] = [
   { id: 'home',      label: 'Home',      icon: IconHome,    hasSecondary: true },
   { id: 'chats',     label: 'Chats',     icon: MessageSquare, hasSecondary: true },
   { id: 'templates', label: 'Templates', icon: LayoutTemplate, hasSecondary: true },
-  { id: 'manager',   label: 'Manager',   icon: IconManager, hasSecondary: true },
   { id: 'paid-growth', label: 'Paid Growth', icon: Megaphone, hasSecondary: true },
-  // { id: 'createAd',  label: 'Create Ad', icon: PlusCircle,  hasSecondary: false },
   { id: 'gallery',   label: 'Gallery',   icon: IconGallery, hasSecondary: true },
   { id: 'organic',   label: 'Organic Marketing', icon: Leaf, hasSecondary: true },
-  { id: 'report',    label: 'Report',    icon: BarChart3,   hasSecondary: true },
   { id: 'profile',   label: 'Profile',   icon: User,        hasSecondary: true },
   { id: 'workspace', label: 'Workspace', icon: Settings,    hasSecondary: true, hidden: true },
 ];
@@ -411,7 +408,6 @@ const SecondarySidebarContent = ({
 }) => {
   switch (activeSection) {
     case 'home':
-    case 'report':
       return <NotificationsPanel />;
 
     case 'chats':
@@ -453,30 +449,6 @@ const SecondarySidebarContent = ({
 
           <SectionLabel label="Report" />
           <SecondaryNavItem icon={BarChart3} label="Report" href="/report" />
-        </>
-      );
-
-    case 'manager':
-      return (
-        <>
-          <SectionLabel label="Dashboard" />
-          {/* <SecondaryNavItem icon={BarChart3}         label="Performance"      href="/manager/dashboard" /> */}
-
-          {/* <SectionLabel label="Campaigns" /> */}
-          <SecondaryNavItem icon={Megaphone}         label="Post to Meta"     href="/manager/post" />
-          <SecondaryNavItem icon={History}           label="Ad History"       href="/manager/history" />
-
-          <SectionLabel label="Automation" />
-          <SecondaryNavItem icon={PauseCircle}       label="Auto-Pause Rules" href="/manager/rules" />
-          <SecondaryNavItem icon={SlidersHorizontal} label="Presets"          href="/manager/presets" />
-
-          <SectionLabel label="Integrations" />
-          <SecondaryNavItem icon={SiMeta}            label="Meta Connection"    href="/manager/meta" />
-          <SecondaryNavItem icon={SiShopify}         label="Shopify Connection" href="/manager/shopify" />
-
-          <SectionLabel label="Shop" />
-          <SecondaryNavItem icon={SiShopify}         label="Shop Products"      href="/shop/products" />
-          {/* <DisabledSecondaryNavItem icon={LayoutDashboard} label="Google Ads" badge="Soon" /> */}
         </>
       );
 
@@ -610,9 +582,7 @@ export default function AppSidebar({
       case 'home':      return '/home';
       case 'chats':     return '/chats';
       case 'templates': return '/templates';
-      case 'manager':   return '/manager/post';
       case 'paid-growth': return '/home';
-      // case 'createAd':  return '/create-ad';
       case 'gallery':   return '/gallery';
       case 'organic':   return '/organic/dashboard';
       case 'report':    return '/report';
@@ -658,18 +628,14 @@ export default function AppSidebar({
     // eslint-disable-next-line react-hooks/set-state-in-effect
     else if (pathname?.startsWith('/templates')) setActiveSection('templates');
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    else if (pathname === '/manager/home')       setActiveSection('paid-growth');
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    else if (pathname?.startsWith('/manager') || pathname?.startsWith('/shop'))
-      setActiveSection('manager');
+    else if (pathname === '/home' || pathname?.startsWith('/manager') || pathname?.startsWith('/shop') || pathname?.startsWith('/report'))
+      setActiveSection('paid-growth');
     // eslint-disable-next-line react-hooks/set-state-in-effect
     else if (pathname?.startsWith('/create-ad')) setActiveSection('createAd');
     // eslint-disable-next-line react-hooks/set-state-in-effect
     else if (pathname?.startsWith('/gallery'))   setActiveSection('gallery');
     // eslint-disable-next-line react-hooks/set-state-in-effect
     else if (pathname?.startsWith('/organic'))   setActiveSection('organic');
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    else if (pathname?.startsWith('/report'))    setActiveSection('report');
     // eslint-disable-next-line react-hooks/set-state-in-effect
     else if (pathname?.startsWith('/profile'))   setActiveSection('profile');
     // eslint-disable-next-line react-hooks/set-state-in-effect
