@@ -81,6 +81,11 @@ type MainSection = {
   hidden?: boolean;
 };
 
+type NavGroup = {
+  label: string;
+  items: MainSection[];
+};
+
 const MAIN_SECTIONS: MainSection[] = [
   { id: 'home',      label: 'Home',      icon: IconHome,    hasSecondary: true },
   { id: 'chats',     label: 'Chats',     icon: MessageSquare, hasSecondary: true },
@@ -92,6 +97,31 @@ const MAIN_SECTIONS: MainSection[] = [
   { id: 'report',    label: 'Report',    icon: BarChart3,   hasSecondary: true },
   { id: 'profile',   label: 'Profile',   icon: User,        hasSecondary: true },
   { id: 'workspace', label: 'Workspace', icon: Settings,    hasSecondary: true, hidden: true },
+];
+
+const PRIMARY_NAV_GROUPS: NavGroup[] = [
+  {
+    label: 'Chat',
+    items: [
+      { id: 'chats',     label: 'Chats',     icon: MessageSquare, hasSecondary: true },
+      { id: 'templates', label: 'Templates', icon: LayoutTemplate, hasSecondary: true },
+    ],
+  },
+  {
+    label: 'Paid Growth',
+    items: [
+      { id: 'home',    label: 'Home',    icon: IconHome,    hasSecondary: true },
+      { id: 'manager', label: 'Manager', icon: IconManager, hasSecondary: true },
+      { id: 'report',  label: 'Reports', icon: BarChart3,   hasSecondary: true },
+      { id: 'gallery', label: 'Gallery', icon: IconGallery, hasSecondary: true },
+    ],
+  },
+  {
+    label: 'Organic Growth',
+    items: [
+      { id: 'organic', label: 'Organic Marketing', icon: Leaf, hasSecondary: true },
+    ],
+  },
 ];
 
 /* ============================================
@@ -634,33 +664,55 @@ export default function AppSidebar({
       ══════════════════════════════ */}
       <aside className="glass-sidebar w-16 flex-shrink-0 flex flex-col items-center py-4 z-20">
 
-        {/* Logo */}
-        <div className="mb-5">
-          <div className="relative h-10 w-10 overflow-hidden rounded-xl">
-            <Image
-              src="/mascot/Robust.png"
-              alt="Robust"
-              fill
-              className="object-contain object-center"
-              sizes="40px"
-              priority
-            />
+        {/* Profile avatar at top */}
+        {displayName ? (
+          <div className="mb-5 flex w-full flex-col items-center select-none">
+            <Link
+              href="/profile"
+              title={displayName}
+              className={`flex h-10 w-10 items-center justify-center rounded-xl transition-colors ${
+                activeSection === 'profile'
+                  ? 'bg-[color-mix(in_srgb,var(--primary)_12%,transparent)]'
+                  : 'hover:bg-[var(--glass-hover)]'
+              }`}
+            >
+              <SidebarProfileAvatar logoUrl={logoUrl} displayName={displayName} />
+            </Link>
+            <span
+              className={`font-ui mt-0.5 max-w-[52px] truncate text-[9px] leading-none ${
+                activeSection === 'profile' ? 'font-semibold text-primary' : 'text-muted-foreground/40'
+              }`}
+            >
+              {displayName.split(/\s+/)[0]}
+            </span>
           </div>
-        </div>
+        ) : (
+          <div className="mb-5 h-10 w-10" />
+        )}
 
         <SidebarDivider />
         <div className="mt-4" />
 
         {/* Main nav */}
-        <nav className="flex-1 flex flex-col items-center gap-1.5 w-full px-2">
-          {MAIN_SECTIONS.filter((s) => !s.hidden).map((section) => (
-            <PrimarySidebarIcon
-              key={section.id}
-              icon={section.icon}
-              label={section.label}
-              isActive={activeSection === section.id}
-              onClick={() => handleSectionClick(section.id)}
-            />
+        <nav className="flex-1 flex flex-col items-center w-full px-2">
+          {PRIMARY_NAV_GROUPS.map((group, groupIndex) => (
+            <React.Fragment key={group.label}>
+              {groupIndex > 0 && <div className="w-full h-px bg-[var(--glass-border)] opacity-50 my-2" />}
+              <span className="font-ui text-[9px] font-bold uppercase tracking-wider text-primary/70 mb-1.5 mt-1">
+                {group.label}
+              </span>
+              <div className="flex flex-col items-center gap-1.5 w-full">
+                {group.items.map((section) => (
+                  <PrimarySidebarIcon
+                    key={section.id}
+                    icon={section.icon}
+                    label={section.label}
+                    isActive={activeSection === section.id}
+                    onClick={() => handleSectionClick(section.id)}
+                  />
+                ))}
+              </div>
+            </React.Fragment>
           ))}
         </nav>
 
@@ -695,74 +747,52 @@ export default function AppSidebar({
             </span>
           </div> */}
 
-          {/* Help */}
-          <div className="flex w-full flex-col items-center select-none">
-            <Link
-              href="/chats"
-              title="Help"
-              className="sidebar-icon w-10 h-10 rounded-xl flex items-center justify-center transition-colors text-muted-foreground/60 hover:text-foreground hover:bg-[var(--glass-hover)]"
-            >
-              <IconHelp className="w-[18px] h-[18px]" />
-            </Link>
-            <span className="font-ui text-[9px] leading-none mb-1 text-muted-foreground/40">
-              Help
-            </span>
-          </div>
-
-          {/* Privacy Policy */}
-          <div className="flex w-full flex-col items-center select-none">
-            <Link
-              href="/privacy-policy"
-              title="Privacy Policy"
-              className="sidebar-icon w-10 h-10 rounded-xl flex items-center justify-center transition-colors text-muted-foreground/60 hover:text-foreground hover:bg-[var(--glass-hover)]"
-            >
-              <ShieldCheck className="w-[18px] h-[18px]" />
-            </Link>
-            <span className="font-ui text-[9px] leading-none mb-1 text-muted-foreground/40">
-              Privacy
-            </span>
-          </div>
-
-          {/* Terms of Service */}
-          <div className="flex w-full flex-col items-center select-none">
-            <Link
-              href="/terms-and-conditions"
-              title="Terms of Service"
-              className="sidebar-icon w-10 h-10 rounded-xl flex items-center justify-center transition-colors text-muted-foreground/60 hover:text-foreground hover:bg-[var(--glass-hover)]"
-            >
-              <ScrollText className="w-[18px] h-[18px]" />
-            </Link>
-            <span className="font-ui text-[9px] leading-none mb-1 text-muted-foreground/40">
-              Terms
-            </span>
-          </div>
-
           {/* Theme Toggle */}
           <ThemeToggle />
 
-          {/* Profile chip */}
-          {displayName ? (
-            <div className="mb-1 flex w-full flex-col items-center select-none">
-              <Link
-                href="/profile"
-                title={displayName}
-                className={`flex h-10 w-10 items-center justify-center rounded-xl transition-colors ${
-                  activeSection === 'profile'
-                    ? 'bg-[color-mix(in_srgb,var(--primary)_12%,transparent)]'
-                    : 'hover:bg-[var(--glass-hover)]'
-                }`}
-              >
-                <SidebarProfileAvatar logoUrl={logoUrl} displayName={displayName} />
-              </Link>
-              <span
-                className={`font-ui mt-0.5 max-w-[52px] truncate text-[9px] leading-none ${
-                  activeSection === 'profile' ? 'font-semibold text-primary' : 'text-muted-foreground/40'
-                }`}
-              >
-                {displayName.split(/\s+/)[0]}
-              </span>
+          {/* Robust logo with hover menu */}
+          <div className="mb-1 flex w-full flex-col items-center select-none relative group/logo">
+            <div className="relative h-10 w-10 overflow-hidden rounded-xl cursor-pointer transition-colors hover:bg-[var(--glass-hover)]">
+              <Image
+                src="/mascot/Robust.png"
+                alt="Robust"
+                fill
+                className="object-contain object-center"
+                sizes="40px"
+                priority
+              />
             </div>
-          ) : null}
+            <span className="font-ui mt-0.5 text-[9px] leading-none text-muted-foreground/40">
+              Robust
+            </span>
+
+            {/* Hover dropdown */}
+            <div className="absolute left-full bottom-0 ml-2 opacity-0 invisible group-hover/logo:opacity-100 group-hover/logo:visible transition-all duration-200 z-50">
+              <div className="glass rounded-xl border border-[var(--glass-border)] shadow-lg py-2 min-w-[140px]">
+                <Link
+                  href="/chats"
+                  className="flex items-center gap-2 px-3 py-2 text-[12px] text-muted-foreground hover:text-foreground hover:bg-[var(--glass-hover)] transition-colors"
+                >
+                  <IconHelp className="w-3.5 h-3.5" />
+                  <span>Help</span>
+                </Link>
+                <Link
+                  href="/privacy-policy"
+                  className="flex items-center gap-2 px-3 py-2 text-[12px] text-muted-foreground hover:text-foreground hover:bg-[var(--glass-hover)] transition-colors"
+                >
+                  <ShieldCheck className="w-3.5 h-3.5" />
+                  <span>Privacy</span>
+                </Link>
+                <Link
+                  href="/terms-and-conditions"
+                  className="flex items-center gap-2 px-3 py-2 text-[12px] text-muted-foreground hover:text-foreground hover:bg-[var(--glass-hover)] transition-colors"
+                >
+                  <ScrollText className="w-3.5 h-3.5" />
+                  <span>Terms</span>
+                </Link>
+              </div>
+            </div>
+          </div>
 
           {/* Log out */}
           <div className="flex w-full flex-col items-center select-none">
