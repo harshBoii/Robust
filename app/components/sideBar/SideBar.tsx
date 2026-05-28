@@ -91,6 +91,7 @@ const MAIN_SECTIONS: MainSection[] = [
   { id: 'chats',     label: 'Chats',     icon: MessageSquare, hasSecondary: true },
   { id: 'templates', label: 'Templates', icon: LayoutTemplate, hasSecondary: true },
   { id: 'manager',   label: 'Manager',   icon: IconManager, hasSecondary: true },
+  { id: 'paid-growth', label: 'Paid Growth', icon: Megaphone, hasSecondary: true },
   // { id: 'createAd',  label: 'Create Ad', icon: PlusCircle,  hasSecondary: false },
   { id: 'gallery',   label: 'Gallery',   icon: IconGallery, hasSecondary: true },
   { id: 'organic',   label: 'Organic Marketing', icon: Leaf, hasSecondary: true },
@@ -101,25 +102,33 @@ const MAIN_SECTIONS: MainSection[] = [
 
 const PRIMARY_NAV_GROUPS: NavGroup[] = [
   {
-    label: 'Chat',
+    label: 'Chats',
     items: [
       { id: 'chats',     label: 'Chats',     icon: MessageSquare, hasSecondary: true },
-      { id: 'templates', label: 'Templates', icon: LayoutTemplate, hasSecondary: true },
     ],
   },
   {
     label: 'Paid Growth',
     items: [
-      { id: 'home',    label: 'Home',    icon: IconHome,    hasSecondary: true },
-      { id: 'manager', label: 'Manager', icon: IconManager, hasSecondary: true },
-      { id: 'report',  label: 'Reports', icon: BarChart3,   hasSecondary: true },
-      { id: 'gallery', label: 'Gallery', icon: IconGallery, hasSecondary: true },
+      { id: 'paid-growth', label: 'Paid Growth', icon: Megaphone, hasSecondary: true },
     ],
   },
   {
     label: 'Organic Growth',
     items: [
       { id: 'organic', label: 'Organic Marketing', icon: Leaf, hasSecondary: true },
+    ],
+  },
+  {
+    label: 'Templates',
+    items: [
+      { id: 'templates', label: 'Templates', icon: LayoutTemplate, hasSecondary: true },
+    ],
+  },
+  {
+    label: 'Gallery',
+    items: [
+      { id: 'gallery', label: 'Gallery', icon: IconGallery, hasSecondary: true },
     ],
   },
 ];
@@ -427,6 +436,26 @@ const SecondarySidebarContent = ({
         </>
       );
 
+    case 'paid-growth':
+      return (
+        <>
+          <SectionLabel label="Dashboard" />
+          <SecondaryNavItem icon={IconHome} label="Dashboard" href="/home" />
+
+          <SectionLabel label="Manager" />
+          <SecondaryNavItem icon={Megaphone}         label="Post to Meta"     href="/manager/post" />
+          <SecondaryNavItem icon={History}           label="Ad History"       href="/manager/history" />
+          <SecondaryNavItem icon={PauseCircle}       label="Auto-Pause Rules" href="/manager/rules" />
+          <SecondaryNavItem icon={SlidersHorizontal} label="Presets"          href="/manager/presets" />
+          <SecondaryNavItem icon={SiMeta}            label="Meta Connection"    href="/manager/meta" />
+          <SecondaryNavItem icon={SiShopify}         label="Shopify Connection" href="/manager/shopify" />
+          <SecondaryNavItem icon={SiShopify}         label="Shop Products"      href="/shop/products" />
+
+          <SectionLabel label="Report" />
+          <SecondaryNavItem icon={BarChart3} label="Report" href="/report" />
+        </>
+      );
+
     case 'manager':
       return (
         <>
@@ -582,6 +611,7 @@ export default function AppSidebar({
       case 'chats':     return '/chats';
       case 'templates': return '/templates';
       case 'manager':   return '/manager/post';
+      case 'paid-growth': return '/home';
       // case 'createAd':  return '/create-ad';
       case 'gallery':   return '/gallery';
       case 'organic':   return '/organic/dashboard';
@@ -627,6 +657,8 @@ export default function AppSidebar({
     else if (pathname?.startsWith('/chats'))     setActiveSection('chats');
     // eslint-disable-next-line react-hooks/set-state-in-effect
     else if (pathname?.startsWith('/templates')) setActiveSection('templates');
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    else if (pathname === '/manager/home')       setActiveSection('paid-growth');
     // eslint-disable-next-line react-hooks/set-state-in-effect
     else if (pathname?.startsWith('/manager') || pathname?.startsWith('/shop'))
       setActiveSection('manager');
@@ -698,9 +730,6 @@ export default function AppSidebar({
           {PRIMARY_NAV_GROUPS.map((group, groupIndex) => (
             <React.Fragment key={group.label}>
               {groupIndex > 0 && <div className="w-full h-px bg-[var(--glass-border)] opacity-50 my-2" />}
-              <span className="font-ui text-[9px] font-bold uppercase tracking-wider text-primary/70 mb-1.5 mt-1">
-                {group.label}
-              </span>
               <div className="flex flex-col items-center gap-1.5 w-full">
                 {group.items.map((section) => (
                   <PrimarySidebarIcon
