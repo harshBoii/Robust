@@ -446,8 +446,8 @@ const SecondarySidebarContent = ({
       return (
         <>
           <SectionLabel label="Organic Marketing" />
-          <SecondaryNavItem icon={LayoutDashboard} label="Home" href="/organic/home" exact />
-          <SecondaryNavItem icon={LayoutDashboard} label="Overview" href="/organic" exact />
+          <SecondaryNavItem icon={BarChart3} label="Dashboard" href="/organic/dashboard" exact />
+          <SecondaryNavItem icon={ShieldCheck} label="GeoKnight" href="/organic/geoKnight" />
         </>
       );
 
@@ -552,7 +552,7 @@ export default function AppSidebar({
       case 'manager':   return '/manager/post';
       // case 'createAd':  return '/create-ad';
       case 'gallery':   return '/gallery';
-      case 'organic':   return '/organic/home';
+      case 'organic':   return '/organic/dashboard';
       case 'report':    return '/report';
       case 'profile':   return '/profile';
       case 'workspace': return '/workspace/settings';

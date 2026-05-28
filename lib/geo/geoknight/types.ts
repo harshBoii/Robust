@@ -33,3 +33,12 @@ export type RivalCompanyView = {
   domain: string | null;
   website: string | null;
 };
+
+export type InsightTopicInput = {
+  name: string;
+  prompts: Array<{
+    query: string;
+    consensus: Array<{ companyName: string; avgRank: number | null; mentions: number }>;
+    byModel: Array<{ model: string; companyName: string; rank: number | null }>;
+  }>;
+};
