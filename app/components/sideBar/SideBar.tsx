@@ -18,6 +18,7 @@ import {
   Leaf,
   X,
   Crosshair,
+  FileText,
 } from 'lucide-react';
 import ThemeToggle from '@/app/components/UI/ThemeToggle';
 import ChatsHistoryList from '@/app/components/chats/ChatsHistoryList';
@@ -480,7 +481,8 @@ const SecondarySidebarContent = ({
           <SectionLabel label="Organic Marketing" />
           <SecondaryNavItem icon={BarChart3} label="Dashboard" href="/organic/dashboard" exact />
           <SecondaryNavItem icon={ShieldCheck} label="GeoKnight" href="/organic/geoKnight" />
-          <SecondaryNavItem icon={Crosshair} label="Bounty" href="/organic/bounty" />
+          <SecondaryNavItem icon={Crosshair} label="Bounty" href="/organic/bounty" exact />
+          <SecondaryNavItem icon={FileText} label="Bounty Pages" href="/organic/bounty-pages" />
         </>
       );
 

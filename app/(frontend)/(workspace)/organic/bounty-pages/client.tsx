@@ -146,6 +146,8 @@ function BountySkeleton() {
   );
 }
 
+const PAGE_SHELL = "w-full min-w-0 max-w-full pb-6 pt-2";
+
 // ── Main component ────────────────────────────────────────────────────────────
 
 export function BountyPagesClient() {
@@ -196,7 +198,7 @@ export function BountyPagesClient() {
   // ── Loading
   if (loading) {
     return (
-      <div className="p-6 max-w-5xl mx-auto">
+      <div className={`${PAGE_SHELL} min-h-[60vh]`}>
         <div className="mb-6">
           <div className="skeleton skeleton-heading w-64 mb-2" />
           <div className="skeleton skeleton-text w-40" />
@@ -210,7 +212,7 @@ export function BountyPagesClient() {
   // ── Auth error
   if (unauthenticated) {
     return (
-      <div className="max-w-5xl mx-auto min-h-[60vh] px-6 pb-6 pt-8 flex flex-col items-center justify-center gap-4">
+      <div className={`${PAGE_SHELL} min-h-[60vh] flex flex-col items-center justify-center gap-4 pt-6`}>
         <div className="w-12 h-12 rounded-full border-2 border-dashed border-[var(--glass-border)] flex items-center justify-center text-muted-foreground/40">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
             <rect width="18" height="11" x="3" y="11" rx="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
@@ -227,7 +229,7 @@ export function BountyPagesClient() {
   // ── Load error
   if (loadError) {
     return (
-      <div className="max-w-5xl mx-auto min-h-[60vh] px-6 pb-6 pt-8 flex flex-col items-center justify-center gap-4">
+      <div className={`${PAGE_SHELL} min-h-[60vh] flex flex-col items-center justify-center gap-4 pt-6`}>
         <div className="w-12 h-12 rounded-full border-2 border-dashed border-red-500/30 bg-red-500/5 flex items-center justify-center text-red-500/60">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
             <circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/>
@@ -242,11 +244,11 @@ export function BountyPagesClient() {
   }
 
   return (
-    <div className="p-6 max-w-5xl mx-auto">
+    <div className={`${PAGE_SHELL} min-h-[60vh]`}>
 
       {/* ── Page header ─────────────────────────────────────────────────── */}
-      <div className="flex flex-wrap items-start justify-between gap-4 mb-6">
-        <div>
+      <div className="mb-6 flex min-w-0 flex-wrap items-start justify-between gap-4">
+        <div className="min-w-0">
           <div className="flex items-center gap-2 mb-1">
             <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--sibling-accent)]">GEO · Bounty</p>
           </div>
@@ -283,9 +285,9 @@ export function BountyPagesClient() {
 
       {/* ── Filters ─────────────────────────────────────────────────────── */}
       {bounties.length > 0 && (
-        <div className="flex flex-wrap items-center gap-3 mb-5">
+        <div className="mb-5 flex min-w-0 flex-wrap items-center gap-3">
           {/* Search */}
-          <div className="relative flex-1 min-w-[200px] max-w-xs">
+          <div className="relative min-w-[200px] flex-1 max-w-full sm:max-w-xs">
             <svg
               className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground/50 pointer-events-none"
               width="13" height="13" viewBox="0 0 24 24" fill="none"
@@ -303,7 +305,7 @@ export function BountyPagesClient() {
           </div>
 
           {/* Status filter pills */}
-          <div className="flex items-center gap-1.5">
+          <div className="flex min-w-0 flex-wrap items-center gap-1.5">
             {["ALL", ...statuses].map((s) => (
               <button
                 key={s}
@@ -321,7 +323,7 @@ export function BountyPagesClient() {
           </div>
 
           {/* Count */}
-          <span className="ml-auto text-[11px] text-muted-foreground tabular-nums">
+          <span className="w-full text-[11px] text-muted-foreground tabular-nums sm:ml-auto sm:w-auto">
             {displayed.length} of {bounties.length}
           </span>
         </div>
@@ -390,7 +392,7 @@ export function BountyPagesClient() {
                   </div>
 
                   {/* Row 3: badges */}
-                  <div className="flex flex-wrap items-center gap-2">
+                  <div className="flex min-w-0 flex-wrap items-center gap-2">
                     <span className={`inline-flex items-center gap-1.5 text-[11px] font-semibold rounded-full border px-2.5 py-1 ${sm.badge}`}>
                       <span className={`w-1.5 h-1.5 rounded-full ${sm.dot}`} />
                       {b.status.charAt(0) + b.status.slice(1).toLowerCase()}
@@ -408,41 +410,43 @@ export function BountyPagesClient() {
                         {page.locale}
                       </span>
                     )}
-                    <span className="ml-auto text-[10px] text-muted-foreground tabular-nums">
+                    <span className="text-[10px] text-muted-foreground tabular-nums sm:ml-auto">
                       confidence {Math.round(b.confidence)}
                     </span>
                   </div>
                 </div>
 
                 {/* ── Bottom action bar ── */}
-                <div className="border-t border-[var(--glass-border)]/50 bg-[var(--glass)]/30 px-5 py-3 flex flex-wrap items-center gap-2">
-                  <Link
-                    href={`/geo/bounty/${b.id}/hunt`}
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--sibling-primary)] px-3.5 py-1.5 text-[11px] font-semibold text-primary-foreground hover:opacity-90 active:scale-[0.98] transition-all"
-                  >
-                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                      <polygon points="5 3 19 12 5 21 5 3"/>
-                    </svg>
-                    View generated hunt
-                  </Link>
-
-                  {page?.canonicalUrl && (
-                    <a
-                      href={page.canonicalUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--glass-border)] bg-[var(--glass)]/80 px-3.5 py-1.5 text-[11px] font-semibold text-foreground hover:border-[var(--sibling-primary)]/40 hover:bg-[var(--glass-hover)] active:scale-[0.98] transition-all"
+                <div className="border-t border-[var(--glass-border)]/50 bg-[var(--glass)]/30 px-5 py-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Link
+                      href={`/organic/bounty/${b.id}/hunt`}
+                      className="glass-button-primary inline-flex items-center gap-1.5 text-[11px] font-semibold py-1.5 px-3.5 active:scale-[0.98] transition-all"
                     >
-                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M15 3h6v6M10 14 21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <polygon points="5 3 19 12 5 21 5 3"/>
                       </svg>
-                      Open canonical URL
-                    </a>
-                  )}
+                      View generated hunt
+                    </Link>
+
+                    {page?.canonicalUrl && (
+                      <a
+                        href={page.canonicalUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--glass-border)] bg-[var(--glass)]/80 px-3.5 py-1.5 text-[11px] font-semibold text-foreground hover:border-[var(--sibling-primary)]/40 hover:bg-[var(--glass-hover)] active:scale-[0.98] transition-all"
+                      >
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M15 3h6v6M10 14 21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                        </svg>
+                        Open canonical URL
+                      </a>
+                    )}
+                  </div>
 
                   {page?.canonicalUrl && (
-                    <div className="flex-1 flex items-center gap-2 min-w-0 ml-2">
-                      <code className="flex-1 text-[10px] font-mono text-muted-foreground/60 truncate min-w-0">
+                    <div className="flex min-w-0 w-full items-center gap-2 sm:flex-1">
+                      <code className="min-w-0 flex-1 truncate text-[10px] font-mono text-muted-foreground/60">
                         {page.canonicalUrl}
                       </code>
                       <CopyButton text={page.canonicalUrl} />

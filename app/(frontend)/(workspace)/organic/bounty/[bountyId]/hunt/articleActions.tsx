@@ -165,7 +165,7 @@ export function ArticleActions({ bountyId }: { bountyId: string }) {
           type="button"
           onClick={onApprove}
           disabled={approveLoading || !canPublish}
-          className="rounded-md bg-[var(--sibling-primary)] px-3 py-1.5 text-xs font-semibold text-primary-foreground hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed"
+          className="glass-button-primary rounded-md px-3 py-1.5 text-xs font-semibold disabled:opacity-60 disabled:cursor-not-allowed"
         >
           {approveLoading ? "Publishing…" : "Approve"}
         </button>
@@ -220,7 +220,7 @@ export function ArticleActions({ bountyId }: { bountyId: string }) {
             <button
               type="button"
               onClick={onSubmitRegenerate}
-              className="rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground hover:bg-primary/90"
+              className="glass-button-primary rounded-md px-3 py-1.5 text-xs font-semibold"
             >
               Submit Regeneration
             </button>
