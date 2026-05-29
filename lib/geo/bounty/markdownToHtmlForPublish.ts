@@ -44,3 +44,21 @@ export function minimalMarkdownToHtml(markdown: string): string {
 
   return html;
 }
+
+/** Appends a markdown block linking to a related article (e.g. new cluster page from pillar). */
+// ─── Pillar page related articles append ──────────────────────────────────────
+
+/**
+ * Appends a markdown block linking to a related article (e.g. new cluster page from pillar).
+ * The markdown link syntax [text](url) is now correctly handled by minimalMarkdownToHtml.
+ */
+export function buildRelatedArticlesAppend(
+  currentMarkdown: string,
+  item: { title: string; url: string }
+): string {
+  const base = currentMarkdown.trimEnd();
+  // Escape ] in title so it doesn't break the markdown link syntax.
+  const escapedTitle = item.title.replace(/]/g, "\\]");
+  const block = `\n\n## Related reading\n\n- [${escapedTitle}](${item.url})\n`;
+  return base === "" ? block.trimStart() : base + block;
+}
