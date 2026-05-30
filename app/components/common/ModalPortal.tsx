@@ -10,7 +10,6 @@ type ModalPortalProps = {
 };
 
 function getPortalTarget(): HTMLElement {
-  if (typeof document === "undefined") return document.body;
   return document.getElementById("modal-root") ?? document.body;
 }
 
