@@ -6,6 +6,7 @@ import { Check, ImageIcon, Upload, X } from 'lucide-react';
 
 import { useUploader } from '@/app/hooks/useUploader';
 import { useToast } from '@/app/components/UI/ToastProvider';
+import { ModalPortal } from '@/app/components/common/ModalPortal';
 import {
   fetchAssetDisplayUrl,
   fetchLogoAssets,
@@ -96,7 +97,8 @@ export function GalleryLogoPicker({ companyId, onClose, onSelect }: GalleryLogoP
   };
 
   return (
-    <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+    <ModalPortal>
+      <div className="fixed inset-0 z-modal flex items-center justify-center p-4">
       <button type="button" className="absolute inset-0 bg-black/50" aria-label="Close" onClick={onClose} />
       <div className="relative z-10 flex max-h-[85vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-[var(--glass-border)] bg-[var(--glass-bg-solid)] shadow-2xl">
         <div className="flex items-center justify-between border-b border-[var(--glass-border)] px-4 py-3">
@@ -194,5 +196,6 @@ export function GalleryLogoPicker({ companyId, onClose, onSelect }: GalleryLogoP
         </div>
       </div>
     </div>
+    </ModalPortal>
   );
 }

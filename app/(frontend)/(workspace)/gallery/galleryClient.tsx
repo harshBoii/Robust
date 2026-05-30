@@ -826,7 +826,7 @@ export default function GalleryClient({
       {openFolder && typeof document !== "undefined"
         ? createPortal(
             <div
-              className="fixed inset-0 z-[200] flex items-stretch justify-center bg-white p-0 sm:p-6 sm:items-center"
+              className="fixed inset-0 z-modal flex items-stretch justify-center bg-white p-0 sm:p-6 sm:items-center"
               role="presentation"
             >
               <button
@@ -842,7 +842,7 @@ export default function GalleryClient({
                   openFolder.bulk?.name ??
                   (openFolder.key === UNGROUPED_KEY ? "Ungrouped" : "Folder")
                 }
-                className="relative z-[201] flex h-full w-full max-h-full flex-col overflow-hidden rounded-none border-0 bg-white shadow-2xl sm:max-h-[90vh] sm:max-w-6xl sm:rounded-2xl sm:border"
+                className="relative z-10 flex h-full w-full max-h-full flex-col overflow-hidden rounded-none border-0 bg-white shadow-2xl sm:max-h-[90vh] sm:max-w-6xl sm:rounded-2xl sm:border"
                 onClick={(e) => e.stopPropagation()}
               >
             <div className="flex shrink-0 flex-wrap items-start gap-3 border-b border-[var(--glass-border)] px-4 py-3 sm:px-5">
@@ -936,7 +936,7 @@ export default function GalleryClient({
       {preview?.kind === "video" && typeof document !== "undefined"
         ? createPortal(
             <div
-              className="fixed inset-0 z-[210] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+              className="fixed inset-0 z-modal flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
               role="presentation"
               onClick={() => setPreview(null)}
             >
@@ -969,7 +969,7 @@ export default function GalleryClient({
       {preview?.kind === "image" && typeof document !== "undefined"
         ? createPortal(
             <div
-              className="fixed inset-0 z-[210] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+              className="fixed inset-0 z-modal flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
               onClick={() => setPreview(null)}
               role="presentation"
             >

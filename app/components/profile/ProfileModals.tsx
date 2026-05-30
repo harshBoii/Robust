@@ -7,6 +7,8 @@ import { AiOutlineLoading } from 'react-icons/ai';
 import { X } from 'lucide-react';
 
 import { useToast } from '@/app/components/UI/ToastProvider';
+import { ModalPortal } from '@/app/components/common/ModalPortal';
+import { ModalBackdrop } from '@/app/components/common/ModalBackdrop';
 import { ProfileLogoField } from '@/app/components/profile/ProfileLogoField';
 import type { CompanyProfile } from '@/lib/profile/company-profile';
 import { formatProfileDate } from '@/app/components/profile/profile-utils';
@@ -20,20 +22,19 @@ type ModalShellProps = {
 
 function ModalShell({ title, onClose, children, wide }: ModalShellProps) {
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-      <button type="button" className="absolute inset-0 bg-black/40" aria-label="Close" onClick={onClose} />
-      <div
-        className={`relative z-10 max-h-[85vh] w-full overflow-hidden rounded-2xl border border-[var(--glass-border)] bg-[var(--glass-bg-solid)] shadow-2xl ${wide ? 'max-w-lg' : 'max-w-md'}`}
-      >
-        <div className="flex items-center justify-between border-b border-[var(--glass-border)] px-4 py-3">
-          <h3 className="font-display text-sm font-semibold">{title}</h3>
-          <button type="button" onClick={onClose} className="glass-button rounded-lg p-1.5">
-            <X className="h-4 w-4" />
-          </button>
+    <ModalPortal>
+      <ModalBackdrop onClose={onClose} contentClassName={wide ? 'max-w-lg' : 'max-w-md'}>
+        <div className="max-h-[85vh] w-full overflow-hidden rounded-2xl border border-[var(--glass-border)] bg-[var(--glass-bg-solid)] shadow-2xl">
+          <div className="flex items-center justify-between border-b border-[var(--glass-border)] px-4 py-3">
+            <h3 className="font-display text-sm font-semibold">{title}</h3>
+            <button type="button" onClick={onClose} className="glass-button rounded-lg p-1.5">
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+          <div className="custom-scrollbar max-h-[calc(85vh-3.5rem)] overflow-y-auto p-4">{children}</div>
         </div>
-        <div className="custom-scrollbar max-h-[calc(85vh-3.5rem)] overflow-y-auto p-4">{children}</div>
-      </div>
-    </div>
+      </ModalBackdrop>
+    </ModalPortal>
   );
 }
 

@@ -63,7 +63,7 @@ export default function ToastProvider({ children }: { children: React.ReactNode 
   return (
     <ToastContext.Provider value={value}>
       {children}
-      <div className="fixed right-4 top-4 z-[20000] w-[340px] space-y-2">
+      <div className="fixed right-4 top-4 z-toast w-[340px] space-y-2">
         {toasts.map((t) => (
           <ToastView key={t.id} t={t} onClose={() => setToasts((p) => p.filter((x) => x.id !== t.id))} />
         ))}

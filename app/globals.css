@@ -89,6 +89,12 @@
   --glass-highlight:     inset 0 1px 0 rgba(255,255,255,0.9),
                          inset 0 -1px 0 rgba(0,0,0,0.04);
 
+  /* Stacking: sidebar (40) < dropdown (50) < modal (100) < toast (200) */
+  --z-sidebar:  40;
+  --z-dropdown: 50;
+  --z-modal:    100;
+  --z-toast:    200;
+
   --sidebar-glass-bg:    rgba(252, 252, 253, 0.82);
   --sidebar-glass-border:rgba(255, 255, 255, 0.6);
   --sidebar-icon-bg:     rgba(0, 0, 0, 0.04);
@@ -99,6 +105,11 @@
 
   --glow-primary:        0 0 20px rgba(215,118,90,0.25), 0 0 60px rgba(215,118,90,0.10);
   --glow-accent:         0 0 20px rgba(120,80,220,0.20);
+
+  --modal-bokeh-1: oklch(0.65 0.18 25 / 0.62);
+  --modal-bokeh-2: oklch(0.55 0.25 280 / 0.48);
+  --modal-bokeh-3: oklch(0.72 0.14 55 / 0.42);
+  --modal-scrim:   rgba(255, 255, 255, 0.42);
 
   --background:           oklch(0.975 0.004 85);
   --foreground:           oklch(0.13 0 0);
@@ -180,6 +191,11 @@
 
   --glow-primary:        0 0 24px rgba(215,118,90,0.35), 0 0 80px rgba(215,118,90,0.15);
   --glow-accent:         0 0 24px rgba(140,100,240,0.30);
+
+  --modal-bokeh-1: oklch(0.70 0.16 25 / 0.55);
+  --modal-bokeh-2: oklch(0.65 0.22 280 / 0.45);
+  --modal-bokeh-3: oklch(0.58 0.12 55 / 0.38);
+  --modal-scrim:   rgba(12, 12, 16, 0.45);
 
   --background:           rgb(18,18,18);
   --foreground:           oklch(0.97 0 0);
@@ -349,6 +365,113 @@
   letter-spacing: -0.01em;
 }
 
+/* Global layer utilities (use with fixed/portaled overlays) */
+.z-sidebar {
+  z-index: var(--z-sidebar);
+}
+.z-dropdown {
+  z-index: var(--z-dropdown);
+}
+.z-modal {
+  z-index: var(--z-modal);
+}
+.z-toast {
+  z-index: var(--z-toast);
+}
+
+/* Frosted modal overlay — blur layer must sit over sidebar + main (#modal-root sibling) */
+.modal-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  isolation: isolate;
+}
+
+.modal-overlay__blur {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background: var(--modal-scrim);
+  backdrop-filter: blur(32px) saturate(160%);
+  -webkit-backdrop-filter: blur(32px) saturate(160%);
+  transform: translateZ(0);
+  will-change: backdrop-filter;
+}
+
+.modal-overlay__bokeh {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.modal-overlay__orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(56px);
+  opacity: 0.85;
+  will-change: transform;
+  mix-blend-mode: soft-light;
+}
+
+.modal-overlay__orb--a {
+  top: -14%;
+  left: -10%;
+  width: min(58vw, 520px);
+  height: min(58vw, 520px);
+  background: radial-gradient(circle, var(--modal-bokeh-1) 0%, transparent 62%);
+  animation: bokeh-drift-a 19s ease-in-out infinite;
+}
+
+.modal-overlay__orb--b {
+  right: -12%;
+  bottom: -16%;
+  width: min(54vw, 480px);
+  height: min(54vw, 480px);
+  background: radial-gradient(circle, var(--modal-bokeh-2) 0%, transparent 62%);
+  animation: bokeh-drift-b 23s ease-in-out infinite;
+}
+
+.modal-overlay__orb--c {
+  top: 34%;
+  left: 38%;
+  width: min(44vw, 400px);
+  height: min(44vw, 400px);
+  background: radial-gradient(circle, var(--modal-bokeh-3) 0%, transparent 62%);
+  animation: bokeh-drift-c 29s ease-in-out infinite;
+}
+
+.modal-overlay__content {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  max-height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+html.minimal .modal-overlay__bokeh,
+html.monochrome .modal-overlay__bokeh {
+  display: none;
+}
+
+html.minimal .modal-overlay__blur,
+html.monochrome .modal-overlay__blur {
+  backdrop-filter: blur(20px) saturate(130%) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(130%) !important;
+}
+
+/* Legacy alias (profile modals etc.) */
+.modal-backdrop {
+  position: absolute;
+  inset: 0;
+}
+
 /* ================================
    KEYFRAMES
    ================================ */
@@ -396,6 +519,23 @@
 @keyframes pulse-glow {
   0%, 100% { box-shadow: var(--glow-primary); }
   50%       { box-shadow: none; }
+}
+
+@keyframes bokeh-drift-a {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33%       { transform: translate(48px, -36px) scale(1.08); }
+  66%       { transform: translate(-28px, 24px) scale(0.94); }
+}
+
+@keyframes bokeh-drift-b {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  40%       { transform: translate(-42px, 30px) scale(1.05); }
+  75%       { transform: translate(26px, -44px) scale(0.97); }
+}
+
+@keyframes bokeh-drift-c {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50%       { transform: translate(34px, 34px) scale(1.1); }
 }
 
 /* ================================

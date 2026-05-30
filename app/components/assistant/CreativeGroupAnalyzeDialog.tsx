@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 
+import { ModalPortal } from '@/app/components/common/ModalPortal';
 import { pickGroupVideoAssetId } from '@/lib/assistant/pick-group-video-asset';
 
 export type CreativeAnalyzeGroupOption = {
@@ -68,7 +69,8 @@ export function CreativeGroupAnalyzeDialog({
   const canConfirm = selectedReady.length > 0 && !analyzing;
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
+    <ModalPortal open={open}>
+      <div className="fixed inset-0 z-modal flex items-center justify-center p-4">
       <button
         type="button"
         className="absolute inset-0 bg-black/50 backdrop-blur-[2px]"
@@ -79,7 +81,7 @@ export function CreativeGroupAnalyzeDialog({
         role="dialog"
         aria-modal
         aria-labelledby="creative-analyze-dialog-title"
-        className="glass-modal relative z-[71] flex max-h-[85vh] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-[var(--glass-border)] shadow-2xl"
+        className="glass-modal relative z-10 flex max-h-[85vh] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-[var(--glass-border)] shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="border-b border-[var(--glass-border)] px-4 py-3">
@@ -166,5 +168,6 @@ export function CreativeGroupAnalyzeDialog({
         </div>
       </div>
     </div>
+    </ModalPortal>
   );
 }

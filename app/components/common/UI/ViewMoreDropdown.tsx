@@ -107,7 +107,7 @@ export function ViewMoreDropdown({
     open && typeof document !== 'undefined' && position ? (
       <div
         ref={ref}
-        className="fixed min-w-[160px] py-1 z-[9999] rounded-md border border-[var(--glass-border)] bg-background/95 shadow-lg backdrop-blur-sm"
+        className="fixed min-w-[160px] py-1 z-dropdown rounded-md border border-[var(--glass-border)] bg-background/95 shadow-lg backdrop-blur-sm"
         style={{ top: position.top, left: position.left }}
         role="menu"
       >

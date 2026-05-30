@@ -1306,7 +1306,7 @@ export default function GeoKnightClient({
 
       {/* ── Simulate modal ───────────────────────────────────────────────── */}
       {simOpen ? (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4">
+        <div className="fixed inset-0 z-modal flex items-end sm:items-center justify-center p-4">
           <div
             className="absolute inset-0 bg-black/70 backdrop-blur-sm"
             onClick={() => setSimOpen(false)}
@@ -1380,7 +1380,7 @@ export default function GeoKnightClient({
 
       {/* ── Analyze Rival modal ──────────────────────────────────────────── */}
       {analyzeOpen ? (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4">
+        <div className="fixed inset-0 z-modal flex items-end sm:items-center justify-center p-4">
           <div
             className="absolute inset-0 bg-black/70 backdrop-blur-sm"
             onClick={() => setAnalyzeOpen(false)}

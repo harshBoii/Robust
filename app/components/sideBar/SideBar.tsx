@@ -22,6 +22,7 @@ import {
   Share2,
 } from 'lucide-react';
 import ThemeToggle from '@/app/components/UI/ThemeToggle';
+import { ModalPortal } from '@/app/components/common/ModalPortal';
 import ChatsHistoryList from '@/app/components/chats/ChatsHistoryList';
 import GalleryUploadZone from '@/app/(frontend)/(workspace)/gallery/GalleryUploadZone';
 import { SiMeta, SiShopify } from 'react-icons/si';
@@ -896,11 +897,12 @@ export default function AppSidebar({
         </button>
       )}
 
+      <ModalPortal open={galleryUploadModalOpen && Boolean(companyId)}>
       <AnimatePresence>
         {galleryUploadModalOpen && companyId ? (
           <motion.div
             key="gallery-upload-modal"
-            className="fixed inset-0 z-[10000] flex items-center justify-center p-4 sm:p-8"
+            className="fixed inset-0 z-modal flex items-center justify-center p-4 sm:p-8"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -915,7 +917,7 @@ export default function AppSidebar({
               role="dialog"
               aria-modal
               aria-labelledby="gallery-upload-modal-title"
-              className="glass-modal relative z-[10001] flex max-h-[90vh] w-full max-w-xl flex-col overflow-hidden rounded-2xl border border-[var(--glass-border)] shadow-2xl"
+              className="glass-modal relative z-10 flex max-h-[90vh] w-full max-w-xl flex-col overflow-hidden rounded-2xl border border-[var(--glass-border)] shadow-2xl"
               initial={{ scale: 0.96, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.96, opacity: 0 }}
@@ -948,6 +950,7 @@ export default function AppSidebar({
           </motion.div>
         ) : null}
       </AnimatePresence>
+      </ModalPortal>
     </div>
   );
 }

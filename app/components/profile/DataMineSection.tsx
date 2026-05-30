@@ -6,6 +6,7 @@ import { AiOutlineLoading } from 'react-icons/ai';
 import { Pencil, Plus, Sparkles, Trash2, X } from 'lucide-react';
 
 import { useToast } from '@/app/components/UI/ToastProvider';
+import { ModalPortal } from '@/app/components/common/ModalPortal';
 import type {
   DataMineBrandEntityDto,
   DataMineOfferingDto,
@@ -116,9 +117,10 @@ function ModalShell({
   children: React.ReactNode;
 }) {
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-      <button type="button" className="absolute inset-0 bg-black/40" aria-label="Close" onClick={onClose} />
-      <div className="relative z-10 max-h-[85vh] w-full max-w-lg overflow-hidden rounded-2xl border border-[var(--glass-border)] bg-[var(--glass-bg-solid)] shadow-2xl">
+    <ModalPortal>
+      <div className="fixed inset-0 z-modal flex items-center justify-center p-4">
+        <button type="button" className="absolute inset-0 bg-black/40" aria-label="Close" onClick={onClose} />
+        <div className="relative z-10 max-h-[85vh] w-full max-w-lg overflow-hidden rounded-2xl border border-[var(--glass-border)] bg-[var(--glass-bg-solid)] shadow-2xl">
         <div className="flex items-center justify-between border-b border-[var(--glass-border)] px-4 py-3">
           <h3 className="font-display text-sm font-semibold">{title}</h3>
           <button type="button" onClick={onClose} className="glass-button rounded-lg p-1.5">
@@ -128,6 +130,7 @@ function ModalShell({
         <div className="custom-scrollbar max-h-[calc(85vh-3.5rem)] overflow-y-auto p-4">{children}</div>
       </div>
     </div>
+    </ModalPortal>
   );
 }
 

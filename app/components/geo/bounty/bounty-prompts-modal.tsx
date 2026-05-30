@@ -4,6 +4,8 @@ import { useState, useEffect } from "react";
 import type { BountySpreadPlatform } from "@/app/generated/prisma/client";
 import type { BountyNiche, BountyNichePrompt } from "./bounty-table";
 import { RevenueChip } from "@/app/components/geo/revenue-chip";
+import { ModalPortal } from "@/app/components/common/ModalPortal";
+import { ModalBackdrop } from "@/app/components/common/ModalBackdrop";
 import {
   ALL_SPREAD_PLATFORMS,
   DEFAULT_SPREAD_PLATFORMS,
@@ -102,16 +104,19 @@ export function BountyPromptsModal({ bounty, onClose }: BountyPromptsModalProps)
   if (!bounty) return null;
 
   return (
-    <div
-      className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
-      onClick={onClose}
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="bounty-modal-title"
-    >
+    <ModalPortal open={Boolean(bounty)}>
+      <ModalBackdrop
+        onClose={onClose}
+        shellProps={{
+          "aria-labelledby": "bounty-modal-title",
+        }}
+        contentClassName="max-w-2xl"
+      >
       <div
-        className="flex w-full max-w-2xl max-h-[85vh] flex-col overflow-hidden rounded-2xl border border-[var(--glass-border)]/80 bg-[var(--glass-bg-solid)] shadow-2xl"
-        onClick={(e) => e.stopPropagation()}
+        className="flex w-full max-h-[85vh] flex-col overflow-hidden rounded-2xl border border-[var(--glass-border)]/80 bg-[var(--glass-bg-solid)] shadow-2xl"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="bounty-modal-title"
       >
         <div className="flex items-start justify-between gap-3 border-b border-[var(--glass-border)]/80 px-5 py-4">
           <div className="min-w-0 flex-1">
@@ -162,7 +167,8 @@ export function BountyPromptsModal({ bounty, onClose }: BountyPromptsModalProps)
           </ul>
         </div>
       </div>
-    </div>
+      </ModalBackdrop>
+    </ModalPortal>
   );
 }
 
