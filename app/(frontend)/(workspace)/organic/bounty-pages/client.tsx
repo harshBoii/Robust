@@ -3,6 +3,9 @@
 // import LoadingAnimation from "@/app/components/animations/loading";
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { platformLabel } from "@/lib/geo/bounty/spread-platforms";
+import { extractPostText } from "@/app/components/geo/bounty/content-metadata";
+import type { BountySpreadPlatform } from "@/app/generated/prisma/client";
 
 
 type AeoPageSummary = {
@@ -17,16 +20,97 @@ type AeoPageSummary = {
   canonicalUrl: string | null;
 };
 
+type BountyContentSummary = {
+  id: string;
+  platform: string;
+  status: string;
+  title: string | null;
+  body?: string | null;
+  metadata?: unknown;
+  publishedUrl: string | null;
+  publishedAt: string | null;
+};
+
 type BountyRow = {
   id: string;
   query: string;
   status: string;
   confidence: number;
   difficulty: string;
+  spreadPlatforms?: unknown;
   aeoPage: AeoPageSummary | null;
+  contents?: BountyContentSummary[];
 };
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
+
+function firstWords(text: string, count: number): string {
+  const words = text.trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return "";
+  const slice = words.slice(0, count).join(" ");
+  return words.length > count ? `${slice}…` : slice;
+}
+
+function getContentExcerpt(content: BountyContentSummary): string {
+  const fromBody = extractPostText(content.body ?? "", content.metadata);
+  if (fromBody) return firstWords(fromBody, 20);
+  if (content.title?.trim()) return firstWords(content.title, 20);
+  return "";
+}
+
+function getBountyDisplayTitle(b: BountyRow): string {
+  const page = b.aeoPage;
+  if (page?.title?.trim()) return page.title.trim();
+
+  const contents = b.contents ?? [];
+
+  if (page) {
+    const blogExcerpt = page.description?.trim() ? firstWords(page.description, 20) : "";
+    if (blogExcerpt) return `${platformLabel("WEBSITE_BLOG")} · ${blogExcerpt}`;
+  }
+
+  for (const content of contents) {
+    const excerpt = getContentExcerpt(content);
+    if (excerpt) {
+      return `${platformLabel(content.platform as BountySpreadPlatform)} · ${excerpt}`;
+    }
+  }
+
+  for (const content of contents) {
+    if (content.title?.trim()) {
+      return `${platformLabel(content.platform as BountySpreadPlatform)} · ${firstWords(content.title, 20)}`;
+    }
+  }
+
+  return firstWords(b.query, 20) || b.query;
+}
+
+type QueryGroup = {
+  query: string;
+  bounties: BountyRow[];
+};
+
+function groupBountiesByQuery(rows: BountyRow[]): QueryGroup[] {
+  const map = new Map<string, QueryGroup>();
+  for (const row of rows) {
+    const key = row.query.trim().toLowerCase();
+    const existing = map.get(key);
+    if (existing) {
+      existing.bounties.push(row);
+    } else {
+      map.set(key, { query: row.query.trim(), bounties: [row] });
+    }
+  }
+  return Array.from(map.values());
+}
+
+function groupStatusMeta(bounties: BountyRow[]) {
+  const statuses = bounties.map((b) => b.status?.toUpperCase());
+  if (statuses.every((s) => s === "HUNTED")) return statusMeta("HUNTED");
+  if (statuses.some((s) => s === "FAILED")) return statusMeta("FAILED");
+  if (statuses.some((s) => s === "PENDING")) return statusMeta("PENDING");
+  return statusMeta(bounties[0]?.status ?? "");
+}
 
 function statusMeta(status: string) {
   const s = status?.toUpperCase();
@@ -121,6 +205,58 @@ function CopyButton({ text }: { text: string }) {
   );
 }
 
+function contentStatusBadge(status: string) {
+  const s = status?.toUpperCase();
+  if (s === "PUBLISHED")
+    return "border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400";
+  if (s === "APPROVED")
+    return "border-blue-500/30 bg-blue-500/10 text-blue-600 dark:text-blue-400";
+  if (s === "FAILED")
+    return "border-red-500/30 bg-red-500/10 text-red-600 dark:text-red-400";
+  return "border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400";
+}
+
+function DistributionRow({ bountyId, page, contents }: { bountyId: string; page: AeoPageSummary | null; contents: BountyContentSummary[] }) {
+  if (!page && contents.length === 0) return null;
+
+  return (
+    <div className="border-t border-[var(--glass-border)]/50 bg-[var(--glass)]/20 px-5 py-3">
+      <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2">Distribution</p>
+      <div className="flex flex-wrap gap-2">
+        {page && (
+          <Link
+            href={`/organic/bounty/${bountyId}/hunt#content-WEBSITE_BLOG`}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--glass-border)] bg-[var(--glass)]/80 px-2.5 py-1.5 text-[10px] font-semibold text-foreground hover:border-[var(--sibling-primary)]/40 transition-all"
+          >
+            <span className={`rounded-full border px-1.5 py-0.5 text-[9px] ${contentStatusBadge(page.publishedAt ? "PUBLISHED" : "DRAFT")}`}>
+              {page.publishedAt ? "Published" : "Draft"}
+            </span>
+            Website (Blogs)
+          </Link>
+        )}
+        {contents.map((c) => (
+          <Link
+            key={c.id}
+            href={
+              c.publishedUrl
+                ? c.publishedUrl
+                : `/organic/bounty/${bountyId}/hunt#content-${c.platform}`
+            }
+            target={c.publishedUrl ? "_blank" : undefined}
+            rel={c.publishedUrl ? "noreferrer" : undefined}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--glass-border)] bg-[var(--glass)]/80 px-2.5 py-1.5 text-[10px] font-semibold text-foreground hover:border-[var(--sibling-primary)]/40 transition-all"
+          >
+            <span className={`rounded-full border px-1.5 py-0.5 text-[9px] ${contentStatusBadge(c.status)}`}>
+              {c.status.charAt(0) + c.status.slice(1).toLowerCase()}
+            </span>
+            {platformLabel(c.platform as BountySpreadPlatform)}
+          </Link>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ── Skeleton loader ───────────────────────────────────────────────────────────
 
 function BountySkeleton() {
@@ -188,10 +324,13 @@ export function BountyPagesClient() {
     const matchSearch =
       !q ||
       b.query.toLowerCase().includes(q) ||
-      (b.aeoPage?.title ?? "").toLowerCase().includes(q) ||
+      getBountyDisplayTitle(b).toLowerCase().includes(q) ||
       b.id.toLowerCase().includes(q);
     return matchStatus && matchSearch;
   });
+
+  const queryGroups = groupBountiesByQuery(displayed);
+  const allQueryGroups = groupBountiesByQuery(bounties);
 
   const statuses = Array.from(new Set(bounties.map((b) => b.status?.toUpperCase()).filter(Boolean)));
 
@@ -254,7 +393,8 @@ export function BountyPagesClient() {
           </div>
           <h1 className="text-xl font-semibold text-foreground font-heading">Generated Pages</h1>
           <p className="text-xs text-muted-foreground mt-0.5">
-            {bounties.length} page{bounties.length !== 1 ? "s" : ""} generated from bounty hunts
+            {allQueryGroups.length} quer{allQueryGroups.length === 1 ? "y" : "ies"} ·{" "}
+            {bounties.length} hunt{bounties.length !== 1 ? "s" : ""}
           </p>
         </div>
 
@@ -324,7 +464,7 @@ export function BountyPagesClient() {
 
           {/* Count */}
           <span className="w-full text-[11px] text-muted-foreground tabular-nums sm:ml-auto sm:w-auto">
-            {displayed.length} of {bounties.length}
+            {queryGroups.length} quer{queryGroups.length === 1 ? "y" : "ies"} · {displayed.length} hunt{displayed.length !== 1 ? "s" : ""}
           </span>
         </div>
       )}
@@ -343,117 +483,142 @@ export function BountyPagesClient() {
             <p className="text-xs text-muted-foreground mt-1 max-w-xs">Use the Bounty section to run hunts — pages will appear here once generated.</p>
           </div>
         </div>
-      ) : displayed.length === 0 ? (
+      ) : queryGroups.length === 0 ? (
         <div className="mt-8 flex flex-col items-center gap-3 text-center py-12">
           <p className="text-sm text-muted-foreground">No pages match your filters.</p>
           <button type="button" onClick={() => { setSearch(""); setFilterStatus("ALL"); }} className="text-[11px] text-[var(--sibling-primary)] hover:underline">Clear filters</button>
         </div>
       ) : (
 
-        /* ── Card grid ─────────────────────────────────────────────────── */
-        <div className="space-y-3">
-          {displayed.map((b) => {
-            const page = b.aeoPage;
-            const sm = statusMeta(b.status);
-            const dm = difficultyMeta(b.difficulty);
+        /* ── Grouped by query ─────────────────────────────────────────── */
+        <div className="space-y-4">
+          {queryGroups.map((group) => {
+            const gm = groupStatusMeta(group.bounties);
+            const maxConfidence = Math.max(...group.bounties.map((b) => b.confidence));
+            const huntCount = group.bounties.length;
+
             return (
               <div
-                key={b.id}
-                className={`glass-card rounded-xl border border-[var(--glass-border)] border-l-4 overflow-hidden ${sm.bar}`}
+                key={group.query.toLowerCase()}
+                className={`glass-card rounded-xl border border-[var(--glass-border)] border-l-4 overflow-hidden ${gm.bar}`}
               >
-                {/* ── Top section ── */}
-                <div className="p-5 flex flex-col gap-4">
-
-                  {/* Row 1: title + confidence ring */}
+                <div className="border-b border-[var(--glass-border)]/50 bg-[var(--glass)]/25 px-5 py-4">
                   <div className="flex items-start gap-4 justify-between">
                     <div className="min-w-0 flex-1">
-                      <h2 className="text-sm font-semibold text-foreground leading-snug">
-                        {page?.title ?? "(Untitled AEO page)"}
-                      </h2>
-                      <div className="mt-1 flex items-center gap-1.5">
-                        <span className="font-mono text-[10px] text-muted-foreground/60 bg-[var(--glass-border)]/30 px-1.5 py-0.5 rounded">
-                          {b.id}
-                        </span>
-                        {page?.publishedAt && (
-                          <span className="text-[10px] text-muted-foreground/60">
-                            · {new Date(page.publishedAt).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
-                          </span>
-                        )}
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--sibling-primary)]/70 mb-1.5">
+                        Query
+                      </p>
+                      <h2 className="text-sm font-semibold text-foreground leading-snug">{group.query}</h2>
+                      <p className="mt-1.5 text-[10px] text-muted-foreground">
+                        {huntCount} hunt{huntCount !== 1 ? "s" : ""} ·{" "}
+                        {group.bounties.reduce((n, b) => n + (b.contents?.length ?? 0) + (b.aeoPage ? 1 : 0), 0)}{" "}
+                        platform
+                        {group.bounties.reduce((n, b) => n + (b.contents?.length ?? 0) + (b.aeoPage ? 1 : 0), 0) !== 1
+                          ? "s"
+                          : ""}
+                      </p>
+                    </div>
+                    <ConfidenceRing value={maxConfidence} />
+                  </div>
+                </div>
+
+                <div className="divide-y divide-[var(--glass-border)]/50">
+                  {group.bounties.map((b) => {
+                    const page = b.aeoPage;
+                    const contents = b.contents ?? [];
+                    const sm = statusMeta(b.status);
+                    const dm = difficultyMeta(b.difficulty);
+
+                    return (
+                      <div key={b.id} className="bg-[var(--glass)]/10">
+                        <div className="p-5 flex flex-col gap-4">
+                          <div className="flex items-start gap-4 justify-between">
+                            <div className="min-w-0 flex-1">
+                              <h3 className="text-sm font-medium text-foreground leading-snug">
+                                {getBountyDisplayTitle(b)}
+                              </h3>
+                              <div className="mt-1 flex items-center gap-1.5">
+                                <span className="font-mono text-[10px] text-muted-foreground/60 bg-[var(--glass-border)]/30 px-1.5 py-0.5 rounded">
+                                  {b.id}
+                                </span>
+                                {page?.publishedAt && (
+                                  <span className="text-[10px] text-muted-foreground/60">
+                                    ·{" "}
+                                    {new Date(page.publishedAt).toLocaleDateString(undefined, {
+                                      month: "short",
+                                      day: "numeric",
+                                      year: "numeric",
+                                    })}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            <ConfidenceRing value={b.confidence} />
+                          </div>
+
+                          <div className="flex min-w-0 flex-wrap items-center gap-2">
+                            <span className={`inline-flex items-center gap-1.5 text-[11px] font-semibold rounded-full border px-2.5 py-1 ${sm.badge}`}>
+                              <span className={`w-1.5 h-1.5 rounded-full ${sm.dot}`} />
+                              {b.status.charAt(0) + b.status.slice(1).toLowerCase()}
+                            </span>
+                            <span className={`text-[11px] font-semibold rounded-full border px-2.5 py-1 ${dm.badge}`}>
+                              {b.difficulty.charAt(0) + b.difficulty.slice(1).toLowerCase()}
+                            </span>
+                            {page?.pageType && (
+                              <span className="text-[11px] font-medium rounded-full border border-[var(--glass-border)] bg-[var(--glass)]/70 px-2.5 py-1 text-muted-foreground">
+                                {page.pageType.replace(/_/g, " ")}
+                              </span>
+                            )}
+                            {page?.locale && (
+                              <span className="text-[11px] font-medium rounded-full border border-[var(--glass-border)] bg-[var(--glass)]/70 px-2.5 py-1 text-muted-foreground uppercase tracking-wider">
+                                {page.locale}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        <DistributionRow bountyId={b.id} page={page} contents={contents} />
+
+                        <div className="border-t border-[var(--glass-border)]/50 bg-[var(--glass)]/30 px-5 py-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Link
+                              href={`/organic/bounty/${b.id}/hunt`}
+                              className="glass-button-primary inline-flex items-center gap-1.5 text-[11px] font-semibold py-1.5 px-3.5 active:scale-[0.98] transition-all"
+                            >
+                              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                <polygon points="5 3 19 12 5 21 5 3"/>
+                              </svg>
+                              View generated hunt
+                            </Link>
+
+                            {page?.canonicalUrl && (
+                              <a
+                                href={page.canonicalUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--glass-border)] bg-[var(--glass)]/80 px-3.5 py-1.5 text-[11px] font-semibold text-foreground hover:border-[var(--sibling-primary)]/40 hover:bg-[var(--glass-hover)] active:scale-[0.98] transition-all"
+                              >
+                                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                  <path d="M15 3h6v6M10 14 21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                                </svg>
+                                Open canonical URL
+                              </a>
+                            )}
+                          </div>
+
+                          {page?.canonicalUrl && (
+                            <div className="flex min-w-0 w-full items-center gap-2 sm:flex-1">
+                              <code className="min-w-0 flex-1 truncate text-[10px] font-mono text-muted-foreground/60">
+                                {page.canonicalUrl}
+                              </code>
+                              <CopyButton text={page.canonicalUrl} />
+                            </div>
+                          )}
+                        </div>
                       </div>
-                    </div>
-
-                    <ConfidenceRing value={b.confidence} />
-                  </div>
-
-                  {/* Row 2: query callout */}
-                  <div className="rounded-lg border-l-2 border-[var(--sibling-primary)]/40 bg-[var(--sibling-primary)]/5 px-3 py-2.5">
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--sibling-primary)]/70 mb-1">Query</p>
-                    <p className="text-xs text-foreground/85 leading-relaxed">{b.query}</p>
-                  </div>
-
-                  {/* Row 3: badges */}
-                  <div className="flex min-w-0 flex-wrap items-center gap-2">
-                    <span className={`inline-flex items-center gap-1.5 text-[11px] font-semibold rounded-full border px-2.5 py-1 ${sm.badge}`}>
-                      <span className={`w-1.5 h-1.5 rounded-full ${sm.dot}`} />
-                      {b.status.charAt(0) + b.status.slice(1).toLowerCase()}
-                    </span>
-                    <span className={`text-[11px] font-semibold rounded-full border px-2.5 py-1 ${dm.badge}`}>
-                      {b.difficulty.charAt(0) + b.difficulty.slice(1).toLowerCase()}
-                    </span>
-                    {page?.pageType && (
-                      <span className="text-[11px] font-medium rounded-full border border-[var(--glass-border)] bg-[var(--glass)]/70 px-2.5 py-1 text-muted-foreground">
-                        {page.pageType.replace(/_/g, " ")}
-                      </span>
-                    )}
-                    {page?.locale && (
-                      <span className="text-[11px] font-medium rounded-full border border-[var(--glass-border)] bg-[var(--glass)]/70 px-2.5 py-1 text-muted-foreground uppercase tracking-wider">
-                        {page.locale}
-                      </span>
-                    )}
-                    <span className="text-[10px] text-muted-foreground tabular-nums sm:ml-auto">
-                      confidence {Math.round(b.confidence)}
-                    </span>
-                  </div>
+                    );
+                  })}
                 </div>
-
-                {/* ── Bottom action bar ── */}
-                <div className="border-t border-[var(--glass-border)]/50 bg-[var(--glass)]/30 px-5 py-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Link
-                      href={`/organic/bounty/${b.id}/hunt`}
-                      className="glass-button-primary inline-flex items-center gap-1.5 text-[11px] font-semibold py-1.5 px-3.5 active:scale-[0.98] transition-all"
-                    >
-                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                        <polygon points="5 3 19 12 5 21 5 3"/>
-                      </svg>
-                      View generated hunt
-                    </Link>
-
-                    {page?.canonicalUrl && (
-                      <a
-                        href={page.canonicalUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--glass-border)] bg-[var(--glass)]/80 px-3.5 py-1.5 text-[11px] font-semibold text-foreground hover:border-[var(--sibling-primary)]/40 hover:bg-[var(--glass-hover)] active:scale-[0.98] transition-all"
-                      >
-                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M15 3h6v6M10 14 21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
-                        </svg>
-                        Open canonical URL
-                      </a>
-                    )}
-                  </div>
-
-                  {page?.canonicalUrl && (
-                    <div className="flex min-w-0 w-full items-center gap-2 sm:flex-1">
-                      <code className="min-w-0 flex-1 truncate text-[10px] font-mono text-muted-foreground/60">
-                        {page.canonicalUrl}
-                      </code>
-                      <CopyButton text={page.canonicalUrl} />
-                    </div>
-                  )}
-                </div>
-
               </div>
             );
           })}

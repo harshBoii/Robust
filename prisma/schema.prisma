@@ -69,6 +69,8 @@ model Company {
   aeoGenerationProfiles   AeoGenerationProfile[]
   aeoPages                AeoPage[]
   citationBounties        CitationBounty[]
+  bountyContents          BountyContent[]
+  socialIntegrations      SocialIntegration[]
   contentClusters         ContentCluster[]
   geoDataSources          GeoDataSource[]
   Citations               Citation[]
@@ -1423,11 +1425,14 @@ model CitationBounty {
   /// When generated content was published (e.g. AEO page go-live)
   publishedAt       DateTime?        @db.Timestamptz(3)
   aeoPageId         String?          @unique
+  /// Snapshot of platforms selected at get-cited time, e.g. ["WEBSITE_BLOG","X"]
+  spreadPlatforms   Json?
   generationContext Json             @default("{}")
   createdAt         DateTime         @default(now()) @db.Timestamptz(3)
   updatedAt         DateTime         @updatedAt @db.Timestamptz(3)
   aeoPage           AeoPage?         @relation(fields: [aeoPageId], references: [id])
   company           Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  contents          BountyContent[]
 
   @@index([companyId])
   @@index([status])
@@ -1438,7 +1443,50 @@ model CitationBounty {
   @@map("citation_bounties")
 }
 
+model BountyContent {
+  id                String               @id @default(cuid())
+  companyId         String
+  bountyId          String
+  platform          BountySpreadPlatform
+  status            BountyContentStatus  @default(DRAFT)
+  title             String?              @db.VarChar(500)
+  body              String               @db.Text
+  metadata          Json?
+  publishedUrl      String?              @db.VarChar(1000)
+  externalPostId    String?              @db.VarChar(255)
+  approvedAt        DateTime?            @db.Timestamptz(3)
+  publishedAt       DateTime?            @db.Timestamptz(3)
+  errorMessage      String?              @db.Text
+  generationContext Json?
+  createdAt         DateTime             @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime             @updatedAt @db.Timestamptz(3)
+  bounty            CitationBounty       @relation(fields: [bountyId], references: [id], onDelete: Cascade)
+  company           Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
+  @@unique([bountyId, platform])
+  @@index([companyId])
+  @@index([bountyId])
+  @@index([platform])
+  @@index([status])
+  @@map("bounty_contents")
+}
+
+model SocialIntegration {
+  id            String         @id @default(cuid())
+  companyId     String
+  provider      SocialProvider
+  accessToken   String         @db.Text
+  refreshToken  String?        @db.Text
+  accountHandle String?        @db.VarChar(255)
+  expiresAt     DateTime?      @db.Timestamptz(3)
+  createdAt     DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime       @updatedAt @db.Timestamptz(3)
+  company       Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, provider])
+  @@index([companyId])
+  @@map("social_integrations")
+}
 
 
 // ================================================================
@@ -1489,6 +1537,27 @@ enum BountyDifficulty {
 EASY
 MEDIUM
 HARD
+}
+
+enum BountySpreadPlatform {
+  WEBSITE_BLOG
+  THIRD_PARTY_BLOG
+  REDDIT
+  X
+  LINKEDIN
+}
+
+enum BountyContentStatus {
+  DRAFT
+  APPROVED
+  PUBLISHED
+  FAILED
+}
+
+enum SocialProvider {
+  X
+  LINKEDIN
+  REDDIT
 }
 
 enum GeoSourceType {

@@ -19,6 +19,7 @@ import {
   X,
   Crosshair,
   FileText,
+  Share2,
 } from 'lucide-react';
 import ThemeToggle from '@/app/components/UI/ThemeToggle';
 import ChatsHistoryList from '@/app/components/chats/ChatsHistoryList';
@@ -446,6 +447,7 @@ const SecondarySidebarContent = ({
           <SecondaryNavItem icon={SlidersHorizontal} label="Presets"          href="/manager/presets" />
           <SecondaryNavItem icon={SiMeta}            label="Meta Connection"    href="/manager/meta" />
           <SecondaryNavItem icon={SiShopify}         label="Shopify Connection" href="/manager/shopify" />
+          <SecondaryNavItem icon={Share2}            label="Social Connections" href="/manager/social" />
           <SecondaryNavItem icon={SiShopify}         label="Shop Products"      href="/shop/products" />
 
           <SectionLabel label="Report" />

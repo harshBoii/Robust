@@ -2,7 +2,7 @@
 
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { ArticleActions } from "./articleActions";
+import { HuntPageClient } from "./hunt-page-client";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -475,69 +475,129 @@ export default async function PublicBountyHuntViewerPage({
       </div>
 
       <div className="mx-auto max-w-5xl px-4 sm:px-6">
-        <div className="pt-4 sm:pt-5">
-          <ArticleActions bountyId={bounty.id} />
-        </div>
+        <HuntPageClient
+          bountyId={bounty.id}
+          query={bounty.query}
+          hasBlog={Boolean(aeoPage)}
+          blogTitle={aeoPage?.title}
+          blogChildren={
+              aeoPage ? (
+                <div className="space-y-10">
+                  <div className="flex flex-wrap items-center gap-x-5 gap-y-3 max-w-3xl">
+                    <ConfidenceRing value={bounty.confidence} />
+                    <Divider className="hidden sm:block h-8 w-px bg-[var(--glass-border)] mx-1" />
+                    <div className="flex flex-wrap gap-x-4 gap-y-2">
+                      <Chip label="Difficulty" value={bounty.difficulty} />
+                      <Chip label="Locale" value={aeoPage.locale ?? "—"} />
+                      {bounty.huntedAt && (
+                        <Chip
+                          label="Hunted"
+                          value={new Date(bounty.huntedAt).toLocaleDateString(undefined, {
+                            day: "numeric",
+                            month: "short",
+                            year: "numeric",
+                          })}
+                        />
+                      )}
+                      {aeoPage.publishedAt && (
+                        <Chip
+                          label="Published"
+                          value={new Date(aeoPage.publishedAt).toLocaleDateString(undefined, {
+                            day: "numeric",
+                            month: "short",
+                            year: "numeric",
+                          })}
+                        />
+                      )}
+                    </div>
+                  </div>
 
-        {/* ── Hero Header ────────────────────────────────────────────────────── */}
-        <header className="py-12 sm:py-16 max-w-3xl">
-          {/* Eyebrow */}
-          <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[var(--sibling-accent)] mb-4">
-            {bounty.pageType ?? "Article"}
-          </p>
+                  <div className="grid grid-cols-1 lg:grid-cols-[1fr_260px] gap-8 items-start">
+                    <div className="rounded-2xl border border-[var(--glass-border)] bg-[var(--glass)]/30 p-7 sm:p-10">
+                      <MarkdownArticle markdown={aeoPage.description ?? ""} />
+                    </div>
 
-          {/* Title */}
-          <h1 className="text-4xl sm:text-5xl font-extrabold tracking-tight text-foreground font-heading leading-[1.1] mb-5">
-            {aeoPage?.title ?? "Bounty — No AEO Page Yet"}
-          </h1>
+                    <aside className="space-y-4 lg:sticky lg:top-20">
+                      <div className="rounded-2xl border border-[var(--glass-border)] bg-[var(--glass)]/30 p-5 space-y-4">
+                        <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground/70">
+                          Page Details
+                        </h3>
 
-          {/* Query / description */}
-          <p className="text-lg text-muted-foreground leading-relaxed mb-8">
-            {bounty.query}
-          </p>
+                        <div className="space-y-2.5 text-sm">
+                          <div>
+                            <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/50 mb-0.5">
+                              URL
+                            </p>
+                            <p className="font-mono text-[12px] text-foreground/80 break-all">
+                              /{aeoPage.locale}/{aeoPage.slug}
+                            </p>
+                          </div>
 
-          {/* Meta row */}
-          <div className="flex flex-wrap items-center gap-x-5 gap-y-3">
-            <ConfidenceRing value={bounty.confidence} />
+                          <Divider />
 
-            <Divider className="hidden sm:block h-8 w-px bg-[var(--glass-border)] mx-1" />
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground text-xs">Page type</span>
+                            <span className="text-xs font-semibold text-foreground/80">
+                              {aeoPage.pageType}
+                            </span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground text-xs">Status</span>
+                            <StatusBadge status={aeoPage.status} />
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground text-xs">Locale</span>
+                            <span className="text-xs font-semibold text-foreground/80">
+                              {aeoPage.locale}
+                            </span>
+                          </div>
+                        </div>
 
-            <div className="flex flex-wrap gap-x-4 gap-y-2">
-              <Chip label="Difficulty" value={bounty.difficulty} />
-              <Chip label="Locale" value={aeoPage?.locale ?? "—"} />
-              {bounty.huntedAt && (
-                <Chip
-                  label="Hunted"
-                  value={new Date(bounty.huntedAt).toLocaleDateString(undefined, {
-                    day: "numeric",
-                    month: "short",
-                    year: "numeric",
-                  })}
-                />
-              )}
-              {aeoPage?.publishedAt && (
-                <Chip
-                  label="Published"
-                  value={new Date(aeoPage.publishedAt).toLocaleDateString(undefined, {
-                    day: "numeric",
-                    month: "short",
-                    year: "numeric",
-                  })}
-                />
-              )}
-            </div>
-          </div>
+                        {aeoPage.canonicalUrl && (
+                          <>
+                            <Divider />
+                            <div>
+                              <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/50 mb-1">
+                                Canonical URL
+                              </p>
+                              <a
+                                href={aeoPage.canonicalUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-[11px] font-mono text-foreground/70 hover:text-foreground underline underline-offset-2 break-all"
+                              >
+                                {aeoPage.canonicalUrl}
+                              </a>
+                            </div>
+                          </>
+                        )}
+                      </div>
 
-          {/* Bounty ID */}
-          <p className="mt-5 text-[11px] font-mono text-muted-foreground/50">
-            ID: {bounty.id}
-          </p>
-        </header>
+                      {(aeoPage.seoTitle || aeoPage.seoDescription) && (
+                        <div className="rounded-2xl border border-[var(--glass-border)] bg-[var(--glass)]/30 p-5 space-y-3">
+                          <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground/70">
+                            SEO Preview
+                          </h3>
+                          {aeoPage.seoTitle && (
+                            <p className="text-sm font-semibold text-[var(--sibling-primary)] leading-snug">
+                              {aeoPage.seoTitle}
+                            </p>
+                          )}
+                          {aeoPage.seoDescription && (
+                            <p className="text-xs text-muted-foreground leading-relaxed">
+                              {aeoPage.seoDescription}
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </aside>
+                  </div>
+                </div>
+              ) : undefined
+          }
+        />
 
-        <Divider />
-
-        {/* ── Main content ───────────────────────────────────────────────────── */}
-        <main className="py-10">
+        <main className="pb-10">
           {!aeoPage ? (
             /* ── Empty state ─────────────────────────────────────────────────── */
             <div className="flex flex-col items-center justify-center rounded-3xl border border-dashed border-[var(--glass-border)] bg-[var(--glass)]/20 py-20 px-8 text-center">
@@ -551,138 +611,25 @@ export default async function PublicBountyHuntViewerPage({
               </p>
             </div>
           ) : (
-            <div className="space-y-10">
-              {/* ── Two-column layout ─────────────────────────────────────────── */}
-              <div className="grid grid-cols-1 lg:grid-cols-[1fr_260px] gap-8 items-start">
-                {/* Article body */}
-                <div className="rounded-2xl border border-[var(--glass-border)] bg-[var(--glass)]/30 p-7 sm:p-10">
-                  <MarkdownArticle markdown={aeoPage.description ?? ""} />
-                </div>
-
-                {/* Side panel */}
-                <aside className="space-y-4 lg:sticky lg:top-20">
-                  <div className="rounded-2xl border border-[var(--glass-border)] bg-[var(--glass)]/30 p-5 space-y-4">
-                    <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground/70">
-                      Page Details
-                    </h3>
-
-                    <div className="space-y-2.5 text-sm">
-                      <div>
-                        <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/50 mb-0.5">
-                          URL
-                        </p>
-                        <p className="font-mono text-[12px] text-foreground/80 break-all">
-                          /{aeoPage.locale}/{aeoPage.slug}
-                        </p>
-                      </div>
-
-                      <Divider />
-
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground text-xs">Page type</span>
-                        <span className="text-xs font-semibold text-foreground/80">
-                          {aeoPage.pageType}
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground text-xs">Status</span>
-                        <StatusBadge status={aeoPage.status} />
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground text-xs">Locale</span>
-                        <span className="text-xs font-semibold text-foreground/80">
-                          {aeoPage.locale}
-                        </span>
-                      </div>
-                    </div>
-
-                    {aeoPage.canonicalUrl && (
-                      <>
-                        <Divider />
-                        <div>
-                          <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/50 mb-1">
-                            Canonical URL
-                          </p>
-                          <a
-                            href={aeoPage.canonicalUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-[11px] font-mono text-foreground/70 hover:text-foreground underline underline-offset-2 break-all"
-                          >
-                            {aeoPage.canonicalUrl}
-                          </a>
-                        </div>
-                      </>
-                    )}
-                  </div>
-
-                  {/* SEO panel */}
-                  {(aeoPage.seoTitle || aeoPage.seoDescription) && (
-                    <div className="rounded-2xl border border-[var(--glass-border)] bg-[var(--glass)]/30 p-5 space-y-3">
-                      <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground/70">
-                        SEO Preview
-                      </h3>
-                      {aeoPage.seoTitle && (
-                        <p className="text-sm font-semibold text-[var(--sibling-primary)] leading-snug">
-                          {aeoPage.seoTitle}
-                        </p>
-                      )}
-                      {aeoPage.seoDescription && (
-                        <p className="text-xs text-muted-foreground leading-relaxed">
-                          {aeoPage.seoDescription}
-                        </p>
-                      )}
-                    </div>
-                  )}
-                </aside>
+            <section>
+              <div className="mb-6">
+                <h2 className="text-xl font-bold text-foreground font-heading">Article Payload</h2>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Inspect every structured block generated for this bounty, along with the inputs
+                  used during generation.
+                </p>
+                <p className="mt-2 text-[11px] font-mono text-muted-foreground/50">ID: {bounty.id}</p>
               </div>
 
-              {/* ── Payload section ────────────────────────────────────────────── */}
-              <section>
-                <div className="mb-6">
-                  <h2 className="text-xl font-bold text-foreground font-heading">
-                    Article Payload
-                  </h2>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    Inspect every structured block generated for this bounty, along
-                    with the inputs used during generation.
-                  </p>
-                </div>
-
-                <div className="space-y-3">
-                  <JsonBlock
-                    icon="📝"
-                    label="Summary"
-                    value={aeoPage.summary ?? {}}
-                  />
-                  <JsonBlock
-                    icon="📌"
-                    label="Facts"
-                    value={aeoPage.facts ?? []}
-                  />
-                  <JsonBlock
-                    icon="❓"
-                    label="FAQ"
-                    value={aeoPage.faq ?? []}
-                  />
-                  <JsonBlock
-                    icon="💬"
-                    label="Claims"
-                    value={aeoPage.claims ?? []}
-                  />
-                  <JsonBlock
-                    icon="🕸️"
-                    label="Knowledge Graph (JSON-LD)"
-                    value={aeoPage.knowledgeGraph ?? {}}
-                  />
-                  <JsonBlock
-                    icon="⚙️"
-                    label="Generation Context (input)"
-                    value={bounty.generationContext ?? {}}
-                  />
-                </div>
-              </section>
-            </div>
+              <div className="space-y-3">
+                <JsonBlock icon="📝" label="Summary" value={aeoPage.summary ?? {}} />
+                <JsonBlock icon="📌" label="Facts" value={aeoPage.facts ?? []} />
+                <JsonBlock icon="❓" label="FAQ" value={aeoPage.faq ?? []} />
+                <JsonBlock icon="💬" label="Claims" value={aeoPage.claims ?? []} />
+                <JsonBlock icon="🕸️" label="Knowledge Graph (JSON-LD)" value={aeoPage.knowledgeGraph ?? {}} />
+                <JsonBlock icon="⚙️" label="Generation Context (input)" value={bounty.generationContext ?? {}} />
+              </div>
+            </section>
           )}
         </main>
       </div>
