@@ -233,10 +233,7 @@ export default function IntegrationPageClient() {
     }
   }, []);
 
-  const closeModal = () => {
-    setModal(null);
-    void bootstrapZernio();
-  };
+  const dismissModal = () => setModal(null);
 
   const socialConnected = (provider: SocialProvider) =>
     socialProviders.find((p) => p.provider === provider)?.connected ?? false;
@@ -311,14 +308,14 @@ export default function IntegrationPageClient() {
 
         <div className="mt-4 flex items-center gap-2 text-[11px] text-muted-foreground">
           <Share2 className="h-3 w-3" />
-          Social connections are powered by Zernio and used to publish bounty content.
+          Social connections are used to publish ads and bounty content.
         </div>
       </div>
 
-      {modal === 'meta' ? <MetaConnectionModal onClose={closeModal} /> : null}
-      {modal === 'shopify' ? <ShopifyConnectionModal onClose={closeModal} /> : null}
+      {modal === 'meta' ? <MetaConnectionModal onClose={dismissModal} /> : null}
+      {modal === 'shopify' ? <ShopifyConnectionModal onClose={dismissModal} /> : null}
       {modal === 'X' || modal === 'LINKEDIN' || modal === 'REDDIT' ? (
-        <SocialConnectionModal provider={modal} onClose={closeModal} />
+        <SocialConnectionModal provider={modal} onClose={dismissModal} />
       ) : null}
     </div>
   );

@@ -44,7 +44,13 @@ type ShopifyAppResponse = {
   envConfigured: boolean;
 };
 
-export default function ManagerShopifyClient({ embedded = false }: { embedded?: boolean }) {
+export default function ManagerShopifyClient({
+  embedded = false,
+  onConnectClick,
+}: {
+  embedded?: boolean;
+  onConnectClick?: () => void;
+}) {
   const [expectedShopDomain, setExpectedShopDomain] = useState('');
   const [connectUrl, setConnectUrl] = useState('');
   const [connected, setConnected] = useState(false);
@@ -300,6 +306,9 @@ export default function ManagerShopifyClient({ embedded = false }: { embedded?: 
               !shopForInstall || !envConfigured ? 'pointer-events-none opacity-50' : ''
             }`}
             aria-disabled={!shopForInstall || !envConfigured}
+            onClick={() => {
+              if (shopForInstall && envConfigured) onConnectClick?.();
+            }}
           >
             <SiShopify className="h-4 w-4" />
             Connect (OAuth, step 2)

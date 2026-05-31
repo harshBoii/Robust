@@ -10,6 +10,11 @@ export type PublishAvailability = {
   reason?: string;
 };
 
+export type RedditPublishOptions = {
+  subreddit: string;
+  flairId?: string;
+};
+
 export interface PublishAdapter {
   platform: BountySpreadPlatform;
   isAvailable(companyId: string): Promise<PublishAvailability>;
@@ -18,5 +23,6 @@ export interface PublishAdapter {
     bountyId: string;
     content: BountyContent;
     aeoPage?: AeoPage | null;
+    reddit?: RedditPublishOptions;
   }): Promise<PublishResult>;
 }

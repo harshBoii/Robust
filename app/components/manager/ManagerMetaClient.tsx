@@ -50,7 +50,13 @@ async function json<T>(res: Response): Promise<T> {
   return data;
 }
 
-export default function ManagerMetaClient({ embedded = false }: { embedded?: boolean }) {
+export default function ManagerMetaClient({
+  embedded = false,
+  onConnectClick,
+}: {
+  embedded?: boolean;
+  onConnectClick?: () => void;
+}) {
   const [metaIntegration, setMetaIntegration] = useState<MetaIntegration | null>(null);
   const [hasSystemToken, setHasSystemToken] = useState(false);
   const [hasMetaOAuth, setHasMetaOAuth] = useState(false);
@@ -234,7 +240,9 @@ export default function ManagerMetaClient({ embedded = false }: { embedded?: boo
             onClick={(e) => {
               if (!hasMetaOAuth) {
                 e.preventDefault();
+                return;
               }
+              onConnectClick?.();
             }}
           >
             <FacebookIcon className="h-4 w-4" />

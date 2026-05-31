@@ -14,7 +14,13 @@ export async function POST(
     return NextResponse.json({ success: false, error: "Not authenticated" }, { status: 401 });
   }
 
-  let body: { platform?: string; contentId?: string; approveAll?: boolean };
+  let body: {
+    platform?: string;
+    contentId?: string;
+    approveAll?: boolean;
+    redditSubreddit?: string;
+    redditFlairId?: string;
+  };
   try {
     body = await request.json();
   } catch {
@@ -90,11 +96,29 @@ export async function POST(
       return NextResponse.json({ success: true, data: result });
     }
 
+    const redditSubreddit =
+      typeof body.redditSubreddit === 'string' ? body.redditSubreddit.trim() : '';
+    if (resolvedPlatform === 'REDDIT' && !redditSubreddit) {
+      return NextResponse.json(
+        { success: false, error: 'Select a subreddit or your profile before publishing to Reddit' },
+        { status: 400 },
+      );
+    }
+
     const result = await publishBountyContent({
       companyId: session.companyId,
       bountyId,
       platform: resolvedPlatform!,
       contentId,
+      reddit:
+        resolvedPlatform === 'REDDIT'
+          ? {
+              subreddit: redditSubreddit,
+              ...(typeof body.redditFlairId === 'string' && body.redditFlairId.trim()
+                ? { flairId: body.redditFlairId.trim() }
+                : {}),
+            }
+          : undefined,
     });
     return NextResponse.json({ success: true, data: result });
   } catch (err) {

@@ -30,11 +30,13 @@ async function json<T>(res: Response): Promise<T> {
 type SocialProviderConnectionPanelProps = {
   provider: SocialProvider;
   embedded?: boolean;
+  onConnectClick?: () => void;
 };
 
 export default function SocialProviderConnectionPanel({
   provider,
   embedded = false,
+  onConnectClick,
 }: SocialProviderConnectionPanelProps) {
   const [status, setStatus] = useState<ProviderStatus | null>(null);
   const [loading, setLoading] = useState(true);
@@ -138,6 +140,9 @@ export default function SocialProviderConnectionPanel({
                     !status.oauthConfigured ? 'pointer-events-none opacity-50' : ''
                   }`}
                   aria-disabled={!status.oauthConfigured}
+                  onClick={() => {
+                    if (status.oauthConfigured) onConnectClick?.();
+                  }}
                 >
                   Connect
                 </a>

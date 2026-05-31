@@ -36,10 +36,17 @@ function IntegrationModalShell({ title, onClose, children }: IntegrationModalShe
   );
 }
 
+function closeModalAfterConnect(onClose: () => void) {
+  window.setTimeout(onClose, 2000);
+}
+
 export function MetaConnectionModal({ onClose }: { onClose: () => void }) {
   return (
     <IntegrationModalShell title="Meta connection" onClose={onClose}>
-      <ManagerMetaClient embedded />
+      <ManagerMetaClient
+        embedded
+        onConnectClick={() => closeModalAfterConnect(onClose)}
+      />
     </IntegrationModalShell>
   );
 }
@@ -47,7 +54,10 @@ export function MetaConnectionModal({ onClose }: { onClose: () => void }) {
 export function ShopifyConnectionModal({ onClose }: { onClose: () => void }) {
   return (
     <IntegrationModalShell title="Shopify connection" onClose={onClose}>
-      <ManagerShopifyClient embedded />
+      <ManagerShopifyClient
+        embedded
+        onConnectClick={() => closeModalAfterConnect(onClose)}
+      />
     </IntegrationModalShell>
   );
 }
@@ -61,7 +71,11 @@ export function SocialConnectionModal({
 }) {
   return (
     <IntegrationModalShell title={`${socialProviderLabel(provider)} connection`} onClose={onClose}>
-      <SocialProviderConnectionPanel provider={provider} embedded />
+      <SocialProviderConnectionPanel
+        provider={provider}
+        embedded
+        onConnectClick={() => closeModalAfterConnect(onClose)}
+      />
     </IntegrationModalShell>
   );
 }

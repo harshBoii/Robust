@@ -3,7 +3,11 @@ import type { BountySpreadPlatform } from "@/app/generated/prisma/client";
 import { approveBountyToShopify } from "@/lib/geo/bounty/approveBountyToShopify";
 import { minimalMarkdownToHtml } from "@/lib/geo/bounty/markdownToHtmlForPublish";
 import { wpSafeFetch } from "@/lib/wordpress/client";
-import type { PublishAdapter, PublishResult } from "@/lib/geo/bounty/publish/types";
+import type {
+  PublishAdapter,
+  PublishResult,
+  RedditPublishOptions,
+} from "@/lib/geo/bounty/publish/types";
 import { publishViaZernio } from "@/lib/zernio/publish";
 
 async function getSocialIntegration(companyId: string, provider: "X" | "LINKEDIN" | "REDDIT") {
@@ -146,6 +150,7 @@ function createSocialAdapter(
         provider,
         contentBody: opts.content.body,
         title: opts.content.title,
+        reddit: opts.reddit,
       });
     },
   };
@@ -170,6 +175,7 @@ export async function publishBountyContent(opts: {
   bountyId: string;
   platform: BountySpreadPlatform;
   contentId?: string;
+  reddit?: RedditPublishOptions;
 }): Promise<PublishResult & { contentId: string }> {
   const bounty = await prisma.citationBounty.findFirst({
     where: { id: opts.bountyId, companyId: opts.companyId },
@@ -237,6 +243,7 @@ export async function publishBountyContent(opts: {
       bountyId: opts.bountyId,
       content,
       aeoPage: bounty.aeoPage,
+      reddit: opts.platform === 'REDDIT' ? opts.reddit : undefined,
     });
 
     await prisma.bountyContent.update({

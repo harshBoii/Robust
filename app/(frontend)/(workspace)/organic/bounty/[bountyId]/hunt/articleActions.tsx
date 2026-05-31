@@ -3,6 +3,10 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { BountySpreadPlatform } from "@/app/generated/prisma/client";
+import {
+  RedditPublishTargetModal,
+  type RedditPublishTargetChoice,
+} from "@/app/components/geo/bounty/reddit-publish-target-modal";
 import { publishPlatformLabel } from "@/lib/geo/bounty/spread-platforms";
 
 type PublishTargets = {
@@ -54,6 +58,7 @@ export function ArticleActions({
   const [loading, setLoading] = useState(true);
   const [targetsError, setTargetsError] = useState<string | null>(null);
   const [blogDestination, setBlogDestination] = useState<"shopify" | "wordpress_wc">("shopify");
+  const [redditModalOpen, setRedditModalOpen] = useState(false);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -134,9 +139,50 @@ export function ArticleActions({
     isBlog ? (blogPublished ? "PUBLISHED" : "DRAFT") : activeContent?.status
   );
 
+  const publishSocial = async (reddit?: RedditPublishTargetChoice) => {
+    if (!activeContent) {
+      setMessage("No content found for this platform.");
+      return;
+    }
+    const res = await fetch(`/api/geo/bounty/${encodeURIComponent(bountyId)}/approve-content`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({
+        platform: selectedPlatform,
+        contentId: activeContent.id,
+        ...(reddit
+          ? {
+              redditSubreddit: reddit.name,
+              ...(reddit.flairId ? { redditFlairId: reddit.flairId } : {}),
+            }
+          : {}),
+      }),
+    });
+    const json = await res.json().catch(() => null);
+    if (!res.ok) {
+      setMessage(json?.error ?? `Failed to publish to ${publishPlatformLabel(selectedPlatform)}`);
+      return;
+    }
+    const url = json?.data?.publishedUrl;
+    setMessage(
+      url
+        ? `Published to ${publishPlatformLabel(selectedPlatform)}: ${url}`
+        : `Published to ${publishPlatformLabel(selectedPlatform)} successfully.`,
+    );
+    onPublished?.();
+    await loadData();
+  };
+
   const onApprove = async () => {
-    setApproveLoading(true);
     setMessage(null);
+
+    if (!isBlog && selectedPlatform === "REDDIT") {
+      setRedditModalOpen(true);
+      return;
+    }
+
+    setApproveLoading(true);
 
     try {
       if (isBlog) {
@@ -158,34 +204,8 @@ export function ArticleActions({
         setMessage("Published blog successfully.");
         setBlogPublished(true);
       } else {
-        if (!activeContent) {
-          setMessage("No content found for this platform.");
-          return;
-        }
-        const res = await fetch(`/api/geo/bounty/${encodeURIComponent(bountyId)}/approve-content`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify({
-            platform: selectedPlatform,
-            contentId: activeContent.id,
-          }),
-        });
-        const json = await res.json().catch(() => null);
-        if (!res.ok) {
-          setMessage(json?.error ?? `Failed to publish to ${publishPlatformLabel(selectedPlatform)}`);
-          return;
-        }
-        const url = json?.data?.publishedUrl;
-        setMessage(
-          url
-            ? `Published to ${publishPlatformLabel(selectedPlatform)}: ${url}`
-            : `Published to ${publishPlatformLabel(selectedPlatform)} successfully.`
-        );
+        await publishSocial();
       }
-
-      onPublished?.();
-      await loadData();
     } catch (e) {
       setMessage(e instanceof Error ? e.message : "Publish failed.");
     } finally {
@@ -344,6 +364,25 @@ export function ArticleActions({
       ) : null}
 
       {message ? <div className="text-xs text-foreground">{message}</div> : null}
+
+      <RedditPublishTargetModal
+        open={redditModalOpen}
+        publishing={approveLoading}
+        onClose={() => {
+          if (!approveLoading) setRedditModalOpen(false);
+        }}
+        onConfirm={async (reddit) => {
+          setApproveLoading(true);
+          try {
+            await publishSocial(reddit);
+            setRedditModalOpen(false);
+          } catch (e) {
+            setMessage(e instanceof Error ? e.message : "Publish failed.");
+          } finally {
+            setApproveLoading(false);
+          }
+        }}
+      />
     </section>
   );
 }

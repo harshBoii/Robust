@@ -20,6 +20,7 @@ export async function publishViaZernio(opts: {
   provider: SocialProvider;
   contentBody: string;
   title?: string | null;
+  reddit?: { subreddit: string; flairId?: string };
 }): Promise<PublishResult> {
   const integration = await prisma.socialIntegration.findUnique({
     where: {
@@ -36,11 +37,27 @@ export async function publishViaZernio(opts: {
   const platform = toZernioPlatform(opts.provider);
   const content = formatSocialContent(opts.title, opts.contentBody, opts.provider);
 
+  const platformSpecificData =
+    opts.provider === 'REDDIT' && opts.reddit?.subreddit
+      ? {
+          subreddit: opts.reddit.subreddit,
+          ...(opts.title?.trim() ? { title: opts.title.trim() } : {}),
+          ...(opts.reddit.flairId ? { flairId: opts.reddit.flairId } : {}),
+        }
+      : undefined;
+
   const { data, error } = await zernio.posts.createPost({
     body: {
       content,
+      ...(opts.provider === 'REDDIT' && opts.title?.trim() ? { title: opts.title.trim() } : {}),
       publishNow: true,
-      platforms: [{ platform, accountId: integration.zernioAccountId }],
+      platforms: [
+        {
+          platform,
+          accountId: integration.zernioAccountId,
+          ...(platformSpecificData ? { platformSpecificData } : {}),
+        },
+      ],
     },
   });
 
