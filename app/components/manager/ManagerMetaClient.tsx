@@ -50,7 +50,7 @@ async function json<T>(res: Response): Promise<T> {
   return data;
 }
 
-export default function ManagerMetaClient() {
+export default function ManagerMetaClient({ embedded = false }: { embedded?: boolean }) {
   const [metaIntegration, setMetaIntegration] = useState<MetaIntegration | null>(null);
   const [hasSystemToken, setHasSystemToken] = useState(false);
   const [hasMetaOAuth, setHasMetaOAuth] = useState(false);
@@ -163,17 +163,25 @@ export default function ManagerMetaClient() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h1 className="font-heading text-3xl font-semibold tracking-tight">Meta connection</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Connect your Facebook account and choose the ad account and page for publishing.
-          </p>
+      {!embedded ? (
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h1 className="font-heading text-3xl font-semibold tracking-tight">Meta connection</h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Connect your Facebook account and choose the ad account and page for publishing.
+            </p>
+          </div>
+          <button className="glass-button px-3 py-2 text-sm" type="button" onClick={load} disabled={loading}>
+            {loading ? 'Loading…' : 'Reload'}
+          </button>
         </div>
-        <button className="glass-button px-3 py-2 text-sm" type="button" onClick={load} disabled={loading}>
-          {loading ? 'Loading…' : 'Reload'}
-        </button>
-      </div>
+      ) : (
+        <div className="flex items-center justify-end">
+          <button className="glass-button px-3 py-1.5 text-xs" type="button" onClick={load} disabled={loading}>
+            {loading ? 'Loading…' : 'Reload'}
+          </button>
+        </div>
+      )}
 
       {error ? (
         <div className="glass-card border border-red-500/30 p-4 text-sm text-red-700 dark:text-red-300">

@@ -12,7 +12,7 @@ const META_OAUTH_DIALOG = "https://www.facebook.com/v21.0/dialog/oauth";
 export async function GET(req: NextRequest) {
   if (!isMetaOAuthConfigured()) {
     return NextResponse.redirect(
-      new URL("/manager/meta?meta_oauth=config", req.url),
+      new URL("/profile/integration?meta_oauth=config", req.url),
     );
   }
 

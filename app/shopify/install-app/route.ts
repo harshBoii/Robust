@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
 
   if (!installUrl) {
     return NextResponse.redirect(
-      new URL("/manager/shopify?shopify_error=no_install_url", request.url),
+      new URL("/profile/integration?shopify_error=no_install_url", request.url),
     );
   }
 

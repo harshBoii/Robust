@@ -21,13 +21,13 @@ export async function GET(request: NextRequest) {
   const config = await getShopifyConfig(companyIdFromDomain);
   if (!config) {
     return NextResponse.redirect(
-      new URL("/manager/shopify?shopify_error=config", request.url),
+      new URL("/profile/integration?shopify_error=config", request.url),
     );
   }
 
   if (!verifyHmacFromSearchParams(searchParams, config.apiSecret)) {
     return NextResponse.redirect(
-      new URL("/manager/shopify?shopify_error=hmac", request.url),
+      new URL("/profile/integration?shopify_error=hmac", request.url),
     );
   }
 

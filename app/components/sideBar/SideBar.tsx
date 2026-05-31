@@ -19,13 +19,13 @@ import {
   X,
   Crosshair,
   FileText,
-  Share2,
+  Plug,
+  Package,
 } from 'lucide-react';
 import ThemeToggle from '@/app/components/UI/ThemeToggle';
 import { ModalPortal } from '@/app/components/common/ModalPortal';
 import ChatsHistoryList from '@/app/components/chats/ChatsHistoryList';
 import GalleryUploadZone from '@/app/(frontend)/(workspace)/gallery/GalleryUploadZone';
-import { SiMeta, SiShopify } from 'react-icons/si';
 
 /* ============================================
    INLINE SVG ICONS
@@ -446,10 +446,6 @@ const SecondarySidebarContent = ({
           <SecondaryNavItem icon={History}           label="Ad History"       href="/manager/history" />
           <SecondaryNavItem icon={PauseCircle}       label="Auto-Pause Rules" href="/manager/rules" />
           <SecondaryNavItem icon={SlidersHorizontal} label="Presets"          href="/manager/presets" />
-          <SecondaryNavItem icon={SiMeta}            label="Meta Connection"    href="/manager/meta" />
-          <SecondaryNavItem icon={SiShopify}         label="Shopify Connection" href="/manager/shopify" />
-          <SecondaryNavItem icon={Share2}            label="Social Connections" href="/manager/social" />
-          <SecondaryNavItem icon={SiShopify}         label="Shop Products"      href="/shop/products" />
 
           <SectionLabel label="Report" />
           <SecondaryNavItem icon={BarChart3} label="Report" href="/report" />
@@ -502,6 +498,8 @@ const SecondarySidebarContent = ({
         <>
           <SectionLabel label="Profile" />
           <SecondaryNavItem icon={User} label="Overview" href="/profile" exact />
+          <SecondaryNavItem icon={Plug} label="Integrations" href="/profile/integration" />
+          <SecondaryNavItem icon={Package} label="Products" href="/profile/products" />
           <SecondaryNavItem icon={Database} label="Data Mine" href="/profile/data" />
           <SecondaryNavItem
             icon={Sparkles}

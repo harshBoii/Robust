@@ -44,7 +44,7 @@ type ShopifyAppResponse = {
   envConfigured: boolean;
 };
 
-export default function ManagerShopifyClient() {
+export default function ManagerShopifyClient({ embedded = false }: { embedded?: boolean }) {
   const [expectedShopDomain, setExpectedShopDomain] = useState('');
   const [connectUrl, setConnectUrl] = useState('');
   const [connected, setConnected] = useState(false);
@@ -163,22 +163,35 @@ export default function ManagerShopifyClient() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h1 className="font-heading text-3xl font-semibold tracking-tight">Shopify connection</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Install the app in your store, then complete OAuth to sync products.
-          </p>
+      {!embedded ? (
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h1 className="font-heading text-3xl font-semibold tracking-tight">Shopify connection</h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Install the app in your store, then complete OAuth to sync products.
+            </p>
+          </div>
+          <button
+            className="glass-button px-3 py-2 text-sm"
+            type="button"
+            onClick={load}
+            disabled={loading}
+          >
+            {loading ? 'Loading…' : 'Reload'}
+          </button>
         </div>
-        <button
-          className="glass-button px-3 py-2 text-sm"
-          type="button"
-          onClick={load}
-          disabled={loading}
-        >
-          {loading ? 'Loading…' : 'Reload'}
-        </button>
-      </div>
+      ) : (
+        <div className="flex items-center justify-end">
+          <button
+            className="glass-button px-3 py-1.5 text-xs"
+            type="button"
+            onClick={load}
+            disabled={loading}
+          >
+            {loading ? 'Loading…' : 'Reload'}
+          </button>
+        </div>
+      )}
 
       {error ? (
         <div className="glass-card border border-red-500/30 p-4 text-sm text-red-700 dark:text-red-300">

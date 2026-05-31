@@ -20,14 +20,14 @@ export async function GET(request: NextRequest) {
   const shop = normalizeShopDomain(rawShop);
   if (!shop) {
     return NextResponse.redirect(
-      new URL("/manager/shopify?shopify_error=invalid_shop", request.url),
+      new URL("/profile/integration?shopify_error=invalid_shop", request.url),
     );
   }
 
   const config = await getShopifyConfig(session.companyId);
   if (!config) {
     return NextResponse.redirect(
-      new URL("/manager/shopify?shopify_error=config", request.url),
+      new URL("/profile/integration?shopify_error=config", request.url),
     );
   }
 

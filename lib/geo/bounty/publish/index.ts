@@ -4,53 +4,13 @@ import { approveBountyToShopify } from "@/lib/geo/bounty/approveBountyToShopify"
 import { minimalMarkdownToHtml } from "@/lib/geo/bounty/markdownToHtmlForPublish";
 import { wpSafeFetch } from "@/lib/wordpress/client";
 import type { PublishAdapter, PublishResult } from "@/lib/geo/bounty/publish/types";
+import { publishViaZernio } from "@/lib/zernio/publish";
 
 async function getSocialIntegration(companyId: string, provider: "X" | "LINKEDIN" | "REDDIT") {
   return prisma.socialIntegration.findUnique({
     where: { companyId_provider: { companyId, provider } },
-    select: { accessToken: true, accountHandle: true },
+    select: { zernioAccountId: true, accountHandle: true },
   });
-}
-
-async function publishViaSocialApi(opts: {
-  companyId: string;
-  provider: "X" | "LINKEDIN" | "REDDIT";
-  contentBody: string;
-  title?: string | null;
-}): Promise<PublishResult> {
-  const integration = await getSocialIntegration(opts.companyId, opts.provider);
-  if (!integration?.accessToken?.trim()) {
-    throw new Error(`${opts.provider} not connected — link your account under Social Connections`);
-  }
-
-  const base = process.env.MICROSERVICE_URL?.trim();
-  if (!base) throw new Error("MICROSERVICE_URL is not configured");
-
-  const res = await fetch(`${base.replace(/\/$/, "")}/aeo/social/publish/${opts.provider.toLowerCase()}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      access_token: integration.accessToken,
-      account_handle: integration.accountHandle,
-      title: opts.title,
-      body: opts.contentBody,
-    }),
-  });
-
-  if (!res.ok) {
-    throw new Error(`${opts.provider} publish failed (${res.status})`);
-  }
-
-  const data = (await res.json()) as {
-    url?: string;
-    post_id?: string;
-    data?: { url?: string; post_id?: string };
-  };
-
-  return {
-    publishedUrl: data.url ?? data.data?.url ?? null,
-    externalPostId: data.post_id ?? data.data?.post_id ?? null,
-  };
 }
 
 const websiteBlogAdapter: PublishAdapter = {
@@ -174,14 +134,14 @@ function createSocialAdapter(
     platform,
     async isAvailable(companyId) {
       const integration = await getSocialIntegration(companyId, provider);
-      if (integration?.accessToken?.trim()) return { available: true };
+      if (integration?.zernioAccountId?.trim()) return { available: true };
       return {
         available: false,
-        reason: `Connect ${provider} under Social Connections`,
+        reason: `Connect ${provider} under Profile → Integrations`,
       };
     },
     async publish(opts) {
-      return publishViaSocialApi({
+      return publishViaZernio({
         companyId: opts.companyId,
         provider,
         contentBody: opts.content.body,

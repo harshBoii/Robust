@@ -71,6 +71,7 @@ model Company {
   citationBounties        CitationBounty[]
   bountyContents          BountyContent[]
   socialIntegrations      SocialIntegration[]
+  zernioProfile           ZernioProfile?
   contentClusters         ContentCluster[]
   geoDataSources          GeoDataSource[]
   Citations               Citation[]
@@ -1472,20 +1473,33 @@ model BountyContent {
 }
 
 model SocialIntegration {
-  id            String         @id @default(cuid())
-  companyId     String
-  provider      SocialProvider
-  accessToken   String         @db.Text
-  refreshToken  String?        @db.Text
-  accountHandle String?        @db.VarChar(255)
-  expiresAt     DateTime?      @db.Timestamptz(3)
-  createdAt     DateTime       @default(now()) @db.Timestamptz(3)
-  updatedAt     DateTime       @updatedAt @db.Timestamptz(3)
-  company       Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  id              String         @id @default(cuid())
+  companyId       String
+  provider        SocialProvider
+  accessToken     String?        @db.Text
+  refreshToken    String?        @db.Text
+  zernioAccountId String?        @unique @db.VarChar(255)
+  accountHandle   String?        @db.VarChar(255)
+  expiresAt       DateTime?      @db.Timestamptz(3)
+  createdAt       DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime       @updatedAt @db.Timestamptz(3)
+  company         Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   @@unique([companyId, provider])
   @@index([companyId])
   @@map("social_integrations")
+}
+
+model ZernioProfile {
+  id              String   @id @default(cuid())
+  companyId       String   @unique
+  zernioProfileId String   @unique @db.VarChar(255)
+  createdAt       DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime @updatedAt @db.Timestamptz(3)
+  company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@map("zernio_profiles")
 }
 
 

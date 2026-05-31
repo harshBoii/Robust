@@ -34,7 +34,7 @@ function formatPrice(min: string | null, max: string | null, currency: string | 
   return `${min} – ${max} ${c}`.trim();
 }
 
-export default function ShopProductsClient() {
+export default function ShopProductsClient({ embedded = false }: { embedded?: boolean }) {
   const [products, setProducts] = useState<ShopProduct[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<ShopProduct[] | null>(null);
@@ -138,27 +138,41 @@ export default function ShopProductsClient() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="font-heading text-3xl font-semibold tracking-tight">Shop products</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Products synced from Shopify. Connect in{' '}
-            <Link href="/manager/shopify" className="text-primary hover:underline">
-              Manager → Shopify
-            </Link>
-            .
-          </p>
+      {!embedded ? (
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h1 className="font-heading text-3xl font-semibold tracking-tight">Shop products</h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Products synced from Shopify. Connect in{' '}
+              <Link href="/profile/integration" className="text-primary hover:underline">
+                Profile → Integrations
+              </Link>
+              .
+            </p>
+          </div>
+          <button
+            type="button"
+            className="glass-button-primary inline-flex items-center gap-2 px-4 py-2 text-sm"
+            onClick={handleRefresh}
+            disabled={refreshing}
+          >
+            <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+            {refreshing ? 'Refreshing…' : 'Refresh feed'}
+          </button>
         </div>
-        <button
-          type="button"
-          className="glass-button-primary inline-flex items-center gap-2 px-4 py-2 text-sm"
-          onClick={handleRefresh}
-          disabled={refreshing}
-        >
-          <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
-          {refreshing ? 'Refreshing…' : 'Refresh feed'}
-        </button>
-      </div>
+      ) : (
+        <div className="flex justify-end">
+          <button
+            type="button"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-2.5 py-1.5 text-[11px] font-semibold text-primary-foreground"
+            onClick={handleRefresh}
+            disabled={refreshing}
+          >
+            <RefreshCw className={`h-3 w-3 ${refreshing ? 'animate-spin' : ''}`} />
+            {refreshing ? 'Refreshing…' : 'Refresh feed'}
+          </button>
+        </div>
+      )}
 
       {error ? (
         <div className="glass-card border border-red-500/30 p-4 text-sm text-red-700 dark:text-red-300">

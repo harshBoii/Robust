@@ -280,8 +280,8 @@ export function ArticleActions({
 
       {!isBlog && !canPublishSocial && !isPublished && (
         <p className="text-xs text-amber-600 dark:text-amber-400">
-          {socialAvailability?.reason ?? "Connect this platform under Social Connections."}{" "}
-          <Link href="/manager/social" className="text-[var(--sibling-primary)] hover:underline">
+          {socialAvailability?.reason ?? "Connect this platform under Profile → Integrations."}{" "}
+          <Link href="/profile/integration" className="text-[var(--sibling-primary)] hover:underline">
             Connect account
           </Link>
         </p>

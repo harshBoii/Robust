@@ -28,20 +28,20 @@ export async function GET(request: NextRequest) {
   const stateParam = searchParams.get("state");
 
   if (!shop || !code) {
-    const res = redirect(request, "/manager/shopify", { shopify_error: "missing_params" });
+    const res = redirect(request, "/profile/integration", { shopify_error: "missing_params" });
     clearShopifyOAuthStateOnResponse(res);
     return res;
   }
 
   const cookieState = readShopifyOAuthStateFromRequest(request);
   if (!cookieState || cookieState.shop !== shop) {
-    const res = redirect(request, "/manager/shopify", { shopify_error: "invalid_state" });
+    const res = redirect(request, "/profile/integration", { shopify_error: "invalid_state" });
     clearShopifyOAuthStateOnResponse(res);
     return res;
   }
 
   if (stateParam && stateParam !== cookieState.state) {
-    const res = redirect(request, "/manager/shopify", { shopify_error: "invalid_state" });
+    const res = redirect(request, "/profile/integration", { shopify_error: "invalid_state" });
     clearShopifyOAuthStateOnResponse(res);
     return res;
   }
@@ -55,13 +55,13 @@ export async function GET(request: NextRequest) {
 
   const config = await getShopifyConfig(session.companyId);
   if (!config) {
-    const res = redirect(request, "/manager/shopify", { shopify_error: "config" });
+    const res = redirect(request, "/profile/integration", { shopify_error: "config" });
     clearShopifyOAuthStateOnResponse(res);
     return res;
   }
 
   if (!verifyHmacFromSearchParams(searchParams, config.apiSecret)) {
-    const res = redirect(request, "/manager/shopify", { shopify_error: "hmac" });
+    const res = redirect(request, "/profile/integration", { shopify_error: "hmac" });
     clearShopifyOAuthStateOnResponse(res);
     return res;
   }
@@ -71,7 +71,7 @@ export async function GET(request: NextRequest) {
     select: { companyId: true },
   });
   if (existing && existing.companyId !== session.companyId) {
-    const res = redirect(request, "/manager/shopify", { shopify_error: "shop_taken" });
+    const res = redirect(request, "/profile/integration", { shopify_error: "shop_taken" });
     clearShopifyOAuthStateOnResponse(res);
     return res;
   }
@@ -80,7 +80,7 @@ export async function GET(request: NextRequest) {
   const accessToken = tokenData.access_token?.trim();
   if (!accessToken) {
     console.error("[shopify callback] token exchange failed", tokenData.error);
-    const res = redirect(request, "/manager/shopify", { shopify_error: "token_exchange" });
+    const res = redirect(request, "/profile/integration", { shopify_error: "token_exchange" });
     clearShopifyOAuthStateOnResponse(res);
     return res;
   }
@@ -105,7 +105,7 @@ export async function GET(request: NextRequest) {
     },
   });
 
-  const res = redirect(request, "/manager/shopify", { shopify_connected: "1" });
+  const res = redirect(request, "/profile/integration", { shopify_connected: "1" });
   clearShopifyOAuthStateOnResponse(res);
   return res;
 }

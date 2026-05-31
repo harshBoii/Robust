@@ -326,14 +326,14 @@ export default function ProfileClient({ profile }: ProfileClientProps) {
 
           <div className="flex shrink-0 items-center gap-1.5">
             <Link
-              href="/manager/meta"
+              href="/profile/integration"
               className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-2.5 py-1.5 text-[11px] font-semibold text-primary-foreground"
             >
               <SiMeta className="h-3 w-3" />
               Manage Meta
             </Link>
             <Link
-              href="/manager/shopify"
+              href="/profile/integration"
               className="inline-flex items-center gap-1.5 rounded-lg border border-black/[0.08] bg-white px-2.5 py-1.5 text-[11px] font-semibold"
             >
               <SiShopify className="h-3 w-3 text-[#5e8e3e]" />
@@ -520,7 +520,7 @@ export default function ProfileClient({ profile }: ProfileClientProps) {
           iconClassName="text-[#0081FB]"
           action={
             <Link
-              href="/manager/meta"
+              href="/profile/integration"
               className="font-ui text-[10px] font-medium text-muted-foreground hover:text-primary"
             >
               Manage
@@ -564,7 +564,7 @@ export default function ProfileClient({ profile }: ProfileClientProps) {
           ) : (
             <p className="text-[11px] text-muted-foreground">
               Not connected.{' '}
-              <Link href="/manager/meta" className="text-primary hover:underline">
+              <Link href="/profile/integration" className="text-primary hover:underline">
                 Connect
               </Link>
             </p>
@@ -580,7 +580,7 @@ export default function ProfileClient({ profile }: ProfileClientProps) {
           iconClassName="text-[#5e8e3e]"
           action={
             <Link
-              href="/manager/shopify"
+              href="/profile/integration"
               className="font-ui text-[10px] font-medium text-muted-foreground hover:text-primary"
             >
               Manage
@@ -612,7 +612,7 @@ export default function ProfileClient({ profile }: ProfileClientProps) {
           ) : (
             <p className="text-[11px] text-muted-foreground">
               Not connected.{' '}
-              <Link href="/manager/shopify" className="text-primary hover:underline">
+              <Link href="/profile/integration" className="text-primary hover:underline">
                 Connect
               </Link>
             </p>
