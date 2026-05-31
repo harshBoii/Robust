@@ -141,7 +141,11 @@ export async function fetchRedditFlairs(
     throw new Error(zernioApiErrorMessage(error) || 'Failed to load subreddit flairs');
   }
 
-  return (data?.flairs ?? [])
-    .filter((f): f is { id: string; text: string } => Boolean(f.id && f.text))
-    .map((f) => ({ id: f.id!, text: f.text! }));
+  const flairs: RedditFlairOption[] = [];
+  for (const row of data?.flairs ?? []) {
+    const id = row?.id?.trim();
+    const text = row?.text?.trim();
+    if (id && text) flairs.push({ id, text });
+  }
+  return flairs;
 }
