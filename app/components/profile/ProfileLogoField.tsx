@@ -30,7 +30,7 @@ export function ProfileLogoField({
       <span className="font-ui text-[11px] font-medium text-muted-foreground">Logo</span>
 
       <div className="flex items-center gap-3">
-        <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-[var(--glass-border)] bg-muted/20">
+        <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full border border-[var(--glass-border)] bg-muted/20">
           {preview ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={preview} alt="" className="h-full w-full object-cover" />

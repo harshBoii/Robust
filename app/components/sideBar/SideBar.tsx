@@ -555,14 +555,14 @@ function SidebarProfileAvatar({
       <img
         src={logoUrl}
         alt={displayName}
-        className="h-8 w-8 rounded-lg object-cover"
+        className="h-8 w-8 rounded-full object-cover"
         onError={() => setLogoFailed(true)}
       />
     );
   }
 
   return (
-    <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#fde8e4] font-display text-xs font-bold text-[#e07a5f]">
+    <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 font-display text-xs font-bold text-primary">
       {initial}
     </span>
   );
@@ -677,9 +677,9 @@ export default function AppSidebar({
             <Link
               href="/profile"
               title={displayName}
-              className={`flex h-10 w-10 items-center justify-center rounded-xl transition-colors ${
+              className={`flex h-10 w-10 items-center justify-center overflow-hidden rounded-full transition-colors ${
                 activeSection === 'profile'
-                  ? 'bg-[color-mix(in_srgb,var(--primary)_12%,transparent)]'
+                  ? 'ring-2 ring-primary/40 bg-[color-mix(in_srgb,var(--primary)_12%,transparent)]'
                   : 'hover:bg-[var(--glass-hover)]'
               }`}
             >

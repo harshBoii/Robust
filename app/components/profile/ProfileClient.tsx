@@ -258,7 +258,7 @@ export default function ProfileClient({ profile }: ProfileClientProps) {
         <div className="relative flex items-center justify-between gap-3 px-3 py-2.5">
           <div className="flex min-w-0 items-center gap-3">
             <div className="relative h-12 w-12 shrink-0">
-              <div className="relative h-full w-full overflow-hidden rounded-xl bg-primary/10">
+              <div className="relative h-full w-full overflow-hidden rounded-full bg-primary/10">
                 {profile.logoUrl ? (
                   // User-provided URL — may be any host; avoid next/image domain allowlist.
                   // eslint-disable-next-line @next/next/no-img-element
