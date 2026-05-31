@@ -32,16 +32,18 @@ import {
 import {
   formatProfileDateShort,
   formatRelativeTime,
+  profileCard,
+  profileCardHeaderCompact,
+  profileGhostButton,
   profileInitials,
+  profileRowBorder,
+  profileStatusBadge,
 } from '@/app/components/profile/profile-utils';
 import type { CompanyProfile } from '@/lib/profile/company-profile';
 
 type ProfileClientProps = {
   profile: CompanyProfile;
 };
-
-const profileCard =
-  'overflow-hidden rounded-xl border border-black/[0.06] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04)]';
 
 function ProfileSectionCard({
   title,
@@ -62,7 +64,7 @@ function ProfileSectionCard({
 }) {
   return (
     <div className={`${profileCard} flex min-h-0 flex-col ${className}`}>
-      <div className="flex shrink-0 items-center justify-between border-b border-black/[0.05] px-3 py-2">
+      <div className={profileCardHeaderCompact}>
         <div className="flex items-center gap-2">
           <Icon className={`h-3.5 w-3.5 ${iconClassName}`} />
           <h2 className="font-display text-[13px] font-semibold text-foreground">{title}</h2>
@@ -81,11 +83,7 @@ function StatusBadge({
   label: string;
   tone?: 'success' | 'warning' | 'neutral';
 }) {
-  const tones = {
-    success: 'bg-emerald-50 text-emerald-600',
-    warning: 'bg-amber-50 text-amber-600',
-    neutral: 'bg-gray-100 text-gray-500',
-  };
+  const tones = profileStatusBadge;
   return (
     <span
       className={`inline-flex shrink-0 items-center gap-0.5 rounded px-1.5 py-px font-ui text-[9px] font-semibold ${tones[tone]}`}
@@ -107,7 +105,7 @@ function InfoFieldRow({
   badge?: React.ReactNode;
 }) {
   return (
-    <div className="flex items-center justify-between gap-2 border-b border-black/[0.04] py-1.5 last:border-b-0">
+    <div className={`flex items-center justify-between gap-2 py-1.5 last:border-b-0 ${profileRowBorder}`}>
       <span className="shrink-0 font-ui text-[9px] font-bold uppercase tracking-wide text-muted-foreground/75">
         {label}
       </span>
@@ -154,7 +152,7 @@ function SecurityRow({
     <button
       type="button"
       onClick={onClick}
-      className="flex w-full items-center justify-between gap-2 border-b border-black/[0.04] py-2 text-left transition-colors last:border-b-0 hover:bg-black/[0.015]"
+      className={`flex w-full items-center justify-between gap-2 py-2 text-left transition-colors last:border-b-0 hover:bg-muted/50 ${profileRowBorder}`}
     >
       <span className="font-body text-[11px] font-medium text-foreground">{label}</span>
       <div className="flex items-center gap-1">
@@ -205,7 +203,7 @@ function MetaRow({
   warn?: boolean;
 }) {
   return (
-    <li className="flex items-center justify-between gap-2 border-b border-black/[0.04] py-1.5 last:border-b-0">
+    <li className={`flex items-center justify-between gap-2 py-1.5 last:border-b-0 ${profileRowBorder}`}>
       <div className="min-w-0 flex-1">
         <span className="font-ui text-[9px] font-bold uppercase tracking-wide text-muted-foreground/75">
           {label}
@@ -242,13 +240,7 @@ export default function ProfileClient({ profile }: ProfileClientProps) {
     <div className="flex h-full min-h-0 w-full flex-col gap-2 overflow-hidden">
       {/* Hero header */}
       <div className={`${profileCard} relative shrink-0 overflow-hidden`}>
-        <div
-          className="pointer-events-none absolute inset-0"
-          style={{
-            background:
-              'linear-gradient(135deg, rgba(255,228,225,0.9) 0%, rgba(255,245,242,0.5) 50%, transparent 100%)',
-          }}
-        />
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-primary/10 via-primary/5 to-transparent" />
         <svg
           className="pointer-events-none absolute inset-0 h-full w-full opacity-30"
           viewBox="0 0 1200 80"
@@ -266,7 +258,7 @@ export default function ProfileClient({ profile }: ProfileClientProps) {
         <div className="relative flex items-center justify-between gap-3 px-3 py-2.5">
           <div className="flex min-w-0 items-center gap-3">
             <div className="relative h-12 w-12 shrink-0">
-              <div className="relative h-full w-full overflow-hidden rounded-xl bg-[#fde8e4]">
+              <div className="relative h-full w-full overflow-hidden rounded-xl bg-primary/10">
                 {profile.logoUrl ? (
                   // User-provided URL — may be any host; avoid next/image domain allowlist.
                   // eslint-disable-next-line @next/next/no-img-element
@@ -276,7 +268,7 @@ export default function ProfileClient({ profile }: ProfileClientProps) {
                     className="h-full w-full object-cover"
                   />
                 ) : (
-                  <div className="flex h-full w-full items-center justify-center font-display text-lg font-bold text-[#e07a5f]">
+                  <div className="flex h-full w-full items-center justify-center font-display text-lg font-bold text-primary">
                     {initials}
                   </div>
                 )}
@@ -285,7 +277,7 @@ export default function ProfileClient({ profile }: ProfileClientProps) {
                 type="button"
                 title="Edit profile"
                 onClick={() => setModal('edit')}
-                className="absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full border border-black/[0.08] bg-white shadow-sm"
+                className="absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full border border-border bg-card shadow-sm"
               >
                 <Pencil className="h-2.5 w-2.5" />
               </button>
@@ -301,7 +293,7 @@ export default function ProfileClient({ profile }: ProfileClientProps) {
               </p>
               <div className="mt-1.5 flex flex-wrap gap-1">
                 {metaConnected && (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-1.5 py-px font-ui text-[9px] font-semibold text-emerald-600">
+                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-1.5 py-px font-ui text-[9px] font-semibold text-emerald-700 dark:text-emerald-400">
                     <SiMeta className="h-2.5 w-2.5" />
                     Meta Connected
                   </span>
@@ -312,11 +304,11 @@ export default function ProfileClient({ profile }: ProfileClientProps) {
                     Shopify Connected
                   </span>
                 )}
-                <span className="inline-flex items-center gap-1 rounded-full bg-violet-50 px-1.5 py-px font-ui text-[9px] font-semibold text-violet-600">
+                <span className="inline-flex items-center gap-1 rounded-full bg-violet-500/10 px-1.5 py-px font-ui text-[9px] font-semibold text-violet-700 dark:text-violet-400">
                   <Sparkles className="h-2.5 w-2.5" />
                   AI Enabled
                 </span>
-                <span className="inline-flex items-center gap-1 rounded-full bg-orange-50 px-1.5 py-px font-ui text-[9px] font-semibold text-orange-600">
+                <span className="inline-flex items-center gap-1 rounded-full bg-orange-500/10 px-1.5 py-px font-ui text-[9px] font-semibold text-orange-700 dark:text-orange-400">
                   <Crown className="h-2.5 w-2.5" />
                   Workspace Owner
                 </span>
@@ -334,34 +326,24 @@ export default function ProfileClient({ profile }: ProfileClientProps) {
             </Link>
             <Link
               href="/profile/integration"
-              className="inline-flex items-center gap-1.5 rounded-lg border border-black/[0.08] bg-white px-2.5 py-1.5 text-[11px] font-semibold"
+              className={`${profileGhostButton} gap-1.5 font-semibold`}
             >
               <SiShopify className="h-3 w-3 text-[#5e8e3e]" />
               Manage Shopify
             </Link>
-            <Link
-              href="/profile/data"
-              className="inline-flex items-center gap-1 rounded-lg border border-black/[0.08] bg-white px-2.5 py-1.5 text-[11px] font-medium"
-            >
+            <Link href="/profile/data" className={profileGhostButton}>
               Data Mine
             </Link>
-            <Link
-              href="/profile/analyze-ads"
-              className="inline-flex items-center gap-1 rounded-lg border border-black/[0.08] bg-white px-2.5 py-1.5 text-[11px] font-medium"
-            >
+            <Link href="/profile/analyze-ads" className={profileGhostButton}>
               Analyze Ads
             </Link>
-            <button
-              type="button"
-              onClick={() => setModal('edit')}
-              className="inline-flex items-center gap-1 rounded-lg border border-black/[0.08] bg-white px-2.5 py-1.5 text-[11px] font-medium"
-            >
+            <button type="button" onClick={() => setModal('edit')} className={profileGhostButton}>
               <Pencil className="h-3 w-3" />
               Edit
             </button>
             <button
               type="button"
-              className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-black/[0.08] bg-white"
+              className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-border bg-card hover:bg-muted/50"
               aria-label="More options"
             >
               <MoreHorizontal className="h-3.5 w-3.5 text-muted-foreground" />
@@ -376,15 +358,15 @@ export default function ProfileClient({ profile }: ProfileClientProps) {
           icon={ImageIcon}
           value={profile.stats.assets.toLocaleString('en-US')}
           label="Creatives Uploaded"
-          iconBg="bg-red-50"
-          iconColor="text-red-500"
+          iconBg="bg-red-500/10"
+          iconColor="text-red-600 dark:text-red-400"
         />
         <StatCard
           icon={MessageSquare}
           value={profile.stats.adChatSessions.toLocaleString('en-US')}
           label="Chats"
-          iconBg="bg-violet-50"
-          iconColor="text-violet-500"
+          iconBg="bg-violet-500/10"
+          iconColor="text-violet-600 dark:text-violet-400"
         />
         <StatCard
           icon={SiMeta}
@@ -394,15 +376,15 @@ export default function ProfileClient({ profile }: ProfileClientProps) {
               : 'Not connected'
           }
           label="Meta · Last OAuth"
-          iconBg="bg-emerald-50"
-          iconColor="text-emerald-600"
+          iconBg="bg-emerald-500/10"
+          iconColor="text-emerald-700 dark:text-emerald-400"
         />
         <StatCard
           icon={Calendar}
           value={formatProfileDateShort(profile.createdAt)}
           label="Member Since"
-          iconBg="bg-orange-50"
-          iconColor="text-orange-500"
+          iconBg="bg-orange-500/10"
+          iconColor="text-orange-600 dark:text-orange-400"
         />
       </div>
 
@@ -502,7 +484,7 @@ export default function ProfileClient({ profile }: ProfileClientProps) {
             ].map(({ label, value }) => (
               <li
                 key={label}
-                className="flex items-center justify-between gap-2 border-b border-black/[0.04] py-1.5 last:border-b-0"
+                className={`flex items-center justify-between gap-2 py-1.5 last:border-b-0 ${profileRowBorder}`}
               >
                 <span className="text-[11px] text-muted-foreground">{label}</span>
                 <span className="text-[11px] font-medium text-foreground">{value}</span>
@@ -636,7 +618,7 @@ export default function ProfileClient({ profile }: ProfileClientProps) {
           <SecurityRow
             label="Active Sessions"
             value={
-              <span className="font-semibold text-emerald-600">
+              <span className="font-semibold text-emerald-700 dark:text-emerald-400">
                 {profile.security.activeSessions}
               </span>
             }

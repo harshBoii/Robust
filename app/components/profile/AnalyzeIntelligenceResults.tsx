@@ -84,9 +84,9 @@ function IntelligenceCard({ row }: { row: IntelligenceResultRow }) {
   const insights = intel ? insightsList(intel.missRobustaInsights) : [];
 
   return (
-    <article className="overflow-hidden rounded-xl border border-black/[0.06] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
+    <article className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
       <div className="flex flex-col gap-3 p-3 sm:flex-row sm:gap-4">
-        <div className="relative mx-auto h-36 w-full shrink-0 overflow-hidden rounded-lg border border-black/[0.06] bg-muted/30 sm:mx-0 sm:h-32 sm:w-36">
+        <div className="relative mx-auto h-36 w-full shrink-0 overflow-hidden rounded-lg border border-border bg-muted/30 sm:mx-0 sm:h-32 sm:w-36">
           <MediaPreview row={row} />
         </div>
 
@@ -101,7 +101,7 @@ function IntelligenceCard({ row }: { row: IntelligenceResultRow }) {
             <p className="font-body mt-1 text-[11px] text-muted-foreground">
               Gallery: {row.title} · {row.assetType}
               {row.intelligenceStatus === 'READY' ? (
-                <span className="ml-1.5 text-emerald-600">· Intelligence ready</span>
+                <span className="ml-1.5 text-emerald-700 dark:text-emerald-400">· Intelligence ready</span>
               ) : (
                 <span className="ml-1.5">· {row.intelligenceStatus}</span>
               )}
@@ -180,7 +180,7 @@ export default function AnalyzeIntelligenceResults({ results, loading }: Props) 
   if (!results.length) return null;
 
   return (
-    <section className="mt-4 space-y-3 border-t border-black/[0.06] pt-4">
+    <section className="mt-4 space-y-3 border-t border-border pt-4">
       <h2 className="font-heading text-sm font-semibold text-foreground">Media & intelligence</h2>
       <p className="font-body text-[11px] text-muted-foreground">
         Creatives analyzed and intelligence stored for your winning ads.

@@ -3,16 +3,18 @@
 import Link from 'next/link';
 import { ChevronLeft, Package } from 'lucide-react';
 
+import {
+  profileCard,
+  profileCardHeader,
+  profileGhostButton,
+} from '@/app/components/profile/profile-utils';
 import ShopProductsClient from '@/app/components/shop/ShopProductsClient';
-
-const profileCard =
-  'overflow-hidden rounded-xl border border-black/[0.06] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04)]';
 
 export default function ProfileProductsPageClient() {
   return (
     <div className="flex h-full min-h-0 w-full flex-col gap-2 overflow-hidden">
       <div className={`${profileCard} shrink-0`}>
-        <div className="flex items-center justify-between gap-3 border-b border-black/[0.05] px-3 py-2.5">
+        <div className={profileCardHeader}>
           <div className="flex min-w-0 items-center gap-2">
             <Package className="h-4 w-4 shrink-0 text-violet-600" />
             <div className="min-w-0">
@@ -24,10 +26,7 @@ export default function ProfileProductsPageClient() {
               </p>
             </div>
           </div>
-          <Link
-            href="/profile"
-            className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-black/[0.08] bg-white px-2.5 py-1.5 text-[11px] font-medium text-muted-foreground hover:text-foreground"
-          >
+          <Link href="/profile" className={`${profileGhostButton} shrink-0`}>
             <ChevronLeft className="h-3 w-3" />
             Profile
           </Link>

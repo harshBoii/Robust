@@ -7,6 +7,7 @@ import { Pencil, Plus, Sparkles, Trash2, X } from 'lucide-react';
 
 import { useToast } from '@/app/components/UI/ToastProvider';
 import { ModalPortal } from '@/app/components/common/ModalPortal';
+import { profileGhostButton } from '@/app/components/profile/profile-utils';
 import type {
   DataMineBrandEntityDto,
   DataMineOfferingDto,
@@ -422,7 +423,7 @@ export default function DataMineSection() {
             type="button"
             disabled={savingInputs || !website.trim()}
             onClick={() => void saveSeedInputs()}
-            className="rounded-lg border border-black/[0.08] bg-white px-3 py-1.5 text-[11px] font-semibold disabled:opacity-60"
+            className={`${profileGhostButton} font-semibold disabled:opacity-60`}
           >
             {savingInputs ? 'Saving…' : 'Save inputs'}
           </button>
@@ -566,7 +567,7 @@ export default function DataMineSection() {
           type="button"
           disabled={savingBrand || !b.canonicalName.trim()}
           onClick={() => void saveBrand()}
-          className="mt-2 rounded-lg border border-black/[0.08] bg-white px-3 py-1.5 text-[11px] font-semibold disabled:opacity-60"
+          className={`mt-2 ${profileGhostButton} font-semibold disabled:opacity-60`}
         >
           {savingBrand ? 'Saving…' : 'Save brand entity'}
         </button>
@@ -590,7 +591,7 @@ export default function DataMineSection() {
         {offerings.length === 0 ? (
           <p className="text-[11px] text-muted-foreground">No offerings yet. Auto-fill or add one.</p>
         ) : (
-          <ul className="divide-y divide-black/[0.04] rounded-lg border border-black/[0.06]">
+          <ul className="divide-y divide-border rounded-lg border border-border">
             {offerings.map((o) => (
               <li
                 key={o.id}
@@ -620,7 +621,7 @@ export default function DataMineSection() {
                     type="button"
                     title="Delete"
                     onClick={() => void deleteOffering(o.id)}
-                    className="rounded p-1 text-red-600 hover:bg-red-50"
+                    className="rounded p-1 text-red-600 hover:bg-red-500/10 dark:text-red-400"
                   >
                     <Trash2 className="h-3 w-3" />
                   </button>

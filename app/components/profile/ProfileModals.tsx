@@ -308,7 +308,7 @@ export function TwoFactorModal({
               <AiOutlineLoading className="h-6 w-6 animate-spin text-primary" />
             </div>
           ) : qrDataUrl ? (
-            <div className="mx-auto w-fit rounded-xl border border-[var(--glass-border)] bg-white p-3">
+            <div className="mx-auto w-fit rounded-xl border border-[var(--glass-border)] bg-card p-3">
               <Image src={qrDataUrl} alt="2FA QR code" width={200} height={200} unoptimized />
             </div>
           ) : null}

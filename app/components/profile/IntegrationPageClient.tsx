@@ -12,11 +12,14 @@ import {
   SocialConnectionModal,
 } from '@/app/components/profile/IntegrationConnectionModals';
 import type { ProviderStatus } from '@/app/components/profile/SocialProviderConnectionPanel';
+import {
+  profileCard,
+  profileCardHeader,
+  profileGhostButton,
+  profileIntegrationCard,
+} from '@/app/components/profile/profile-utils';
 import type { SocialProvider } from '@/app/generated/prisma/client';
 import { fromZernioPlatform } from '@/lib/zernio/platforms';
-
-const profileCard =
-  'overflow-hidden rounded-xl border border-black/[0.06] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04)]';
 
 type IntegrationModal = 'meta' | 'shopify' | SocialProvider | null;
 
@@ -72,7 +75,7 @@ function StatusBadge({ connected }: { connected: boolean }) {
       className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold ${
         connected
           ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400'
-          : 'bg-black/[0.04] text-muted-foreground'
+          : 'bg-muted text-muted-foreground'
       }`}
     >
       {connected ? 'Connected' : 'Not connected'}
@@ -99,11 +102,11 @@ function IntegrationCard({
     <button
       type="button"
       onClick={onClick}
-      className="flex flex-col items-start gap-3 rounded-xl border border-black/[0.06] bg-white p-4 text-left shadow-[0_1px_2px_rgba(0,0,0,0.04)] transition hover:border-black/[0.12] hover:shadow-[0_2px_8px_rgba(0,0,0,0.06)]"
+      className={profileIntegrationCard}
     >
       <div className="flex w-full items-start justify-between gap-2">
         <div
-          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-black/[0.03] ${iconClassName ?? ''}`}
+          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted ${iconClassName ?? ''}`}
         >
           <Icon className="h-4 w-4" />
         </div>
@@ -241,7 +244,7 @@ export default function IntegrationPageClient() {
   return (
     <div className="flex h-full min-h-0 w-full flex-col gap-2 overflow-hidden">
       <div className={`${profileCard} shrink-0`}>
-        <div className="flex items-center justify-between gap-3 border-b border-black/[0.05] px-3 py-2.5">
+        <div className={profileCardHeader}>
           <div className="flex min-w-0 items-center gap-2">
             <Plug className="h-4 w-4 shrink-0 text-violet-600" />
             <div className="min-w-0">
@@ -253,10 +256,7 @@ export default function IntegrationPageClient() {
               </p>
             </div>
           </div>
-          <Link
-            href="/profile"
-            className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-black/[0.08] bg-white px-2.5 py-1.5 text-[11px] font-medium text-muted-foreground hover:text-foreground"
-          >
+          <Link href="/profile" className={`${profileGhostButton} shrink-0`}>
             <ChevronLeft className="h-3 w-3" />
             Profile
           </Link>

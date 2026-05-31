@@ -107,7 +107,7 @@ export default function SocialProviderConnectionPanel({
       ) : null}
 
       {status ? (
-        <div className="rounded-xl border border-black/[0.06] bg-white p-4">
+        <div className="rounded-xl border border-border bg-card p-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <p className="text-sm font-semibold text-foreground">{label}</p>
@@ -127,7 +127,7 @@ export default function SocialProviderConnectionPanel({
                   type="button"
                   onClick={() => void onDisconnect()}
                   disabled={disconnecting}
-                  className="rounded-lg border border-black/[0.08] px-3 py-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground disabled:opacity-60"
+                  className="rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground disabled:opacity-60"
                 >
                   {disconnecting ? 'Disconnecting…' : 'Disconnect'}
                 </button>
