@@ -131,6 +131,12 @@ const PRIMARY_NAV_GROUPS: NavGroup[] = [
       { id: 'gallery', label: 'Gallery', icon: IconGallery, hasSecondary: true },
     ],
   },
+  {
+    label: 'Profile',
+    items: [
+      { id: 'profile', label: 'Profile', icon: User, hasSecondary: true },
+    ],
+  },
 ];
 
 /* ============================================

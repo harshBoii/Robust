@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server';
 import type { SocialProvider } from '@/app/generated/prisma/client';
 import { prisma } from '@/lib/prisma';
 import { getSession } from '@/lib/auth/session';
-import { getZernioClient, isZernioConfigured, zernioApiErrorMessage } from '@/lib/zernio/client';
+import { isZernioConfigured } from '@/lib/zernio/client';
+import { disconnectZernioSocialAccountWithFallback } from '@/lib/zernio/disconnect-social-account';
 import { ZERNIO_SOCIAL_PROVIDERS } from '@/lib/zernio/platforms';
 
 export async function GET() {
@@ -63,16 +64,11 @@ export async function DELETE(request: Request) {
 
   if (integration?.zernioAccountId && isZernioConfigured()) {
     try {
-      const zernio = getZernioClient();
-      await zernio.accounts.deleteAccount({
-        path: { accountId: integration.zernioAccountId },
-      });
+      await disconnectZernioSocialAccountWithFallback(integration.zernioAccountId);
     } catch (err) {
       console.error('[zernio disconnect]', err);
-      return NextResponse.json(
-        { success: false, error: zernioApiErrorMessage(err) },
-        { status: 502 },
-      );
+      const message = err instanceof Error ? err.message : 'Disconnect failed';
+      return NextResponse.json({ success: false, error: message }, { status: 502 });
     }
   }
 

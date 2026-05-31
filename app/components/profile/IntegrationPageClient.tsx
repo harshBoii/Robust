@@ -12,6 +12,7 @@ import {
   SocialConnectionModal,
 } from '@/app/components/profile/IntegrationConnectionModals';
 import type { ProviderStatus } from '@/app/components/profile/SocialProviderConnectionPanel';
+import { socialProviderLabel } from '@/lib/auth/social-oauth-state';
 import {
   profileCard,
   profileCardHeader,
@@ -89,34 +90,55 @@ function IntegrationCard({
   icon: Icon,
   iconClassName,
   connected,
-  onClick,
+  onManage,
+  onDisconnect,
+  disconnecting = false,
 }: {
   label: string;
   description: string;
   icon: React.ComponentType<{ className?: string }>;
   iconClassName?: string;
   connected: boolean;
-  onClick: () => void;
+  onManage: () => void;
+  onDisconnect?: () => void;
+  disconnecting?: boolean;
 }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={profileIntegrationCard}
-    >
-      <div className="flex w-full items-start justify-between gap-2">
-        <div
-          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted ${iconClassName ?? ''}`}
-        >
-          <Icon className="h-4 w-4" />
+    <div className={`${profileIntegrationCard} flex flex-col`}>
+      <button type="button" onClick={onManage} className="flex w-full flex-col items-start gap-3 text-left">
+        <div className="flex w-full items-start justify-between gap-2">
+          <div
+            className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted ${iconClassName ?? ''}`}
+          >
+            <Icon className="h-4 w-4" />
+          </div>
+          <StatusBadge connected={connected} />
         </div>
-        <StatusBadge connected={connected} />
-      </div>
-      <div>
-        <p className="text-sm font-semibold text-foreground">{label}</p>
-        <p className="mt-0.5 text-[11px] text-muted-foreground">{description}</p>
-      </div>
-    </button>
+        <div>
+          <p className="text-sm font-semibold text-foreground">{label}</p>
+          <p className="mt-0.5 text-[11px] text-muted-foreground">{description}</p>
+        </div>
+      </button>
+      {connected && onDisconnect ? (
+        <div className="mt-1 flex w-full gap-2 border-t border-border pt-3">
+          <button
+            type="button"
+            onClick={onManage}
+            className={`${profileGhostButton} flex-1 justify-center`}
+          >
+            Manage
+          </button>
+          <button
+            type="button"
+            onClick={() => void onDisconnect()}
+            disabled={disconnecting}
+            className="flex-1 rounded-lg border border-border px-2.5 py-1.5 text-[11px] font-semibold text-red-600 transition-colors hover:bg-red-500/10 disabled:opacity-60 dark:text-red-400"
+          >
+            {disconnecting ? 'Disconnecting…' : 'Disconnect'}
+          </button>
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -133,6 +155,7 @@ export default function IntegrationPageClient() {
   const [loading, setLoading] = useState(true);
   const [zernioError, setZernioError] = useState<string | null>(null);
   const [zernioSuccess, setZernioSuccess] = useState<string | null>(null);
+  const [disconnectingProvider, setDisconnectingProvider] = useState<SocialProvider | null>(null);
 
   const loadStatus = useCallback(async () => {
     try {
@@ -238,6 +261,29 @@ export default function IntegrationPageClient() {
   const socialConnected = (provider: SocialProvider) =>
     socialProviders.find((p) => p.provider === provider)?.connected ?? false;
 
+  const disconnectSocial = async (provider: SocialProvider) => {
+    setDisconnectingProvider(provider);
+    setZernioError(null);
+    setZernioSuccess(null);
+    try {
+      await json(
+        await fetch('/api/integrations/social', {
+          method: 'DELETE',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ provider }),
+        }),
+      );
+      setZernioSuccess(`${socialProviderLabel(provider)} disconnected.`);
+      if (modal === provider) setModal(null);
+      await loadStatus();
+    } catch (e) {
+      setZernioError(e instanceof Error ? e.message : 'Disconnect failed');
+    } finally {
+      setDisconnectingProvider(null);
+    }
+  };
+
   return (
     <div className="flex h-full min-h-0 w-full flex-col gap-2 overflow-hidden">
       <div className={`${profileCard} shrink-0`}>
@@ -282,7 +328,7 @@ export default function IntegrationPageClient() {
               icon={SiMeta}
               iconClassName="text-[#0081FB]"
               connected={metaConnected}
-              onClick={() => setModal('meta')}
+              onManage={() => setModal('meta')}
             />
             <IntegrationCard
               label="Shopify"
@@ -290,19 +336,25 @@ export default function IntegrationPageClient() {
               icon={SiShopify}
               iconClassName="text-[#5e8e3e]"
               connected={shopifyConnected}
-              onClick={() => setModal('shopify')}
+              onManage={() => setModal('shopify')}
             />
-            {SOCIAL_CARDS.map((card) => (
-              <IntegrationCard
-                key={card.id}
-                label={card.label}
-                description={card.description}
-                icon={card.icon}
-                iconClassName={card.iconClassName}
-                connected={socialConnected(card.id as SocialProvider)}
-                onClick={() => setModal(card.id)}
-              />
-            ))}
+            {SOCIAL_CARDS.map((card) => {
+              const provider = card.id as SocialProvider;
+              const connected = socialConnected(provider);
+              return (
+                <IntegrationCard
+                  key={card.id}
+                  label={card.label}
+                  description={card.description}
+                  icon={card.icon}
+                  iconClassName={card.iconClassName}
+                  connected={connected}
+                  onManage={() => setModal(card.id)}
+                  onDisconnect={connected ? () => disconnectSocial(provider) : undefined}
+                  disconnecting={disconnectingProvider === provider}
+                />
+              );
+            })}
           </div>
         )}
 
