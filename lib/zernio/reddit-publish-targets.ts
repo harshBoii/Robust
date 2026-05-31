@@ -52,7 +52,7 @@ export async function fetchRedditPublishTargets(companyId: string): Promise<{
 
   const integration = await getRedditIntegration(companyId);
   const accountId = integration?.zernioAccountId?.trim();
-  if (!accountId) {
+  if (!integration || !accountId) {
     throw new Error('Reddit not connected — link your account under Profile → Integrations');
   }
 
