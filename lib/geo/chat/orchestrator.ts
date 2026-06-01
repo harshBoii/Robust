@@ -128,10 +128,13 @@ export async function handleGeoMessage(
 
     const calls = turn.toolCalls ?? [];
     if (calls.length === 0) {
-      turn = {
-        status: 'reply',
-        reply: 'I need a moment — what would you like to know about your organic visibility?',
-      };
+      // Empty tool turn after retries inside runGeoAgentTurn; one more reply-only attempt.
+      turn = await runGeoAgentTurn({
+        userText: text,
+        geo,
+        priorMessages,
+        toolResults: allToolResults.length ? allToolResults : toolResults,
+      });
       break;
     }
 
