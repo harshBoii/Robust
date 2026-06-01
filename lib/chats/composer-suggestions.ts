@@ -1,3 +1,4 @@
+import { CHATS_INTENT_SUGGESTIONS } from './chat-path-suggestions';
 import type { ChatWorkflowStep, WorkflowState } from './types';
 
 /** Composer chips aligned with agent nextStep or workflow step (client-safe). */
@@ -23,12 +24,7 @@ export function composerSuggestions(
     return ['Draft campaign for me', '₹1500/day traffic campaign'];
   }
   if (step === 'intent') {
-    return [
-      'Post an ad',
-      'Create a video ad',
-      "Mother's Day tier-2 India",
-      'Help me launch a campaign',
-    ];
+    return [...CHATS_INTENT_SUGGESTIONS];
   }
   if (step === 'geo') {
     const chips = workflowState.geo?.composerSuggestions;

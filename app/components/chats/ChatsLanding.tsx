@@ -4,15 +4,10 @@ import { motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
+import { CHATS_INTENT_SUGGESTIONS } from '@/lib/chats/chat-path-suggestions';
+
 import { setPendingChatStart } from './chat-pending-storage';
 import { ChatsComposer } from './ChatsComposer';
-
-const SUGGESTIONS = [
-  'Post an ad',
-  'Create product ad images',
-  'Generate ad variants',
-  'Product on model photoshoot',
-];
 
 const ease = [0.22, 1, 0.36, 1] as const;
 
@@ -72,7 +67,7 @@ export default function ChatsLanding({ userName }: { userName: string; companyId
           loading={loading}
           disabled={loading}
           placeholder="Write a message…"
-          suggestions={SUGGESTIONS}
+          suggestions={[...CHATS_INTENT_SUGGESTIONS]}
         />
       </motion.div>
     </div>
