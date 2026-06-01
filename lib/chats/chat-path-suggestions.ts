@@ -18,5 +18,5 @@ export const CHATS_INTENT_SUGGESTIONS: readonly string[] = [
   // GEO — organic visibility, bounties, get cited
   "What's my share of voice?",
   'Get cited for a high-value prompt',
-  'Publish blog and LinkedIn drafts',
+  'Share Content on X/Twitter/LinkedIn and website',
 ];
