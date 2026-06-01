@@ -9,7 +9,6 @@ import {
 import { parseWorkflowState, serializeMessage, serializeSession } from '@/lib/chats/serialize';
 import type { OrchestratorResult, SerializedMessage, WorkflowState } from '@/lib/chats/types';
 
-import { userConfirmedPublish } from './confirm-publish';
 import { runGeoAgentTurn } from './geo-agent-turn';
 import type { GeoAgentTurn } from './geo-agent-schema';
 import { parseSpreadPlatforms } from '@/lib/geo/bounty/spread-platforms';
@@ -72,20 +71,10 @@ function mergeGeoState(
       approveAll: turn.pendingPublish.approveAll,
       redditSubreddit: turn.pendingPublish.redditSubreddit,
       redditFlairId: turn.pendingPublish.redditFlairId,
-      confirmed: turn.pendingPublish.confirmed ?? false,
     };
   }
 
   return next;
-}
-
-function applyPublishConfirmation(geo: GeoChatState, userText: string): GeoChatState {
-  if (!geo.pendingPublish || geo.pendingPublish.confirmed) return geo;
-  if (!userConfirmedPublish(userText)) return geo;
-  return {
-    ...geo,
-    pendingPublish: { ...geo.pendingPublish, confirmed: true },
-  };
 }
 
 export async function handleGeoMessage(
@@ -98,7 +87,7 @@ export async function handleGeoMessage(
   if (!session) throw new Error('Session not found');
 
   const workflow = parseWorkflowState(session.workflowState);
-  let geo = applyPublishConfirmation(workflow.geo ?? {}, text);
+  let geo = workflow.geo ?? {};
 
   const newMessages: SerializedMessage[] = [];
   if (!options?.skipUserBubble) {

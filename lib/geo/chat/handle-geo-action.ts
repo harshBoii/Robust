@@ -11,6 +11,7 @@ import { parseWorkflowState, serializeMessage, serializeSession } from '@/lib/ch
 import type { ChatActionType, OrchestratorResult, SerializedMessage, WorkflowState } from '@/lib/chats/types';
 
 import type { GeoChatState } from './types';
+import { handleGeoMessage } from './orchestrator';
 
 const GEO_STEP = 'geo';
 
@@ -85,13 +86,12 @@ export async function handleGeoChatAction(
       pendingPublish: {
         bountyId,
         platforms,
-        confirmed: false,
         redditSubreddit: subreddit,
         redditFlairId: flairId,
       },
       composerSuggestions: [
-        'Yes, publish to Reddit now',
-        'Publish LinkedIn and blog too',
+        'Publish to Reddit now',
+        'Publish all drafts for this bounty',
         'Pick a different subreddit',
       ],
     };
@@ -99,36 +99,29 @@ export async function handleGeoChatAction(
     newMessages.push(
       await assistantMsg(
         sessionId,
-        `Got it — I'll publish to **${display}**${flairId ? ' with your selected flair' : ''} when you confirm. Say **"yes, publish now"** to go live.`,
+        `Saved **${display}**${flairId ? ' with your selected flair' : ''} for Reddit. Publishing that draft now…`,
       ),
     );
-  } else {
-    throw new Error(`Unknown GEO action: ${action}`);
+
+    const nextWorkflow: WorkflowState = { ...workflow, geo };
+    await updateChatSession(sessionId, companyId, {
+      currentStep: GEO_STEP,
+      pathType: 'GEO',
+      workflowState: nextWorkflow,
+    });
+
+    const publishTurn = await handleGeoMessage(
+      sessionId,
+      companyId,
+      'Publish the Reddit draft for this bounty using the subreddit I just selected.',
+      { skipUserBubble: true },
+    );
+
+    return {
+      ...publishTurn,
+      newMessages: [...newMessages, ...publishTurn.newMessages],
+    };
   }
 
-  const nextWorkflow: WorkflowState = { ...workflow, geo };
-
-  await updateChatSession(sessionId, companyId, {
-    currentStep: GEO_STEP,
-    pathType: 'GEO',
-    workflowState: nextWorkflow,
-  });
-
-  const refreshed = await getChatSession(sessionId, companyId);
-  if (!refreshed) throw new Error('Session not found');
-
-  const serialized = serializeSession(refreshed as DbChatSession);
-  return {
-    session: {
-      id: serialized.id,
-      title: serialized.title,
-      status: serialized.status,
-      currentStep: GEO_STEP,
-      workflowState: nextWorkflow,
-      bulkUploadId: serialized.bulkUploadId,
-      campaignId: serialized.campaignId,
-    },
-    messages: serialized.messages,
-    newMessages,
-  };
+  throw new Error(`Unknown GEO action: ${action}`);
 }

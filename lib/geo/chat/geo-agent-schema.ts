@@ -33,7 +33,6 @@ export const geoPendingPublishSchema = z.object({
   approveAll: z.boolean().optional(),
   redditSubreddit: z.string().optional(),
   redditFlairId: z.string().optional(),
-  confirmed: z.boolean().optional(),
 });
 
 export const geoRedditTargetPickerSchema = z.object({

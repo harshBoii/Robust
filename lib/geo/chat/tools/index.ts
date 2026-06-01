@@ -145,22 +145,17 @@ export async function executeGeoTool(
       }
 
       case 'geo.publish_content': {
-        if (!ctx.geo.pendingPublish?.confirmed) {
-          return {
-            result: {
-              ok: false,
-              error:
-                'Publish not confirmed. Ask the user to confirm before calling geo.publish_content.',
-            },
-            statePatch,
-          };
+        const bountyId =
+          (typeof args.bountyId === 'string' && args.bountyId.trim()) ||
+          ctx.geo.pendingPublish?.bountyId ||
+          ctx.geo.lastBountyId ||
+          '';
+        if (!bountyId) {
+          return { result: { ok: false, error: 'bountyId is required' }, statePatch };
         }
 
-        const bountyId =
-          typeof args.bountyId === 'string'
-            ? args.bountyId
-            : ctx.geo.pendingPublish.bountyId;
-        const approveAll = args.approveAll === true || ctx.geo.pendingPublish.approveAll === true;
+        const approveAll =
+          args.approveAll === true || ctx.geo.pendingPublish?.approveAll === true;
 
         if (approveAll) {
           const contents = await prisma.bountyContent.findMany({
@@ -196,7 +191,7 @@ export async function executeGeoTool(
             }
           }
 
-          const blogPlatform = ctx.geo.pendingPublish.platforms?.includes('WEBSITE_BLOG');
+          const blogPlatform = ctx.geo.pendingPublish?.platforms?.includes('WEBSITE_BLOG');
           if (blogPlatform) {
             try {
               const result = await publishBountyContent({
@@ -231,7 +226,7 @@ export async function executeGeoTool(
         const platform =
           typeof args.platform === 'string'
             ? (args.platform as BountySpreadPlatform)
-            : ctx.geo.pendingPublish.platforms?.[0];
+            : ctx.geo.pendingPublish?.platforms?.[0];
         if (!platform) {
           return { result: { ok: false, error: 'platform is required' }, statePatch };
         }
@@ -262,7 +257,7 @@ export async function executeGeoTool(
         const contentId =
           typeof args.contentId === 'string'
             ? args.contentId
-            : ctx.geo.pendingPublish.contentId;
+            : ctx.geo.pendingPublish?.contentId;
 
         const result = await publishBountyContent({
           companyId: ctx.companyId,

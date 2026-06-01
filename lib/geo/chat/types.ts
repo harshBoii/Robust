@@ -7,7 +7,6 @@ export type GeoPendingPublish = {
   approveAll?: boolean;
   redditSubreddit?: string;
   redditFlairId?: string;
-  confirmed: boolean;
 };
 
 export type GeoChatState = {
