@@ -30,6 +30,14 @@ export function composerSuggestions(
       'Help me launch a campaign',
     ];
   }
+  if (step === 'geo') {
+    return [
+      "What's my share of voice?",
+      'Top uncited prompts by revenue',
+      'Summarize my bounty pipeline',
+      'Get cited for a high-value query',
+    ];
+  }
   if (step === 'videoGen') {
     const vg = workflowState.videoGen;
     if (vg?.step === 'durationInput') {

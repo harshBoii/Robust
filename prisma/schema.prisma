@@ -1625,6 +1625,7 @@ enum ChatPathType {
   ADS
   IMAGE_GEN
   VIDEO_GEN
+  GEO
 }
 
 enum BulkUploadStatus {

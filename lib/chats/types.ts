@@ -1,7 +1,10 @@
 import type { GroupModel } from '@/lib/create-ad/group-model';
 import type { AdsetPreset, CampaignPreset } from '@/app/components/manager/presets/types';
 
+import type { GeoChatState } from '@/lib/geo/chat/types';
+
 export type ChatWorkflowStep =
+  | 'geo'
   | 'imageGen'
   | 'videoGen'
   | 'intent'
@@ -30,6 +33,8 @@ import type { ImageGenState } from '@/lib/image-gen/types';
 import type { VideoGenState } from '@/lib/video-gen/types';
 
 export type WorkflowState = {
+  /** GEO strategist agent state (when pathType is GEO). */
+  geo?: GeoChatState;
   /** Path B image generation state (when pathType is IMAGE_GEN). */
   imageGen?: ImageGenState;
   /** Video ad generation state (when pathType is VIDEO_GEN). */

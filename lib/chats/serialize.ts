@@ -1,7 +1,7 @@
 import { sanitizeWorkflowStateForClient } from '@/lib/video-gen/state';
 
 import type { DbChatMessage, DbChatSession } from './repository';
-import type { SerializedMessage, WorkflowState } from './types';
+import type { ChatWorkflowStep, SerializedMessage, WorkflowState } from './types';
 
 export function parseWorkflowState(raw: unknown): WorkflowState {
   if (!raw || typeof raw !== 'object') return {};
@@ -27,7 +27,7 @@ export function serializeSession(session: DbChatSession) {
     id: session.id,
     title: session.title,
     status: session.status,
-    currentStep: session.currentStep,
+    currentStep: session.currentStep as ChatWorkflowStep,
     workflowState,
     bulkUploadId: session.bulkUploadId,
     campaignId: session.campaignId,

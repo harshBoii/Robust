@@ -18,6 +18,7 @@ import {
   handleVideoGenMessage,
   initVideoGenFromFirstMessage,
 } from '@/lib/video-gen/orchestrator';
+import { handleGeoMessage, initGeoFromFirstMessage } from '@/lib/geo/chat/orchestrator';
 import { parseVideoGenState } from '@/lib/video-gen/state';
 import type { VideoGenActionType } from '@/lib/video-gen/types';
 import { VIDEO_GEN_ACTIONS } from '@/lib/video-gen/types';
@@ -168,10 +169,11 @@ function packageOrchestratorResult(
   };
 }
 
-function sessionPathType(session: DbChatSession): 'ADS' | 'IMAGE_GEN' | 'VIDEO_GEN' | null {
+function sessionPathType(session: DbChatSession): 'ADS' | 'IMAGE_GEN' | 'VIDEO_GEN' | 'GEO' | null {
   const pt = (session as DbChatSession & { pathType?: string | null }).pathType;
   if (pt === 'IMAGE_GEN') return 'IMAGE_GEN';
   if (pt === 'VIDEO_GEN') return 'VIDEO_GEN';
+  if (pt === 'GEO') return 'GEO';
   if (pt === 'ADS') return 'ADS';
   const state = parseWorkflowState(session.workflowState);
   if (parseVideoGenState(state)) return 'VIDEO_GEN';
@@ -205,8 +207,19 @@ export async function handleChatMessage(
     return handleVideoGenMessage(sessionId, companyId, text);
   }
 
+  if (pathType === 'GEO' || step === 'geo') {
+    return handleGeoMessage(sessionId, companyId, text);
+  }
+
   if (pathType === null && step === 'intent') {
     const route = await classifyTopLevelPath(text);
+    if (route === 'geo') {
+      await userMsg(sessionId, text);
+      await updateChatSession(sessionId, companyId, { pathType: 'GEO' });
+      const refreshed = await getChatSession(sessionId, companyId);
+      if (!refreshed) throw new Error('Session not found');
+      return initGeoFromFirstMessage(sessionId, companyId, text);
+    }
     if (route === 'imageGen') {
       await userMsg(sessionId, text);
       await updateChatSession(sessionId, companyId, { pathType: 'IMAGE_GEN' });
@@ -264,6 +277,23 @@ export async function handleChatAction(
 ): Promise<OrchestratorResult> {
   const session = await getChatSession(sessionId, companyId);
   if (!session) throw new Error('Session not found');
+
+  if (sessionPathType(session) === 'GEO' || session.currentStep === 'geo') {
+    const serialized = serializeSession(session);
+    return {
+      session: {
+        id: serialized.id,
+        title: serialized.title,
+        status: serialized.status,
+        currentStep: 'geo',
+        workflowState: serialized.workflowState,
+        bulkUploadId: serialized.bulkUploadId,
+        campaignId: serialized.campaignId,
+      },
+      messages: serialized.messages,
+      newMessages: [],
+    };
+  }
 
   if (
     VIDEO_GEN_ACTIONS.includes(action as VideoGenActionType) ||

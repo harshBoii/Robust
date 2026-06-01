@@ -5,6 +5,7 @@ import { CAMPAIGN_OBJECTIVE_OPTIONS } from '@/lib/assistant/constants';
 import { AGENT_ACTIONABLE_STEPS } from './agent-steps';
 
 const chatWorkflowSteps = z.enum([
+  'geo',
   'imageGen',
   'videoGen',
   'intent',

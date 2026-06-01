@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth/session";
+import { loadBountyPagesData } from "@/lib/geo/bounty/loadBountyPagesData";
 
 export async function GET() {
   const session = await getSession();
@@ -8,44 +8,7 @@ export async function GET() {
     return NextResponse.json({ success: false, error: "Not authenticated" }, { status: 401 });
   }
 
-  const bounties = await prisma.citationBounty.findMany({
-    where: {
-      companyId: session.companyId,
-      OR: [
-        { aeoPageId: { not: null } },
-        { contents: { some: {} } },
-      ],
-    },
-    orderBy: { createdAt: "desc" },
-    include: {
-      aeoPage: {
-        select: {
-          id: true,
-          slug: true,
-          locale: true,
-          title: true,
-          description: true,
-          status: true,
-          pageType: true,
-          publishedAt: true,
-          canonicalUrl: true,
-        },
-      },
-      contents: {
-        select: {
-          id: true,
-          platform: true,
-          status: true,
-          title: true,
-          body: true,
-          metadata: true,
-          publishedUrl: true,
-          publishedAt: true,
-        },
-        orderBy: { createdAt: "asc" },
-      },
-    },
-  });
+  const bounties = await loadBountyPagesData(session.companyId);
 
   return NextResponse.json({ success: true, bounties });
 }
