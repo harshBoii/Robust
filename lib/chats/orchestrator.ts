@@ -18,6 +18,7 @@ import {
   handleVideoGenMessage,
   initVideoGenFromFirstMessage,
 } from '@/lib/video-gen/orchestrator';
+import { handleGeoChatAction } from '@/lib/geo/chat/handle-geo-action';
 import { handleGeoMessage, initGeoFromFirstMessage } from '@/lib/geo/chat/orchestrator';
 import { parseVideoGenState } from '@/lib/video-gen/state';
 import type { VideoGenActionType } from '@/lib/video-gen/types';
@@ -279,6 +280,9 @@ export async function handleChatAction(
   if (!session) throw new Error('Session not found');
 
   if (sessionPathType(session) === 'GEO' || session.currentStep === 'geo') {
+    if (action === 'geo.redditTargetPicked') {
+      return handleGeoChatAction(sessionId, companyId, action, payload, userMessage);
+    }
     const serialized = serializeSession(session);
     return {
       session: {

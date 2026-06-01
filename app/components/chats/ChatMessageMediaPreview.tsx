@@ -3,6 +3,14 @@
 import { useEffect, useState } from 'react';
 
 import { DownloadImageButton } from './widgets/ImageGenWidgets';
+import {
+  GeoBountyPreviewWidget,
+  parseGeoBountyPreviewPayload,
+} from './widgets/GeoBountyPreviewWidget';
+import {
+  GeoRedditTargetPickerWidget,
+  parseGeoRedditTargetPickerPayload,
+} from './widgets/GeoRedditTargetPickerWidget';
 
 function SingleResultImagePreview({
   imageUrl,
@@ -125,6 +133,24 @@ export function ChatMessageMediaPreview({
     );
   }
 
+  if (widgetType === 'geoBountyPreviews') {
+    const preview = parseGeoBountyPreviewPayload(widgetPayload);
+    if (!preview) return null;
+    return <GeoBountyPreviewWidget payload={preview} />;
+  }
+
+  if (widgetType === 'geoRedditTargetPicker') {
+    const picker = parseGeoRedditTargetPickerPayload(widgetPayload);
+    if (!picker) return null;
+    return (
+      <GeoRedditTargetPickerWidget
+        payload={picker}
+        onAction={() => {}}
+        disabled
+      />
+    );
+  }
+
   return null;
 }
 
@@ -144,6 +170,12 @@ export function messageHasMediaPreview(
   if (widgetType === 'imageGenTemplateGrid') {
     const outputs = payload.outputs as Array<{ imageUrl?: string }> | undefined;
     return Boolean(outputs?.some((o) => o.imageUrl));
+  }
+  if (widgetType === 'geoBountyPreviews') {
+    return Boolean(parseGeoBountyPreviewPayload(widgetPayload));
+  }
+  if (widgetType === 'geoRedditTargetPicker') {
+    return Boolean(parseGeoRedditTargetPickerPayload(widgetPayload));
   }
   return false;
 }

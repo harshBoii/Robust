@@ -10,6 +10,7 @@ import { runGetCitedForCompany } from '@/lib/geo/bounty/runGetCitedForCompany';
 import { getPublishTargetsForBounty } from '@/lib/geo/bounty/getPublishTargets';
 import { publishBountyContent } from '@/lib/geo/bounty/publish';
 import { parseSpreadPlatforms } from '@/lib/geo/bounty/spread-platforms';
+import { fetchRedditPublishTargets } from '@/lib/zernio/reddit-publish-targets';
 
 import type { GeoToolCall } from '../geo-agent-schema';
 import type { GeoChatState, GeoToolContext, GeoToolResult } from '../types';
@@ -112,6 +113,37 @@ export async function executeGeoTool(
         return { result: { ok: true, data }, statePatch: { ...statePatch, lastBountyId: bountyId } };
       }
 
+      case 'geo.fetch_reddit_targets': {
+        try {
+          const data = await fetchRedditPublishTargets(ctx.companyId);
+          return {
+            result: {
+              ok: true,
+              data: {
+                targets: data.targets.map((t) => ({
+                  kind: t.kind,
+                  name: t.name,
+                  label: t.label,
+                  over18: t.over18 ?? false,
+                })),
+                defaultSubreddit: data.defaultSubreddit,
+                accountHandle: data.accountHandle,
+                note: 'User must select a community via the in-chat Reddit picker before publish.',
+              },
+            },
+            statePatch,
+          };
+        } catch (err) {
+          return {
+            result: {
+              ok: false,
+              error: err instanceof Error ? err.message : 'Failed to load Reddit targets',
+            },
+            statePatch,
+          };
+        }
+      }
+
       case 'geo.publish_content': {
         if (!ctx.geo.pendingPublish?.confirmed) {
           return {
@@ -208,6 +240,23 @@ export async function executeGeoTool(
         const resolved = valid[0];
         if (!resolved) {
           return { result: { ok: false, error: 'Invalid platform' }, statePatch };
+        }
+
+        if (resolved === 'REDDIT') {
+          const sub =
+            (typeof args.redditSubreddit === 'string' ? args.redditSubreddit.trim() : '') ||
+            ctx.geo.pendingPublish?.redditSubreddit?.trim() ||
+            '';
+          if (!sub) {
+            return {
+              result: {
+                ok: false,
+                error:
+                  'Reddit subreddit not selected. Show redditTargetPicker in chat and wait for the user to pick a community.',
+              },
+              statePatch,
+            };
+          }
         }
 
         const contentId =

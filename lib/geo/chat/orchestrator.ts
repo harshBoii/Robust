@@ -15,6 +15,7 @@ import type { GeoAgentTurn } from './geo-agent-schema';
 import { parseSpreadPlatforms } from '@/lib/geo/bounty/spread-platforms';
 
 import type { GeoChatState, GeoPendingPublish } from './types';
+import { buildGeoBountyPreviewFromToolResults } from './build-preview-widget';
 import { executeGeoTool } from './tools';
 
 const GEO_STEP = 'geo';
@@ -25,8 +26,19 @@ async function userMsg(sessionId: string, content: string): Promise<SerializedMe
   return serializeMessage(row);
 }
 
-async function assistantMsg(sessionId: string, content: string): Promise<SerializedMessage> {
-  const [row] = await appendChatMessages(sessionId, [{ role: 'ASSISTANT', content }]);
+async function assistantMsg(
+  sessionId: string,
+  content: string,
+  widget?: { type: string; payload: unknown },
+): Promise<SerializedMessage> {
+  const [row] = await appendChatMessages(sessionId, [
+    {
+      role: 'ASSISTANT',
+      content,
+      widgetType: widget?.type ?? null,
+      widgetPayload: widget?.payload ?? null,
+    },
+  ]);
   return serializeMessage(row);
 }
 
@@ -38,6 +50,14 @@ function mergeGeoState(
   let next: GeoChatState = { ...prev, ...patch };
 
   if (turn?.memory) next.memory = turn.memory;
+
+  if (turn?.suggestions?.length) {
+    next.composerSuggestions = turn.suggestions;
+  } else if (turn?.status === 'reply') {
+    next.composerSuggestions = undefined;
+  } else if ('composerSuggestions' in patch) {
+    next.composerSuggestions = patch.composerSuggestions;
+  }
 
   if ('pendingPublish' in patch) {
     next.pendingPublish = patch.pendingPublish;
@@ -87,10 +107,12 @@ export async function handleGeoMessage(
 
   const priorMessages = [...(session.messages ?? []).map(serializeMessage), ...newMessages];
 
-  let toolResults: Array<{
+  const allToolResults: Array<{
     name: string;
+    args?: Record<string, unknown>;
     result: { ok: boolean; data?: unknown; error?: string };
   }> = [];
+  let toolResults: typeof allToolResults = [];
 
   let turn: GeoAgentTurn | null = null;
 
@@ -121,8 +143,9 @@ export async function handleGeoMessage(
         geo,
       });
       geo = mergeGeoState(geo, statePatch, turn);
-      roundResults.push({ name: call.name, result });
+      roundResults.push({ name: call.name, args: call.args, result });
     }
+    allToolResults.push(...roundResults);
     toolResults = roundResults;
   }
 
@@ -130,7 +153,7 @@ export async function handleGeoMessage(
     turn = {
       status: 'reply',
       reply:
-        toolResults.length > 0
+        allToolResults.length > 0
           ? 'Here is what I found from your GEO data. Ask a follow-up if you want to go deeper on any prompt or bounty.'
           : 'How can I help with your GEO strategy today?',
     };
@@ -138,11 +161,21 @@ export async function handleGeoMessage(
 
   geo = mergeGeoState(geo, {}, turn);
 
-  const reply =
+  const previewPayload = buildGeoBountyPreviewFromToolResults(allToolResults);
+  let reply =
     turn.reply?.trim() ||
     'Let me know what you would like to explore — share of voice, prompts, bounties, or publishing content.';
 
-  newMessages.push(await assistantMsg(sessionId, reply));
+  if (previewPayload) {
+    reply = stripInternalIdsFromGeoReply(reply);
+    if (!/preview/i.test(reply)) {
+      reply = `${reply}\n\nPlatform previews are below — switch tabs to review each draft before publishing.`;
+    }
+  }
+
+  const assistantWidget = resolveGeoAssistantWidget(turn, geo, previewPayload);
+
+  newMessages.push(await assistantMsg(sessionId, reply, assistantWidget));
 
   const nextWorkflow: WorkflowState = {
     ...workflow,
@@ -172,6 +205,40 @@ export async function handleGeoMessage(
     messages: serialized.messages,
     newMessages,
   };
+}
+
+function resolveGeoAssistantWidget(
+  turn: GeoAgentTurn,
+  geo: GeoChatState,
+  previewPayload: ReturnType<typeof buildGeoBountyPreviewFromToolResults>,
+): { type: string; payload: unknown } | undefined {
+  if (turn.redditTargetPicker?.bountyId) {
+    const pickerBountyId = turn.redditTargetPicker.bountyId;
+    return {
+      type: 'geoRedditTargetPicker',
+      payload: {
+        bountyId: pickerBountyId,
+        initialSubreddit: geo.pendingPublish?.redditSubreddit ?? null,
+      },
+    };
+  }
+
+  if (previewPayload) {
+    return { type: 'geoBountyPreviews', payload: previewPayload };
+  }
+
+  return undefined;
+}
+
+
+/** Remove raw bounty/content IDs from assistant text when previews are shown inline. */
+function stripInternalIdsFromGeoReply(text: string): string {
+  return text
+    .replace(/^\s*[-*]?\s*\*?\*?Bounty ID\*?\*?:\s*\S+\s*$/gim, '')
+    .replace(/^\s*[-*]?\s*\*?\*?(LinkedIn|Reddit|X|Website).*content ID\*?\*?:\s*\S+\s*$/gim, '')
+    .replace(/^\s*[-*]?\s*\*?\*?Published draft assets created\*?\*?:\s*$/gim, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
 }
 
 export async function initGeoFromFirstMessage(

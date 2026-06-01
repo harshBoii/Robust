@@ -48,6 +48,8 @@ const WIDGET_STEP: Record<string, ChatWorkflowStep[]> = {
   videoGenGenerating: ['videoGen'],
   videoGenHeygenProgress: ['videoGen'],
   videoGenDone: ['videoGen'],
+  geoBountyPreviews: ['geo'],
+  geoRedditTargetPicker: ['geo'],
   stepNav: [
     'intent',
     'mediaSource',

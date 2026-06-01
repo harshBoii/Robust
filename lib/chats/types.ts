@@ -169,7 +169,8 @@ export type ChatActionType =
   | 'videoGen.scriptApproved'
   | 'videoGen.scriptChangeRequested'
   | 'videoGen.adSelected'
-  | 'videoGen.retryIntel';
+  | 'videoGen.retryIntel'
+  | 'geo.redditTargetPicked';
 
 export type SerializedMessage = {
   id: string;

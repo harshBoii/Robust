@@ -55,6 +55,7 @@ const ACTIONS: ChatActionType[] = [
   'videoGen.scriptChangeRequested',
   'videoGen.adSelected',
   'videoGen.retryIntel',
+  'geo.redditTargetPicked',
 ];
 
 export async function POST(

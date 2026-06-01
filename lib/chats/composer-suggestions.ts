@@ -31,12 +31,8 @@ export function composerSuggestions(
     ];
   }
   if (step === 'geo') {
-    return [
-      "What's my share of voice?",
-      'Top uncited prompts by revenue',
-      'Summarize my bounty pipeline',
-      'Get cited for a high-value query',
-    ];
+    const chips = workflowState.geo?.composerSuggestions;
+    return chips?.length ? chips : undefined;
   }
   if (step === 'videoGen') {
     const vg = workflowState.videoGen;

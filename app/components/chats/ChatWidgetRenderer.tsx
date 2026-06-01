@@ -44,6 +44,14 @@ import {
   ShopifyProductPickerWidget,
 } from './widgets/ImageGenWidgets';
 import {
+  GeoBountyPreviewWidget,
+  parseGeoBountyPreviewPayload,
+} from './widgets/GeoBountyPreviewWidget';
+import {
+  GeoRedditTargetPickerWidget,
+  parseGeoRedditTargetPickerPayload,
+} from './widgets/GeoRedditTargetPickerWidget';
+import {
   VideoGenAdLibraryPickerWidget,
   VideoGenAdTypePickerWidget,
   VideoGenAnalyzingWidget,
@@ -93,6 +101,24 @@ export function ChatWidgetRenderer({
       widgetType === 'imageGenTemplateGrid')
   ) {
     return null;
+  }
+
+  if (widgetType === 'geoBountyPreviews') {
+    const preview = parseGeoBountyPreviewPayload(payload);
+    if (!preview) return null;
+    return <GeoBountyPreviewWidget payload={preview} />;
+  }
+
+  if (widgetType === 'geoRedditTargetPicker') {
+    const picker = parseGeoRedditTargetPickerPayload(payload);
+    if (!picker) return null;
+    return (
+      <GeoRedditTargetPickerWidget
+        payload={picker}
+        onAction={onAction}
+        disabled={!active}
+      />
+    );
   }
 
   if (!active) return null;
