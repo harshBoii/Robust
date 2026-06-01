@@ -6,7 +6,7 @@ export const CHATS_INTENT_SUGGESTIONS: readonly string[] = [
   // ADS — Meta campaigns, creatives, publish
   'Post an ad to Meta',
   'Launch a new Meta campaign',
-  "Mother's Day campaign for tier-2 India",
+  "Festive campaign for tier-2 Cities in India",
   // IMAGE_GEN — product / variant / on-model visuals
   'Create product ad images',
   'Generate ad image variants',
