@@ -145,7 +145,7 @@ export function ChatMessageMediaPreview({
     return (
       <GeoRedditTargetPickerWidget
         payload={picker}
-        onAction={() => {}}
+        onAction={async () => {}}
         disabled
       />
     );
