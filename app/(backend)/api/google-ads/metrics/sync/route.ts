@@ -29,7 +29,7 @@ export async function POST() {
   }
 
   const env = requireGoogleAdsEnv();
-  const customerId = requireGoogleCustomerId(integration);
+  const customerId = await requireGoogleCustomerId(companyId);
 
   const client = new GoogleAdsApi({
     client_id: env.clientId,
