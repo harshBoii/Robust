@@ -47,7 +47,7 @@ export async function POST() {
   const dbAds = await prisma.googleAd.findMany({
     where: {
       googleAdsIntegrationId: integration.id,
-      googleAdId: { not: null },
+      publishedAt: { not: null },
     },
     select: {
       id: true,
