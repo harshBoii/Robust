@@ -8,6 +8,8 @@ export type ChatWorkflowStep =
   | 'imageGen'
   | 'videoGen'
   | 'intent'
+  | 'platformChoice'
+  | 'googleCampaignType'
   | 'mediaSource'
   | 'mediaUpload'
   | 'mediaPick'
@@ -25,6 +27,8 @@ export type ChatWorkflowStep =
   | 'creativeMode'
   | 'creativeBuild'
   | 'creativeCsv'
+  | 'googleCreative'
+  | 'conversionSetup'
   | 'preview'
   | 'publishChoice'
   | 'done';
@@ -39,6 +43,18 @@ export type WorkflowState = {
   imageGen?: ImageGenState;
   /** Video ad generation state (when pathType is VIDEO_GEN). */
   videoGen?: VideoGenState;
+  /** Chosen ad platform: 'meta' (default) | 'google' */
+  platform?: 'meta' | 'google';
+  /** Google Ads campaign type when platform === 'google' */
+  googleCampaignType?: 'SEARCH' | 'DISPLAY' | 'PERFORMANCE_MAX';
+  /** Google Ads: DB id of selected GoogleCampaign */
+  googleCampaignId?: string;
+  /** Google Ads: DB id of selected GoogleAdGroup */
+  googleAdGroupId?: string;
+  /** Google Ads: DB id of selected GoogleAssetGroup (PMax) */
+  googleAssetGroupId?: string;
+  /** Google Ads: publish job IDs */
+  googlePublishJobIds?: string[];
   bulkUploadId?: string;
   assetIds?: string[];
   groups?: GroupModel[];
@@ -74,6 +90,8 @@ export type AdWidgetType =
   | 'mediaUpload'
   | 'mediaPick'
   | 'mediaAnalyzing'
+  | 'platformChoice'
+  | 'googleCampaignType'
   | 'campaignChoice'
   | 'pixelQuestion'
   | 'campaignObjective'
@@ -86,6 +104,7 @@ export type AdWidgetType =
   | 'creativeMode'
   | 'creativeCsv'
   | 'creativeBuilding'
+  | 'googleCreativeForm'
   | 'adPreview'
   | 'publishSchedule'
   | 'done'
@@ -123,6 +142,12 @@ export type WidgetType = AdWidgetType | ImageGenWidgetType | VideoGenWidgetType;
 
 export type ChatActionType =
   | 'intent.ack'
+  | 'platform.selected'
+  | 'google.campaignTypeSelected'
+  | 'google.campaignSelected'
+  | 'google.adGroupSelected'
+  | 'google.creativeSubmitted'
+  | 'google.publish.submit'
   | 'media.source'
   | 'media.uploaded'
   | 'media.analyzed'

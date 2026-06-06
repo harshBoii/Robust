@@ -6,6 +6,7 @@ import { getStepResumePrompt } from './step-prompts';
 import type { ChatWorkflowStep, WidgetType, WorkflowState } from './types';
 
 export type LogicalStepId =
+  | 'platform'
   | 'media'
   | 'pixel'
   | 'campaign'
@@ -24,6 +25,13 @@ export type LogicalStepDef = {
 };
 
 export const LOGICAL_STEPS: LogicalStepDef[] = [
+  {
+    id: 'platform',
+    label: 'Platform',
+    required: false,
+    focusStep: 'platformChoice',
+    fieldsNeeded: ['ad platform (Meta or Google)'],
+  },
   {
     id: 'media',
     label: 'Creatives',
@@ -97,6 +105,9 @@ function creativesHaveCopy(state: WorkflowState): boolean {
 
 export function isLogicalStepComplete(stepId: LogicalStepId, state: WorkflowState): boolean {
   switch (stepId) {
+    case 'platform':
+      // Platform step is optional / auto-defaults to meta; treat as complete once any downstream step is set
+      return Boolean(state.platform || state.campaignId || state.googleCampaignId);
     case 'media':
       return hasCreativesReady(state);
     case 'pixel':
@@ -117,7 +128,9 @@ export function isLogicalStepComplete(stepId: LogicalStepId, state: WorkflowStat
     case 'preview':
       return state.creativeMode !== undefined && creativesHaveCopy(state);
     case 'publish':
-      return Boolean(state.publishJobIds?.length);
+      return Boolean(
+        state.publishJobIds?.length || state.googlePublishJobIds?.length,
+      );
     default:
       return false;
   }

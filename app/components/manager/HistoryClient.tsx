@@ -10,6 +10,7 @@ import {
 
 type HistoryRow = {
   kind: 'ad' | 'job';
+  platform: 'META' | 'GOOGLE';
   id: string;
   status: string;
   createdAt: string;
@@ -32,7 +33,7 @@ async function json<T>(res: Response): Promise<T> {
   return data;
 }
 
-export default function HistoryClient() {
+export default function HistoryClient({ initialPlatform }: { initialPlatform?: 'META' | 'GOOGLE' }) {
   const toast = useToast();
   const [rows, setRows] = useState<HistoryRow[]>([]);
   const [loading, setLoading] = useState(false);
@@ -42,6 +43,7 @@ export default function HistoryClient() {
 
   const [q, setQ] = useState('');
   const [status, setStatus] = useState<'ALL' | 'ACTIVE' | 'PAUSED' | 'ARCHIVED' | 'PROCESSING' | 'FAILED'>('ALL');
+  const [platform, setPlatform] = useState<'ALL' | 'META' | 'GOOGLE'>(initialPlatform ?? 'ALL');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -50,14 +52,55 @@ export default function HistoryClient() {
       const qs = new URLSearchParams();
       if (q.trim()) qs.set('q', q.trim());
       if (status !== 'ALL') qs.set('status', status);
-      const data = await json<{ rows: HistoryRow[] }>(await fetch(`/api/manager/history?${qs.toString()}`, { credentials: 'include' }));
-      setRows(data.rows ?? []);
+      if (platform !== 'ALL') qs.set('platform', platform);
+
+      // Fetch Meta history (existing) and, conditionally, Google history
+      const [metaRes, googleRes] = await Promise.all([
+        fetch(`/api/manager/history?${qs.toString()}`, { credentials: 'include' }),
+        (platform === 'ALL' || platform === 'GOOGLE')
+          ? fetch(`/api/google-ads/ads?${qs.toString()}`, { credentials: 'include' })
+          : Promise.resolve(null),
+      ]);
+
+      const metaData = await json<{ rows: HistoryRow[] }>(metaRes);
+      const metaRows: HistoryRow[] = (metaData.rows ?? []).map((r) => ({ ...r, platform: 'META' as const }));
+
+      let googleRows: HistoryRow[] = [];
+      if (googleRes?.ok) {
+        const gData = await json<{ ads: Array<{
+          id: string;
+          status: string;
+          createdAt: string;
+          adGroup?: { campaign?: { name?: string }; name?: string };
+          creative?: { headlines?: string[] };
+        }>}>(googleRes);
+        googleRows = (gData.ads ?? []).map((a) => ({
+          kind: 'ad' as const,
+          platform: 'GOOGLE' as const,
+          id: a.id,
+          status: a.status,
+          createdAt: a.createdAt,
+          scheduledAt: null,
+          thumbnailUrl: null,
+          name: a.creative?.headlines?.[0] ?? `Google Ad ${a.id.slice(-6)}`,
+          campaignName: a.adGroup?.campaign?.name ?? null,
+          adSetName: a.adGroup?.name ?? null,
+          presetName: null,
+          lastError: null,
+          metaAdId: null,
+        }));
+      }
+
+      const combined = [...metaRows, ...googleRows].sort(
+        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+      );
+      setRows(platform === 'META' ? metaRows : platform === 'GOOGLE' ? googleRows : combined);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load history');
     } finally {
       setLoading(false);
     }
-  }, [q, status]);
+  }, [q, status, platform]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -145,12 +188,21 @@ export default function HistoryClient() {
           value={status}
           onChange={(e) => setStatus(e.target.value as typeof status)}
         >
-          <option value="ALL">All</option>
+          <option value="ALL">All statuses</option>
           <option value="ACTIVE">Active</option>
           <option value="PAUSED">Paused</option>
           <option value="ARCHIVED">Archived</option>
           <option value="PROCESSING">Processing</option>
           <option value="FAILED">Failed</option>
+        </select>
+        <select
+          className="glass-input px-3 py-2 text-sm"
+          value={platform}
+          onChange={(e) => setPlatform(e.target.value as typeof platform)}
+        >
+          <option value="ALL">All platforms</option>
+          <option value="META">Meta</option>
+          <option value="GOOGLE">Google Ads</option>
         </select>
 
         {loading && (
@@ -177,6 +229,7 @@ export default function HistoryClient() {
           <thead className="sticky top-0 z-10">
             <tr className="bg-background/60 backdrop-blur-sm border-b border-border/40">
               <th className="px-3 py-3 text-left font-ui text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Creative</th>
+              <th className="px-3 py-3 text-left font-ui text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Platform</th>
               <th className="px-3 py-3 text-left font-ui text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Name</th>
               <th className="px-3 py-3 text-left font-ui text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Campaign</th>
               <th className="px-3 py-3 text-left font-ui text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Adset</th>
@@ -206,6 +259,14 @@ export default function HistoryClient() {
                   </div>
                 </td>
                 <td className="px-3 py-3">
+                  <span className={[
+                    'glass-badge text-[10px] px-2 py-0.5',
+                    r.platform === 'GOOGLE' ? 'text-blue-600 bg-blue-500/10 border-blue-500/30' : '',
+                  ].join(' ')}>
+                    {r.platform === 'GOOGLE' ? 'Google' : 'Meta'}
+                  </span>
+                </td>
+                <td className="px-3 py-3">
                   <div className="max-w-[360px] truncate text-sm font-medium text-foreground">{r.name}</div>
                   <div className="font-data mt-0.5 truncate text-[11px] text-muted-foreground/70">{r.id}</div>
                   {r.lastError ? (
@@ -227,7 +288,7 @@ export default function HistoryClient() {
                   ) : null}
                 </td>
                 <td className="px-3 py-3 text-right">
-                  {r.kind === 'ad' ? (
+                  {r.kind === 'ad' && r.platform !== 'GOOGLE' ? (
                     <button
                       type="button"
                       className="glass-button px-3 py-2 text-xs inline-flex items-center gap-2"
@@ -245,7 +306,7 @@ export default function HistoryClient() {
 
             {!filtered.length && !loading && (
               <tr>
-                <td colSpan={8} className="px-4 py-14 text-center text-muted-foreground">
+                <td colSpan={9} className="px-4 py-14 text-center text-muted-foreground">
                   No rows found.
                 </td>
               </tr>

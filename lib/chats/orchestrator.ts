@@ -32,6 +32,7 @@ import { shouldSkipActionUserBubble } from './user-message-policy';
 import { isCampaignObjectiveAllowed } from './campaign-objective-rules';
 import { tryHandleAdsEmptyPickerTurn } from './handle-empty-picker-turn';
 import { executeAgentPlan } from './execute-agent-plan';
+import { handleGoogleChatAction } from './google-action-handler';
 import {
   buildAdsetDraftFromCampaign,
   defaultAdsetDraft,
@@ -332,6 +333,33 @@ export async function handleChatAction(
   let nextStep = session.currentStep as ChatWorkflowStep;
   let nextState = { ...state };
   let recoveredFromError = false;
+
+  // ── Google Ads action routing ────────────────────────────────────────────
+  const GOOGLE_ACTIONS: ChatActionType[] = [
+    'platform.selected',
+    'google.campaignTypeSelected',
+    'google.campaignSelected',
+    'google.adGroupSelected',
+    'google.creativeSubmitted',
+    'google.publish.submit',
+  ];
+
+  if (GOOGLE_ACTIONS.includes(action)) {
+    return handleGoogleChatAction({
+      sessionId,
+      companyId,
+      session,
+      action,
+      payload,
+      userMessage,
+      options,
+      state,
+      newMessages,
+      nextStep,
+      nextState,
+    });
+  }
+  // ── End Google routing ───────────────────────────────────────────────────
 
   const displayUserText =
     userMessage?.trim() || resolveActionUserMessage(action, payload) || null;

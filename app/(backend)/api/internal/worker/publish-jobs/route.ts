@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { getSession } from '@/lib/auth/session';
 import { processPublishJobs } from '@/lib/meta/process-publish-jobs';
+import { processGooglePublishJobs } from '@/lib/google-ads/process-publish-jobs';
 
 export const dynamic = 'force-dynamic';
 
@@ -21,13 +22,26 @@ export async function POST(req: NextRequest) {
   }
 
   const limit = Math.min(20, Math.max(1, Number(req.nextUrl.searchParams.get('limit') ?? '10') || 10));
+  const platform = req.nextUrl.searchParams.get('platform') ?? 'all';
 
   try {
-    const result = await processPublishJobs({
-      limit,
-      companyId: session?.companyId,
-    });
-    return NextResponse.json(result);
+    const results: Record<string, unknown> = {};
+
+    if (platform === 'all' || platform === 'meta') {
+      results.meta = await processPublishJobs({
+        limit,
+        companyId: session?.companyId,
+      });
+    }
+
+    if (platform === 'all' || platform === 'google') {
+      results.google = await processGooglePublishJobs({
+        limit,
+        companyId: session?.companyId,
+      });
+    }
+
+    return NextResponse.json(results);
   } catch (e) {
     return NextResponse.json(
       { error: e instanceof Error ? e.message : 'Publish worker failed' },

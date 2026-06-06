@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 import { ChevronLeft, Plug, Share2 } from 'lucide-react';
-import { SiMeta, SiShopify, SiReddit, SiX } from 'react-icons/si';
+import { SiMeta, SiShopify, SiReddit, SiX, SiGoogle } from 'react-icons/si';
 import { FaLinkedin } from 'react-icons/fa';
 
 import {
@@ -11,6 +11,7 @@ import {
   ShopifyConnectionModal,
   SocialConnectionModal,
 } from '@/app/components/profile/IntegrationConnectionModals';
+import { GoogleAdsConnectionModal } from '@/app/components/profile/GoogleAdsConnectionModal';
 import type { ProviderStatus } from '@/app/components/profile/SocialProviderConnectionPanel';
 import { socialProviderLabel } from '@/lib/auth/social-oauth-state';
 import {
@@ -22,7 +23,7 @@ import {
 import type { SocialProvider } from '@/app/generated/prisma/client';
 import { fromZernioPlatform } from '@/lib/zernio/platforms';
 
-type IntegrationModal = 'meta' | 'shopify' | SocialProvider | null;
+type IntegrationModal = 'meta' | 'shopify' | 'google-ads' | SocialProvider | null;
 
 type CardConfig = {
   id: IntegrationModal;
@@ -150,6 +151,7 @@ function providerFromZernioParam(value: string | null): SocialProvider | null {
 export default function IntegrationPageClient() {
   const [modal, setModal] = useState<IntegrationModal>(null);
   const [metaConnected, setMetaConnected] = useState(false);
+  const [googleAdsConnected, setGoogleAdsConnected] = useState(false);
   const [shopifyConnected, setShopifyConnected] = useState(false);
   const [socialProviders, setSocialProviders] = useState<ProviderStatus[]>([]);
   const [loading, setLoading] = useState(true);
@@ -159,7 +161,7 @@ export default function IntegrationPageClient() {
 
   const loadStatus = useCallback(async () => {
     try {
-      const [meta, shopify, social] = await Promise.all([
+      const [meta, shopify, social, gads] = await Promise.all([
         json<{
           hasAdAccountAndPage: boolean;
         }>(await fetch('/api/meta/integration')).catch(() => ({ hasAdAccountAndPage: false })),
@@ -169,10 +171,14 @@ export default function IntegrationPageClient() {
         json<{ providers: ProviderStatus[] }>(
           await fetch('/api/integrations/social', { credentials: 'include' }),
         ).catch(() => ({ providers: [] })),
+        json<{ integration: { customerId?: string } | null }>(
+          await fetch('/api/google-ads/integration', { credentials: 'include' }),
+        ).catch(() => ({ integration: null })),
       ]);
       setMetaConnected(meta.hasAdAccountAndPage);
       setShopifyConnected(shopify.connected);
       setSocialProviders(social.providers);
+      setGoogleAdsConnected(Boolean(gads.integration?.customerId));
     } catch (e) {
       setZernioError(e instanceof Error ? e.message : 'Failed to load integrations');
     }
@@ -213,6 +219,9 @@ export default function IntegrationPageClient() {
     if (params.get('meta_oauth') || params.has('meta_oauth')) {
       setModal('meta');
       shouldCleanUrl = true;
+    } else if (params.get('gads_oauth')) {
+      setModal('google-ads');
+      shouldCleanUrl = true;
     } else if (params.get('shopify_connected') || params.get('shopify_error')) {
       setModal('shopify');
       shouldCleanUrl = true;
@@ -240,8 +249,9 @@ export default function IntegrationPageClient() {
       }
     }
 
-    if (shouldCleanUrl) {
+      if (shouldCleanUrl) {
       params.delete('meta_oauth');
+      params.delete('gads_oauth');
       params.delete('shopify_connected');
       params.delete('shopify_error');
       params.delete('zernio_error');
@@ -331,6 +341,14 @@ export default function IntegrationPageClient() {
               onManage={() => setModal('meta')}
             />
             <IntegrationCard
+              label="Google Ads"
+              description="Search, Display, and Performance Max campaigns"
+              icon={SiGoogle}
+              iconClassName="text-[#4285F4]"
+              connected={googleAdsConnected}
+              onManage={() => setModal('google-ads')}
+            />
+            <IntegrationCard
               label="Shopify"
               description="Sync products from your Shopify store"
               icon={SiShopify}
@@ -365,6 +383,9 @@ export default function IntegrationPageClient() {
       </div>
 
       {modal === 'meta' ? <MetaConnectionModal onClose={dismissModal} /> : null}
+      {modal === 'google-ads' ? (
+        <GoogleAdsConnectionModal onClose={dismissModal} onConnected={() => void loadStatus()} />
+      ) : null}
       {modal === 'shopify' ? <ShopifyConnectionModal onClose={dismissModal} /> : null}
       {modal === 'X' || modal === 'LINKEDIN' || modal === 'REDDIT' ? (
         <SocialConnectionModal provider={modal} onClose={dismissModal} />

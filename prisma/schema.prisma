@@ -43,8 +43,9 @@ model Company {
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
 
   // Relations
-  metaIntegration    MetaIntegration?
-  integrationCms     CompanyIntegrationCms[]
+  metaIntegration         MetaIntegration?
+  googleAdsIntegration    GoogleAdsIntegration?
+  integrationCms          CompanyIntegrationCms[]
   shopifyShops       ShopifyShop[]
   shopifyProducts    ShopifyProduct[]
   assets             Asset[]
@@ -58,6 +59,7 @@ model Company {
   adAutomationEvents AdAutomationEvent[]
   notifications      Notification[]
   adPublishJobs      AdPublishJob[]
+  googleAdsPublishJobs GoogleAdPublishJob[]
   assistantCreativeUsage AssistantCreativeUsage[]
   adChatSessions     AdChatSession[]
   authSessions       AuthSession[]
@@ -477,6 +479,335 @@ model MetaIntegration {
 
   @@index([companyId])
   @@map("meta_integrations")
+}
+
+// ================================================================
+// GOOGLE ADS INTEGRATION
+// ================================================================
+
+model GoogleAdsIntegration {
+  id               String    @id @default(cuid())
+  companyId        String    @unique
+  /// AES-256 encrypted OAuth refresh token
+  refreshToken     String    @db.Text
+  /// Google Ads customer ID (no dashes, e.g. 1234567890)
+  customerId       String?   @db.VarChar(30)
+  /// MCC / manager account ID used to access customerId
+  loginCustomerId  String?   @db.VarChar(30)
+  /// Google Ads conversion action resource name
+  conversionActionId String? @db.VarChar(200)
+  createdAt        DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime  @updatedAt @db.Timestamptz(3)
+
+  company         Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  campaigns       GoogleCampaign[]
+  adGroups        GoogleAdGroup[]
+  assetGroups     GoogleAssetGroup[]
+  creatives       GoogleCreative[]
+  media           GoogleMedia[]
+  ads             GoogleAd[]
+  publishJobs     GoogleAdPublishJob[]
+
+  @@index([companyId])
+  @@map("google_ads_integrations")
+}
+
+model GoogleCampaign {
+  id                    String    @id @default(cuid())
+  googleAdsIntegrationId String
+  googleCampaignId      String    @db.VarChar(100)
+  campaignPresetId      String?
+  name                  String    @db.VarChar(500)
+  /// SEARCH | DISPLAY | PERFORMANCE_MAX
+  campaignType          String    @db.VarChar(30)
+  /// ACTIVE | PAUSED | REMOVED
+  status                String    @db.VarChar(50)
+  /// MAXIMIZE_CONVERSIONS | MAXIMIZE_CONVERSION_VALUE | TARGET_CPA | TARGET_ROAS | MANUAL_CPC | TARGET_IMPRESSION_SHARE
+  biddingStrategy       String?   @db.VarChar(64)
+  dailyBudgetMicros     BigInt?
+  totalBudgetMicros     BigInt?
+  targetCpaMicros       BigInt?
+  targetRoas            Float?
+  publishedAt           DateTime? @db.Timestamptz(3)
+  createdAt             DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt             DateTime  @updatedAt @db.Timestamptz(3)
+
+  googleAdsIntegration  GoogleAdsIntegration  @relation(fields: [googleAdsIntegrationId], references: [id], onDelete: Cascade)
+  campaignPreset        GoogleCampaignPreset? @relation(fields: [campaignPresetId], references: [id], onDelete: SetNull)
+  adGroups              GoogleAdGroup[]
+  assetGroups           GoogleAssetGroup[]
+  publishJobs           GoogleAdPublishJob[]
+
+  @@unique([googleAdsIntegrationId, googleCampaignId])
+  @@index([googleAdsIntegrationId])
+  @@index([googleCampaignId])
+  @@map("google_campaigns")
+}
+
+model GoogleAdGroup {
+  id                     String    @id @default(cuid())
+  googleAdsIntegrationId String
+  campaignId             String
+  googleAdGroupId        String    @db.VarChar(100)
+  adGroupPresetId        String?
+  name                   String?   @db.VarChar(500)
+  /// ACTIVE | PAUSED | REMOVED
+  status                 String?   @db.VarChar(50)
+  /// Keyword list as JSON array of {text, matchType}
+  keywords               Json?     @default("[]")
+  /// Display targeting criteria as JSON
+  targeting              Json?     @default("{}")
+  cpcBidMicros           BigInt?
+  createdAt              DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt              DateTime  @updatedAt @db.Timestamptz(3)
+
+  googleAdsIntegration   GoogleAdsIntegration  @relation(fields: [googleAdsIntegrationId], references: [id], onDelete: Cascade)
+  campaign               GoogleCampaign        @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  adGroupPreset          GoogleAdGroupPreset?  @relation(fields: [adGroupPresetId], references: [id], onDelete: SetNull)
+  ads                    GoogleAd[]
+  publishJobs            GoogleAdPublishJob[]
+
+  @@unique([googleAdsIntegrationId, googleAdGroupId])
+  @@index([campaignId])
+  @@index([googleAdsIntegrationId])
+  @@map("google_ad_groups")
+}
+
+model GoogleAssetGroup {
+  id                     String    @id @default(cuid())
+  googleAdsIntegrationId String
+  campaignId             String
+  googleAssetGroupId     String    @db.VarChar(100)
+  assetGroupPresetId     String?
+  name                   String?   @db.VarChar(500)
+  /// ACTIVE | PAUSED | REMOVED
+  status                 String?   @db.VarChar(50)
+  finalUrl               String    @db.VarChar(2000)
+  mobileUrl              String?   @db.VarChar(2000)
+  path1                  String?   @db.VarChar(15)
+  path2                  String?   @db.VarChar(15)
+  createdAt              DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt              DateTime  @updatedAt @db.Timestamptz(3)
+
+  googleAdsIntegration   GoogleAdsIntegration      @relation(fields: [googleAdsIntegrationId], references: [id], onDelete: Cascade)
+  campaign               GoogleCampaign            @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  assetGroupPreset       GoogleAssetGroupPreset?   @relation(fields: [assetGroupPresetId], references: [id], onDelete: SetNull)
+  publishJobs            GoogleAdPublishJob[]
+
+  @@unique([googleAdsIntegrationId, googleAssetGroupId])
+  @@index([campaignId])
+  @@map("google_asset_groups")
+}
+
+model GoogleCreative {
+  id                     String    @id @default(cuid())
+  googleAdsIntegrationId String
+  campaignId             String?
+  assetId                String?
+  /// RSA: up to 15 | RDA: 1-5 | PMax headlines stored here too
+  headlines              Json      @default("[]")
+  /// RSA: up to 4 | RDA: 1-5 | PMax descriptions stored here too
+  descriptions           Json      @default("[]")
+  /// RDA / PMax only
+  longHeadline           String?   @db.VarChar(500)
+  businessName           String?   @db.VarChar(255)
+  finalUrl               String?   @db.VarChar(2000)
+  path1                  String?   @db.VarChar(15)
+  path2                  String?   @db.VarChar(15)
+  /// RESPONSIVE_SEARCH | RESPONSIVE_DISPLAY
+  adType                 String    @db.VarChar(40)
+  createdAt              DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt              DateTime  @updatedAt @db.Timestamptz(3)
+
+  googleAdsIntegration   GoogleAdsIntegration @relation(fields: [googleAdsIntegrationId], references: [id], onDelete: Cascade)
+  ads                    GoogleAd[]
+  publishJobs            GoogleAdPublishJob[]
+
+  @@index([googleAdsIntegrationId])
+  @@index([campaignId])
+  @@map("google_creatives")
+}
+
+model GoogleMedia {
+  id                     String    @id @default(cuid())
+  googleAdsIntegrationId String
+  assetId                String?
+  /// Google Ads asset resource name (customers/{id}/assets/{asset_id})
+  googleAssetResourceName String   @db.VarChar(200)
+  /// IMAGE | YOUTUBE_VIDEO | LOGO | SQUARE_IMAGE | LANDSCAPE_LOGO | CALL_TO_ACTION_SELECTION
+  assetType              String    @db.VarChar(50)
+  uploadedCustomerId     String    @db.VarChar(30)
+  createdAt              DateTime  @default(now()) @db.Timestamptz(3)
+
+  googleAdsIntegration   GoogleAdsIntegration @relation(fields: [googleAdsIntegrationId], references: [id], onDelete: Cascade)
+
+  @@index([googleAdsIntegrationId])
+  @@index([assetId])
+  @@map("google_media")
+}
+
+model GoogleAd {
+  id                     String    @id @default(cuid())
+  googleAdsIntegrationId String
+  adGroupId              String
+  googleCreativeDbId     String?
+  googleAdId             String    @db.VarChar(100)
+  name                   String?   @db.VarChar(500)
+  /// ACTIVE | PAUSED | REMOVED
+  status                 String?   @db.VarChar(50)
+  /// RESPONSIVE_SEARCH | RESPONSIVE_DISPLAY
+  adType                 String?   @db.VarChar(40)
+  publishedAt            DateTime? @db.Timestamptz(3)
+  createdAt              DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt              DateTime  @updatedAt @db.Timestamptz(3)
+
+  googleAdsIntegration   GoogleAdsIntegration @relation(fields: [googleAdsIntegrationId], references: [id], onDelete: Cascade)
+  adGroup                GoogleAdGroup        @relation(fields: [adGroupId], references: [id], onDelete: Cascade)
+  creative               GoogleCreative?      @relation(fields: [googleCreativeDbId], references: [id], onDelete: SetNull)
+
+  @@unique([googleAdsIntegrationId, googleAdId])
+  @@index([adGroupId])
+  @@map("google_ads")
+}
+
+model GoogleAdMetrics {
+  id                String   @id @default(cuid())
+  googleCampaignId  String
+  googleAdId        String   @db.VarChar(100)
+  impressions       Int
+  clicks            Int
+  ctr               Float
+  spend             Float
+  cpc               Float?
+  conversions       Float?
+  conversionValue   Float?
+  roas              Float?
+  /// "last_7d" | "last_30d" | "lifetime"
+  datePreset        String   @db.VarChar(50)
+  recordedAt        DateTime @default(now()) @db.Timestamptz(3)
+
+  @@index([googleCampaignId])
+  @@index([googleAdId])
+  @@index([googleAdId, datePreset])
+  @@unique([googleAdId, datePreset], name: "googleAdId_datePreset")
+  @@index([recordedAt(sort: Desc)])
+  @@map("google_ad_metrics")
+}
+
+/// Campaign-level preset for Google Ads
+model GoogleCampaignPreset {
+  id              String    @id @default(cuid())
+  companyId       String
+  name            String    @db.VarChar(120)
+  isDefault       Boolean   @default(false)
+  /// SEARCH | DISPLAY | PERFORMANCE_MAX
+  campaignType    String    @db.VarChar(30)
+  biddingStrategy String?   @db.VarChar(64)
+  dailyBudgetMicros BigInt?
+  totalBudgetMicros BigInt?
+  targetCpaMicros BigInt?
+  targetRoas      Float?
+  /// For Search: geo targets JSON array
+  geoTargets      Json?     @default("[]")
+  /// For Search: languages JSON array
+  languages       Json?     @default("[]")
+  status          String?   @db.VarChar(32)
+  createdAt       DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime  @updatedAt @db.Timestamptz(3)
+
+  campaigns       GoogleCampaign[]
+
+  @@index([companyId])
+  @@index([companyId, isDefault])
+  @@map("google_campaign_presets")
+}
+
+/// Ad Group level preset for Google Search / Display
+model GoogleAdGroupPreset {
+  id              String    @id @default(cuid())
+  companyId       String
+  name            String    @db.VarChar(120)
+  isDefault       Boolean   @default(false)
+  /// For Search: keyword list JSON [{text, matchType}]
+  keywords        Json?     @default("[]")
+  /// For Display: targeting criteria JSON
+  targeting       Json?     @default("{}")
+  cpcBidMicros    BigInt?
+  createdAt       DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime  @updatedAt @db.Timestamptz(3)
+
+  adGroups        GoogleAdGroup[]
+
+  @@index([companyId])
+  @@map("google_ad_group_presets")
+}
+
+/// Asset Group level preset for Performance Max campaigns
+model GoogleAssetGroupPreset {
+  id              String    @id @default(cuid())
+  companyId       String
+  name            String    @db.VarChar(120)
+  isDefault       Boolean   @default(false)
+  finalUrl        String?   @db.VarChar(2000)
+  path1           String?   @db.VarChar(15)
+  path2           String?   @db.VarChar(15)
+  /// Default headlines JSON array
+  headlines       Json?     @default("[]")
+  /// Default descriptions JSON array
+  descriptions    Json?     @default("[]")
+  longHeadline    String?   @db.VarChar(500)
+  businessName    String?   @db.VarChar(255)
+  createdAt       DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime  @updatedAt @db.Timestamptz(3)
+
+  assetGroups     GoogleAssetGroup[]
+
+  @@index([companyId])
+  @@map("google_asset_group_presets")
+}
+
+/// Async publish queue for Google Ads
+model GoogleAdPublishJob {
+  id                     String           @id @default(cuid())
+  companyId              String
+  googleAdsIntegrationId String
+  campaignId             String
+  /// Null for PMax (uses assetGroupId instead)
+  adGroupId              String?
+  /// Only set for PMax campaigns
+  assetGroupId           String?
+  assetId                String?
+  googleCreativeDbId     String?
+  /// SEARCH | DISPLAY | PERFORMANCE_MAX
+  campaignType           String           @db.VarChar(30)
+  status                 PublishJobStatus @default(QUEUED)
+  attempts               Int              @default(0)
+  maxAttempts            Int              @default(3)
+  scheduledAt            DateTime?        @db.Timestamptz(3)
+  startedAt              DateTime?        @db.Timestamptz(3)
+  completedAt            DateTime?        @db.Timestamptz(3)
+  lastError              String?          @db.Text
+  googleAdDbId           String?
+  /// Per-group creative overrides
+  headlinesOverride      Json?
+  descriptionsOverride   Json?
+  longHeadlineOverride   String?          @db.VarChar(500)
+  finalUrlOverride       String?          @db.VarChar(2000)
+  createdAt              DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt              DateTime         @updatedAt @db.Timestamptz(3)
+
+  company                Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  googleAdsIntegration   GoogleAdsIntegration @relation(fields: [googleAdsIntegrationId], references: [id], onDelete: Cascade)
+  campaign               GoogleCampaign       @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  adGroup                GoogleAdGroup?       @relation(fields: [adGroupId], references: [id], onDelete: Cascade)
+  assetGroup             GoogleAssetGroup?    @relation(fields: [assetGroupId], references: [id], onDelete: Cascade)
+  creative               GoogleCreative?      @relation(fields: [googleCreativeDbId], references: [id], onDelete: SetNull)
+
+  @@index([companyId, status])
+  @@index([scheduledAt, status])
+  @@index([googleAdsIntegrationId])
+  @@index([campaignId])
+  @@map("google_ad_publish_jobs")
 }
 
 // ================================================================

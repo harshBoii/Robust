@@ -7,6 +7,10 @@ export const CHATS_INTENT_SUGGESTIONS: readonly string[] = [
   'Post an ad to Meta',
   'Launch a new Meta campaign',
   "Festive campaign for tier-2 Cities in India",
+  // ADS — Google Ads
+  'Launch a Google Search campaign',
+  'Post a Display ad to Google',
+  'Create a Performance Max campaign',
   // IMAGE_GEN — product / variant / on-model visuals
   'Create product ad images',
   'Generate ad image variants',

@@ -62,6 +62,11 @@ import {
   VideoGenScriptReviewWidget,
   VideoGenSubpathChoiceWidget,
 } from './widgets/VideoGenWidgets';
+import {
+  GoogleCampaignTypeWidget,
+  GoogleCreativeFormWidget,
+  PlatformChoiceWidget,
+} from './widgets/GoogleAdsWidgets';
 
 export function ChatWidgetRenderer({
   widgetType,
@@ -315,6 +320,17 @@ export function ChatWidgetRenderer({
       );
     case 'videoGenDone':
       return <VideoGenDoneWidget payload={payload} />;
+    case 'platformChoice':
+      return <PlatformChoiceWidget onAction={onAction} />;
+    case 'googleCampaignType':
+      return <GoogleCampaignTypeWidget onAction={onAction} />;
+    case 'googleCreativeForm':
+      return (
+        <GoogleCreativeFormWidget
+          campaignType={payload.campaignType as string | undefined}
+          onAction={onAction}
+        />
+      );
     default:
       return null;
   }

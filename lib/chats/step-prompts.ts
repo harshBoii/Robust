@@ -90,6 +90,26 @@ export function getStepResumePrompt(step: ChatWorkflowStep): {
         content: 'Ready to publish. Post immediately or schedule for later?',
         widgetType: 'publishSchedule',
       };
+    case 'platformChoice':
+      return {
+        content: 'Where would you like to publish your ads?',
+        widgetType: 'platformChoice',
+      };
+    case 'googleCampaignType':
+      return {
+        content: 'Which Google Ads campaign type would you like to run?',
+        widgetType: 'googleCampaignType',
+      };
+    case 'googleCreative':
+      return {
+        content: 'Fill in your Google ad creative — headlines, descriptions, and a final URL.',
+        widgetType: 'googleCreativeForm',
+      };
+    case 'conversionSetup':
+      return {
+        content: 'Set up a conversion action for this campaign (optional).',
+        widgetType: null,
+      };
     default:
       return { content: 'Continue when you are ready.', widgetType: null };
   }

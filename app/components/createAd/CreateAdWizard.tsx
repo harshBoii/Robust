@@ -1,9 +1,12 @@
 'use client';
 
 import { useCallback, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 
 import type { CreativeFields, GroupModel } from './types';
 import { CREATE_AD_STEPS, type CreateAdStep, StepBar } from './shared';
+import { PlatformPicker } from '@/app/components/ads/PlatformPicker';
+import type { AdPlatform, GoogleCampaignType } from '@/lib/ads/platform';
 
 import UploadStep from './steps/UploadStep';
 import GroupsStep from './steps/GroupsStep';
@@ -25,6 +28,10 @@ function defaultCreative(): CreativeFields {
 }
 
 export default function CreateAdWizard({ companyId }: { companyId: string }) {
+  const router = useRouter();
+  const [platform, setPlatform] = useState<AdPlatform>('META');
+  const [googleCampaignType, setGoogleCampaignType] = useState<GoogleCampaignType>('DISPLAY');
+  const [showPlatformPicker, setShowPlatformPicker] = useState(true);
   const [step, setStep] = useState<CreateAdStep>('Upload');
   const stepIndex = CREATE_AD_STEPS.indexOf(step);
 
@@ -111,38 +118,70 @@ export default function CreateAdWizard({ companyId }: { companyId: string }) {
               </svg>
             </span>
             <span className="font-ui text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-              Meta Ads
+              {platform === 'GOOGLE' ? 'Google Ads' : 'Meta Ads'}
             </span>
           </div>
           <h1 className="font-display text-2xl font-semibold tracking-tight">Create Ad</h1>
           <p className="text-sm text-muted-foreground">
-            Upload creatives, map groups to ad sets, preview, and publish to Meta.
+            {platform === 'GOOGLE'
+              ? 'Upload creatives, configure your Google campaign, and publish.'
+              : 'Upload creatives, map groups to ad sets, preview, and publish to Meta.'}
           </p>
         </div>
 
         <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={prev}
-            disabled={stepIndex === 0}
-            className="glass-button flex items-center gap-1.5 px-4 py-2 text-sm disabled:opacity-40"
-          >
-            Back
-          </button>
-          <button
-            type="button"
-            onClick={next}
-            disabled={!canNext || stepIndex >= CREATE_AD_STEPS.length - 1}
-            className="glass-button-primary flex items-center gap-1.5 px-4 py-2 text-sm disabled:opacity-40"
-          >
-            Next
-          </button>
+          {showPlatformPicker ? (
+            <button
+              type="button"
+              onClick={() => {
+                if (platform === 'GOOGLE') {
+                  router.push(`/manager/post-google`);
+                } else {
+                  setShowPlatformPicker(false);
+                }
+              }}
+              className="glass-button-primary flex items-center gap-1.5 px-4 py-2 text-sm"
+            >
+              Continue →
+            </button>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={prev}
+                disabled={stepIndex === 0}
+                className="glass-button flex items-center gap-1.5 px-4 py-2 text-sm disabled:opacity-40"
+              >
+                Back
+              </button>
+              <button
+                type="button"
+                onClick={next}
+                disabled={!canNext || stepIndex >= CREATE_AD_STEPS.length - 1}
+                className="glass-button-primary flex items-center gap-1.5 px-4 py-2 text-sm disabled:opacity-40"
+              >
+                Next
+              </button>
+            </>
+          )}
         </div>
       </div>
 
-      <div className="glass-card px-6 py-5">
-        <StepBar steps={CREATE_AD_STEPS} current={step} />
-      </div>
+      {showPlatformPicker ? (
+        <div className="glass-card px-6 py-6 max-w-xl">
+          <h2 className="text-sm font-semibold text-foreground mb-4">Where do you want to publish?</h2>
+          <PlatformPicker
+            platform={platform}
+            googleCampaignType={googleCampaignType}
+            onPlatformChange={setPlatform}
+            onCampaignTypeChange={setGoogleCampaignType}
+          />
+        </div>
+      ) : (
+        <>
+          <div className="glass-card px-6 py-5">
+            <StepBar steps={CREATE_AD_STEPS} current={step} />
+          </div>
 
       {(bulkUploadId || campaignId || includedGroups.length > 0) ? (
         <div className="animate-fade-up mt-3 flex flex-wrap items-center gap-2 rounded-2xl border border-border/40 bg-background/30 px-4 py-2.5">
@@ -261,6 +300,8 @@ export default function CreateAdWizard({ companyId }: { companyId: string }) {
           </button>
         </div>
       </div>
+        </>
+      )}
     </div>
   );
 }

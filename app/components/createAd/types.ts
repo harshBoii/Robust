@@ -23,13 +23,34 @@ export type CreativeFields = {
   pixelId: string;
 };
 
+/** Google Ads creative fields for RSA / RDA / PMax. */
+export type GoogleCreativeFields = {
+  /** Up to 15 for RSA, 5 for RDA/PMax */
+  headlines: string[];
+  /** Up to 4 for RSA, 5 for RDA/PMax */
+  descriptions: string[];
+  /** Required for RDA and PMax */
+  longHeadline?: string;
+  /** Required for RDA and PMax */
+  businessName?: string;
+  finalUrl: string;
+  path1?: string;
+  path2?: string;
+};
+
 export type GroupModel = {
   bucketId: string;
   label: string;
   assetIds: string[];
   assets: Asset[];
   included: boolean;
+  /** Meta: DB id of MetaAdSet */
   adSetId: string;
   creative: CreativeFields;
+  /** Google: DB id of GoogleAdGroup or GoogleAssetGroup */
+  googleAdGroupId?: string;
+  /** Google Ads creative fields (used when platform === 'GOOGLE') */
+  googleCreative?: GoogleCreativeFields;
 };
+
 

@@ -870,3 +870,10 @@ export function DoneWidget({ jobIds }: { jobIds?: string[] }) {
     </div>
   );
 }
+
+// ─── Google Ads widgets (re-exported from dedicated module) ──────────────────
+export {
+  PlatformChoiceWidget,
+  GoogleCampaignTypeWidget,
+  GoogleCreativeFormWidget,
+} from './GoogleAdsWidgets';
