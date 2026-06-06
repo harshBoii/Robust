@@ -1,8 +1,17 @@
 import 'server-only';
 
+import { GetObjectCommand } from '@aws-sdk/client-s3';
+
+import { r2 } from '@/lib/cloudfare/r2';
 import { prisma } from '@/lib/prisma';
 import { uploadImageAsset, uploadYoutubeAsset } from '@/lib/google-ads/client';
 import { googleAdsErrorFromRaw } from '@/lib/google-ads/errors';
+
+async function readAssetBytes(input: { r2Bucket: string; r2Key: string }): Promise<Uint8Array> {
+  const res = await r2.send(new GetObjectCommand({ Bucket: input.r2Bucket, Key: input.r2Key }));
+  if (!res.Body) throw new Error('Missing R2 body');
+  return new Uint8Array(await res.Body.transformToByteArray());
+}
 
 /**
  * Download a gallery asset from R2, upload it to Google Ads as an image asset,
@@ -21,21 +30,17 @@ export async function uploadGalleryAssetToGoogle(input: {
 
   const asset = await prisma.asset.findUnique({
     where: { id: input.assetId },
-    select: { id: true, title: true, sourceUrl: true, assetType: true },
+    select: { id: true, title: true, r2Key: true, r2Bucket: true, mimeType: true, assetType: true },
   });
   if (!asset) throw new Error(`Asset not found: ${input.assetId}`);
-
-  if (!asset.sourceUrl) throw new Error('Asset has no downloadable URL');
+  if (!asset.r2Key?.trim()) throw new Error('Asset has no downloadable file');
 
   try {
-    // Fetch bytes
-    const response = await fetch(asset.sourceUrl);
-    if (!response.ok) throw new Error(`Failed to fetch asset: ${response.status}`);
-    const bytes = await response.arrayBuffer();
+    const bytes = await readAssetBytes({ r2Bucket: asset.r2Bucket, r2Key: asset.r2Key });
     const base64 = Buffer.from(bytes).toString('base64');
 
     const assetType = input.assetType ?? 'IMAGE';
-    const mimeType = asset.sourceUrl.toLowerCase().includes('.png') ? 'IMAGE_PNG' : 'IMAGE_JPEG';
+    const mimeType = asset.mimeType?.toLowerCase().includes('png') ? 'IMAGE_PNG' : 'IMAGE_JPEG';
 
     const { resourceName } = await uploadImageAsset({
       refreshToken: integration.refreshToken,
@@ -48,7 +53,6 @@ export async function uploadGalleryAssetToGoogle(input: {
       },
     });
 
-    // Persist GoogleMedia record
     await prisma.googleMedia.create({
       data: {
         googleAdsIntegrationId: input.googleAdsIntegrationId,

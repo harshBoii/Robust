@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { Prisma } from '@/app/generated/prisma/client';
 import { getSession } from '@/lib/auth/session';
 import { prisma } from '@/lib/prisma';
 
@@ -63,8 +64,8 @@ export async function POST(req: NextRequest) {
           ? BigInt(Math.round(body.targetCpaMicros))
           : null,
       targetRoas: typeof body.targetRoas === 'number' ? body.targetRoas : null,
-      geoTargets: Array.isArray(body.geoTargets) ? body.geoTargets : [],
-      languages: Array.isArray(body.languages) ? body.languages : [],
+      geoTargets: (Array.isArray(body.geoTargets) ? body.geoTargets : []) as Prisma.InputJsonValue,
+      languages: (Array.isArray(body.languages) ? body.languages : []) as Prisma.InputJsonValue,
       status: typeof body.status === 'string' ? body.status : null,
       isDefault: body.isDefault === true,
     },

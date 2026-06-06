@@ -6,6 +6,8 @@ import type { AdWidgetType, ChatWorkflowStep, WorkflowState } from './types';
 
 const AD_WORKFLOW_STEPS = new Set<ChatWorkflowStep>([
   'intent',
+  'platformChoice',
+  'googleCampaignType',
   'mediaSource',
   'mediaUpload',
   'mediaPick',
@@ -22,6 +24,8 @@ const AD_WORKFLOW_STEPS = new Set<ChatWorkflowStep>([
   'adsetApprove',
   'creativeMode',
   'creativeBuild',
+  'googleCreative',
+  'conversionSetup',
   'creativeCsv',
   'preview',
   'publishChoice',

@@ -433,7 +433,7 @@ export async function createResponsiveSearchAd(input: {
     const customer = makeClient(input.refreshToken, input.customerId, input.loginCustomerId);
     const rsa = input.rsa;
 
-    const result = await customer.ads.create([
+    const result = await customer.adGroupAds.create([
       {
         ad_group: rsa.adGroupResourceName,
         status: rsa.status ?? 'PAUSED',
@@ -470,7 +470,7 @@ export async function createResponsiveDisplayAd(input: {
     const customer = makeClient(input.refreshToken, input.customerId, input.loginCustomerId);
     const rda = input.rda;
 
-    const result = await customer.ads.create([
+    const result = await customer.adGroupAds.create([
       {
         ad_group: rda.adGroupResourceName,
         status: rda.status ?? 'PAUSED',

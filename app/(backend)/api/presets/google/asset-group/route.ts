@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { Prisma } from '@/app/generated/prisma/client';
 import { getSession } from '@/lib/auth/session';
 import { prisma } from '@/lib/prisma';
 
@@ -49,8 +50,8 @@ export async function POST(req: NextRequest) {
       finalUrl: typeof body.finalUrl === 'string' ? body.finalUrl : null,
       path1: typeof body.path1 === 'string' ? body.path1 : null,
       path2: typeof body.path2 === 'string' ? body.path2 : null,
-      headlines: Array.isArray(body.headlines) ? body.headlines : [],
-      descriptions: Array.isArray(body.descriptions) ? body.descriptions : [],
+      headlines: (Array.isArray(body.headlines) ? body.headlines : []) as Prisma.InputJsonValue,
+      descriptions: (Array.isArray(body.descriptions) ? body.descriptions : []) as Prisma.InputJsonValue,
       longHeadline: typeof body.longHeadline === 'string' ? body.longHeadline : null,
       businessName: typeof body.businessName === 'string' ? body.businessName : null,
       isDefault: body.isDefault === true,

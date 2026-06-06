@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { Prisma } from '@/app/generated/prisma/client';
 import { getSession } from '@/lib/auth/session';
 import { prisma } from '@/lib/prisma';
 
@@ -42,8 +43,10 @@ export async function POST(req: NextRequest) {
     data: {
       companyId: session.companyId,
       name,
-      keywords: Array.isArray(body.keywords) ? body.keywords : [],
-      targeting: typeof body.targeting === 'object' && body.targeting !== null ? body.targeting as Record<string, unknown> : {},
+      keywords: (Array.isArray(body.keywords) ? body.keywords : []) as Prisma.InputJsonValue,
+      targeting: (
+        typeof body.targeting === 'object' && body.targeting !== null ? body.targeting : {}
+      ) as Prisma.InputJsonValue,
       cpcBidMicros:
         typeof body.cpcBidMicros === 'number' ? BigInt(Math.round(body.cpcBidMicros)) : null,
       isDefault: body.isDefault === true,

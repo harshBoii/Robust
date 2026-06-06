@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { Prisma } from '@/app/generated/prisma/client';
 import { prisma } from '@/lib/prisma';
 import {
   createResponsiveSearchAd,
@@ -414,8 +415,12 @@ export async function enqueueGoogleBulkPublish(input: {
           campaignType: input.campaignType,
           googleCreativeDbId: group.googleCreativeDbId ?? null,
           scheduledAt: input.scheduledAt ?? null,
-          headlinesOverride: group.headlines ?? null,
-          descriptionsOverride: group.descriptions ?? null,
+          headlinesOverride: group.headlines
+            ? (group.headlines as Prisma.InputJsonValue)
+            : undefined,
+          descriptionsOverride: group.descriptions
+            ? (group.descriptions as Prisma.InputJsonValue)
+            : undefined,
           longHeadlineOverride: group.longHeadline ?? null,
           finalUrlOverride: group.finalUrl ?? null,
         },
