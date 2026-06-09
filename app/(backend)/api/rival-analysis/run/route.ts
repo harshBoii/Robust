@@ -8,6 +8,7 @@ import { scrapeRivalAds } from '@/lib/rival-analysis/scraper';
 import { analyzeAds } from '@/lib/rival-analysis/analyzer';
 
 export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
 export const maxDuration = 300;
 
 const StartRunSchema = z.object({
