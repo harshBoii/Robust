@@ -113,6 +113,15 @@ const DOM_EXTRACT_JS = `
 })()
 `;
 
+const log = (msg: string, data?: unknown) => {
+  const ts = new Date().toISOString();
+  if (data !== undefined) {
+    console.log(`[rival-scraper] ${ts} ${msg}`, data);
+  } else {
+    console.log(`[rival-scraper] ${ts} ${msg}`);
+  }
+};
+
 export async function scrapeRivalAds(
   pageName: string,
   country = 'IN',
@@ -125,7 +134,12 @@ export async function scrapeRivalAds(
     `&q=${encodeURIComponent(pageName)}` +
     `&search_type=page`;
 
+  log(`Starting scrape — page="${pageName}" country=${country} serverless=${IS_SERVERLESS}`);
+  log(`URL: ${url}`);
+
+  log('Launching browser…');
   const browser = await launchBrowser();
+  log('Browser launched.');
 
   try {
     const ctx = await browser.newContext({
@@ -138,31 +152,51 @@ export async function scrapeRivalAds(
     });
 
     const page = await ctx.newPage();
+    log('Navigating to FB Ad Library…');
     await page.goto(url, { waitUntil: 'networkidle', timeout: 30000 });
+    log('Page loaded (networkidle). Waiting 3 s…');
     await page.waitForTimeout(3000);
 
     // dismiss cookie banner
     try {
       const btn = page.locator('[data-testid="cookie-policy-manage-dialog-accept-button"]');
       if (await btn.isVisible({ timeout: 3000 })) {
+        log('Cookie banner visible — dismissing…');
         await btn.click();
         await page.waitForTimeout(1000);
+        log('Cookie banner dismissed.');
+      } else {
+        log('No cookie banner detected.');
       }
     } catch { /* ignore */ }
 
     // scroll to load ads
+    log(`Scrolling up to ${MAX_SCROLLS} times to load ads…`);
     let prevH = 0;
     for (let i = 0; i < MAX_SCROLLS; i++) {
       await page.evaluate('window.scrollTo(0, document.body.scrollHeight)');
       await page.waitForTimeout(2500);
       const h = await page.evaluate('document.body.scrollHeight') as number;
+      log(`  scroll ${i + 1}/${MAX_SCROLLS} — height=${h}px${h === prevH ? ' (no change, stopping)' : ''}`);
       if (h === prevH) break;
       prevH = h;
     }
 
+    log('Extracting ads from DOM…');
     const evaluated = await page.evaluate(DOM_EXTRACT_JS);
     const rawAds = (Array.isArray(evaluated) ? evaluated : []) as Omit<ScrapedAd, 'days_running'>[];
+    log(`DOM extraction returned ${rawAds.length} raw ad(s).`);
+
+    // log a quick summary of what was found
+    if (rawAds.length === 0) {
+      const bodySnippet = await page.evaluate('document.body.innerText').catch(() => '') as string;
+      log('WARNING: 0 ads found. First 500 chars of page text:', bodySnippet.slice(0, 500));
+    } else {
+      log('Raw ad library IDs:', rawAds.map(a => a.library_id));
+    }
+
     await browser.close();
+    log('Browser closed.');
 
     // compute longevity
     const today = new Date();
@@ -179,11 +213,19 @@ export async function scrapeRivalAds(
       return { ...ad, days_running };
     });
 
-    return ads
+    const top6 = ads
       .filter(a => a.days_running !== null)
       .sort((a, b) => (b.days_running ?? 0) - (a.days_running ?? 0))
       .slice(0, 6);
+
+    log(`After longevity filter: ${top6.length} ad(s) kept (top 6 by days running).`);
+    top6.forEach((a, i) =>
+      log(`  #${i + 1} library_id=${a.library_id} days=${a.days_running} cta=${a.cta ?? 'none'} images=${a.images.length}`)
+    );
+
+    return top6;
   } catch (err) {
+    log('ERROR during scrape:', err instanceof Error ? err.message : String(err));
     await browser.close().catch(() => {});
     throw err;
   }

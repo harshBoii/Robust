@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { getSession } from '@/lib/auth/session';
 import { scrapeRivalAds } from '@/lib/rival-analysis/scraper';
-import { analyzeAds } from '@/lib/rival-analysis/analyzer';
+import { analyzeAds, pickBestImage } from '@/lib/rival-analysis/analyzer';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -77,7 +77,7 @@ export async function POST(req: NextRequest) {
           images: ad.images,
           videos: ad.videos as object[],
           landingUrls: ad.landing_urls,
-          thumbnailUrl: ad.images[0] ?? null,
+          thumbnailUrl: pickBestImage(ad.images),
           analysis: perAdAnalysis[i] ?? null,
           imageVisible: imageVisible[i] ?? false,
           rank: i + 1,

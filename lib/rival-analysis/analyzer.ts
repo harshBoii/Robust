@@ -26,8 +26,8 @@ async function fetchImageAsBase64(url: string): Promise<string | null> {
   }
 }
 
-/** Pick the highest-res image from an ad's image array */
-function pickBestImage(images: string[]): string | null {
+/** Pick the highest-res image from an ad's image array (also used as the card thumbnail) */
+export function pickBestImage(images: string[]): string | null {
   if (!images.length) return null;
   return (
     images.find(x => x.includes('s600x600')) ??
