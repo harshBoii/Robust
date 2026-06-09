@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, RefreshCw, AlertCircle, Loader2, Swords } from 'lucide-react';
+import { Plus, RefreshCw, AlertCircle, Swords } from 'lucide-react';
 
 import AddRivalModal from './AddRivalModal';
 import RivalAdCard, { type RivalAdCardData } from './RivalAdCard';
@@ -28,62 +28,91 @@ interface RunData {
 
 const POLL_INTERVAL = 3500;
 
+function LoadingCircle({ size = 'md', label }: { size?: 'sm' | 'md' | 'lg'; label?: string }) {
+  const dim =
+    size === 'lg' ? 'h-12 w-12 border-[3px]' : size === 'sm' ? 'h-5 w-5 border-2' : 'h-10 w-10 border-[3px]';
+  return (
+    <div className="flex flex-col items-center justify-center gap-3 text-center">
+      <span
+        className={`inline-block animate-spin rounded-full border-[var(--clipfox-primary)] border-t-transparent ${dim}`}
+        role="status"
+        aria-label={label ?? 'Loading'}
+      />
+      {label ? <p className="text-sm text-muted-foreground">{label}</p> : null}
+    </div>
+  );
+}
+
 export default function RivalAnalysisClient() {
   const [rivals, setRivals] = useState<RivalEntry[]>([]);
+  const [loadingRivals, setLoadingRivals] = useState(true);
   const [activeRivalId, setActiveRivalId] = useState<string | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [selectedAd, setSelectedAd] = useState<RivalAdCardData | null>(null);
 
   const [runId, setRunId] = useState<string | null>(null);
   const [run, setRun] = useState<RunData>({ status: 'IDLE', ads: [], summary: null, error: null });
+  const [loadingRun, setLoadingRun] = useState(false);
   const [starting, setStarting] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // ── fetch rivals list ──────────────────────────────────────────
   const fetchRivals = useCallback(async () => {
-    const res = await fetch('/api/rival-analysis/rivals');
-    if (!res.ok) return;
-    const data = await res.json();
-    setRivals(data.rivals ?? []);
-    if (!activeRivalId && data.rivals?.length) {
-      setActiveRivalId(data.rivals[0].id);
+    setLoadingRivals(true);
+    try {
+      const res = await fetch('/api/rival-analysis/rivals');
+      if (!res.ok) return;
+      const data = await res.json();
+      setRivals(data.rivals ?? []);
+      if (!activeRivalId && data.rivals?.length) {
+        setActiveRivalId(data.rivals[0].id);
+      }
+    } finally {
+      setLoadingRivals(false);
     }
   }, [activeRivalId]);
 
   useEffect(() => { fetchRivals(); }, [fetchRivals]);
 
+  // ── polling ───────────────────────────────────────────────────
+  const fetchRunData = useCallback(async (id: string, options?: { showLoader?: boolean }) => {
+    if (options?.showLoader) setLoadingRun(true);
+    try {
+      const res = await fetch(`/api/rival-analysis/run/${id}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      setRun({
+        status: data.status,
+        ads: data.ads ?? [],
+        summary: data.summary ?? null,
+        error: data.error ?? null,
+      });
+      return data.status as RunStatus;
+    } finally {
+      if (options?.showLoader) setLoadingRun(false);
+    }
+  }, []);
+
   // ── load latest run when active rival changes ─────────────────
   useEffect(() => {
-    if (!activeRivalId) return;
+    if (!activeRivalId || loadingRivals) return;
     const rival = rivals.find(r => r.id === activeRivalId);
     const latestRun = rival?.scrapeRuns?.[0];
     if (!latestRun) {
       setRun({ status: 'IDLE', ads: [], summary: null, error: null });
       setRunId(null);
+      setLoadingRun(false);
       return;
     }
     setRunId(latestRun.id);
     if (latestRun.status === 'DONE' || latestRun.status === 'FAILED') {
-      fetchRunData(latestRun.id);
+      void fetchRunData(latestRun.id, { showLoader: true });
     } else {
       setRun(prev => ({ ...prev, status: latestRun.status as RunStatus }));
+      setLoadingRun(false);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeRivalId, rivals]);
-
-  // ── polling ───────────────────────────────────────────────────
-  const fetchRunData = useCallback(async (id: string) => {
-    const res = await fetch(`/api/rival-analysis/run/${id}`);
-    if (!res.ok) return;
-    const data = await res.json();
-    setRun({
-      status: data.status,
-      ads: data.ads ?? [],
-      summary: data.summary ?? null,
-      error: data.error ?? null,
-    });
-    return data.status as RunStatus;
-  }, []);
+  }, [activeRivalId, rivals, loadingRivals]);
 
   useEffect(() => {
     if (!runId) return;
@@ -158,8 +187,11 @@ export default function RivalAnalysisClient() {
                 disabled={isRunning || starting}
                 className="glass-button-primary flex items-center gap-1.5 px-4 py-2 text-sm font-semibold disabled:opacity-50"
               >
-                {isRunning ? (
-                  <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Scraping…</>
+                {isRunning || starting ? (
+                  <>
+                    <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                    {starting ? 'Starting…' : 'Scraping…'}
+                  </>
                 ) : (
                   <><RefreshCw className="h-3.5 w-3.5" /> Run Analysis</>
                 )}
@@ -183,7 +215,9 @@ export default function RivalAnalysisClient() {
                 key={rival.id}
                 layout
                 onClick={() => {
+                  if (rival.id === activeRivalId) return;
                   setActiveRivalId(rival.id);
+                  setLoadingRun(!!rival.scrapeRuns?.[0]);
                   setRun({ status: 'IDLE', ads: [], summary: null, error: null });
                   setRunId(null);
                 }}
@@ -202,8 +236,15 @@ export default function RivalAnalysisClient() {
 
       {/* ── Main content ── */}
       <div className="flex-1 px-6 pb-10 pt-6">
+        {/* Initial page load */}
+        {loadingRivals && (
+          <div className="flex min-h-[50vh] items-center justify-center py-20">
+            <LoadingCircle size="lg" label="Loading rivals…" />
+          </div>
+        )}
+
         {/* Empty state — no rivals */}
-        {rivals.length === 0 && (
+        {!loadingRivals && rivals.length === 0 && (
           <div className="flex flex-col items-center justify-center gap-4 py-24 text-center">
             <Swords className="h-10 w-10 text-muted-foreground/30" />
             <p className="font-heading text-base font-semibold text-foreground">No rivals yet</p>
@@ -219,8 +260,15 @@ export default function RivalAnalysisClient() {
           </div>
         )}
 
+        {/* Loading existing run results */}
+        {!loadingRivals && loadingRun && !isRunning && (
+          <div className="flex min-h-[40vh] items-center justify-center py-20">
+            <LoadingCircle size="lg" label="Loading analysis…" />
+          </div>
+        )}
+
         {/* Empty state — rival selected but never run */}
-        {activeRival && run.status === 'IDLE' && !isRunning && (
+        {!loadingRivals && !loadingRun && activeRival && run.status === 'IDLE' && !isRunning && (
           <div className="flex flex-col items-center justify-center gap-4 py-20 text-center">
             <p className="font-heading text-base font-semibold text-foreground">
               Ready to analyse <span className="text-[var(--sibling-primary)]">{activeRival.brandName}</span>
@@ -231,20 +279,24 @@ export default function RivalAnalysisClient() {
           </div>
         )}
 
-        {/* Running spinner */}
+        {/* Running analysis */}
         <AnimatePresence>
-          {isRunning && (
+          {!loadingRivals && isRunning && (
             <motion.div
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0 }}
-              className="flex flex-col items-center justify-center gap-4 py-20 text-center"
+              className="flex min-h-[50vh] flex-col items-center justify-center gap-4 py-20 text-center"
             >
-              <Loader2 className="h-8 w-8 animate-spin text-[var(--sibling-primary)]" />
-              <p className="font-heading text-base font-semibold text-foreground">
-                {run.status === 'PENDING' ? 'Starting scrape…' : 'Scraping ads & running analysis…'}
-              </p>
-              <p className="text-sm text-muted-foreground">
+              <LoadingCircle
+                size="lg"
+                label={
+                  run.status === 'PENDING'
+                    ? 'Starting scrape…'
+                    : 'Scraping ads & running GPT-4 Vision analysis…'
+                }
+              />
+              <p className="max-w-sm text-sm text-muted-foreground">
                 This can take 1–3 minutes. You can stay on the page.
               </p>
             </motion.div>
@@ -252,7 +304,7 @@ export default function RivalAnalysisClient() {
         </AnimatePresence>
 
         {/* Error */}
-        {run.status === 'FAILED' && run.error && (
+        {!loadingRivals && !loadingRun && run.status === 'FAILED' && run.error && (
           <div className="mb-6 flex items-start gap-3 rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3">
             <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
             <div>
@@ -263,7 +315,7 @@ export default function RivalAnalysisClient() {
         )}
 
         {/* Ad grid (2 rows × 3 cols) */}
-        {run.ads.length > 0 && (
+        {!loadingRivals && !loadingRun && !isRunning && run.ads.length > 0 && (
           <AnimatePresence>
             <motion.div
               initial={{ opacity: 0 }}
@@ -282,7 +334,7 @@ export default function RivalAnalysisClient() {
         )}
 
         {/* Intelligence summary */}
-        {run.summary && activeRival && (
+        {!loadingRivals && !loadingRun && !isRunning && run.summary && activeRival && (
           <IntelligenceSummary markdown={run.summary} brandName={activeRival.brandName} />
         )}
       </div>

@@ -5,7 +5,7 @@ import OpenAI from 'openai';
 import type { ScrapedAd } from './scraper';
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-const VISION_MODEL = 'gpt-4o';
+const VISION_MODEL = 'gpt-5.4-mini';
 
 async function fetchImageAsBase64(url: string): Promise<string | null> {
   try {
@@ -144,7 +144,6 @@ ${(ad.ad_copy ?? ad.raw_text ?? '').slice(0, 2500)}
     try {
       const res = await openai.chat.completions.create({
         model: VISION_MODEL,
-        max_tokens: 1500,
         messages,
       });
       const text = res.choices[0]?.message?.content ?? '';
@@ -166,7 +165,6 @@ ${(ad.ad_copy ?? ad.raw_text ?? '').slice(0, 2500)}
   try {
     const res = await openai.chat.completions.create({
       model: VISION_MODEL,
-      max_tokens: 3000,
       messages: [
         { role: 'user', content: summaryUserContent + '\n\n' + SUMMARY_PROMPT },
       ],

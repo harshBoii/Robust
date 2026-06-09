@@ -106,7 +106,7 @@ export default function AdDetailModal({ ad, onClose }: AdDetailModalProps) {
           <div className="flex min-h-0 flex-1 flex-col overflow-hidden border-t border-white/10 md:border-l md:border-t-0">
             <div className="shrink-0 border-b border-white/10 px-5 py-3">
               <h3 className="font-heading text-sm font-semibold text-foreground">Ad Analysis</h3>
-              <p className="text-[11px] text-muted-foreground">GPT-4 Vision competitive intelligence</p>
+              <p className="text-[11px] text-muted-foreground">competitive intelligence</p>
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
               {ad.analysis ? (

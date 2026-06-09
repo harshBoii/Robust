@@ -28,7 +28,7 @@ export default function IntelligenceSummary({ markdown, brandName }: Intelligenc
               Competitive Intelligence — {brandName}
             </p>
             <p className="text-[11px] text-muted-foreground">
-              GPT-4 Vision summary of top 6 ads
+              summary of top 6 ads
             </p>
           </div>
         </div>
