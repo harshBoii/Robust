@@ -69,7 +69,7 @@ export async function runRadarJob(companyId: string) {
       select: { title: true, onlineStoreUrl: true },
     }),
     prisma.companyRival.findMany({
-      where: { companyId },
+      where: { companyId, rivalCompanyId: { not: null } },
       orderBy: { createdAt: 'desc' },
       select: { rivalCompany: { select: { name: true } } },
     }),
@@ -87,7 +87,7 @@ export async function runRadarJob(companyId: string) {
     '';
 
   const primaryOffering = brandEntity?.offerings.find((o) => o.isPrimary) ?? brandEntity?.offerings[0];
-  const competitorsFromRivals = rivals.map((r) => r.rivalCompany.name).filter(Boolean);
+  const competitorsFromRivals = rivals.map((r) => r.rivalCompany?.name).filter(Boolean);
   const competitorsFromOffer = primaryOffering?.competitors ?? [];
   const competitors = (() => {
     const out: string[] = [];
