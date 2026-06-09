@@ -456,6 +456,9 @@ const SecondarySidebarContent = ({
           <SecondaryNavItem icon={PauseCircle}       label="Auto-Pause Rules" href="/manager/rules" />
           <SecondaryNavItem icon={SlidersHorizontal} label="Presets"          href="/manager/presets" />
 
+          <SectionLabel label="Intelligence" />
+          <SecondaryNavItem icon={Swords} label="Rival Analysis" href="/organic/rival-analysis" />
+
           <SectionLabel label="Report" />
           <SecondaryNavItem icon={BarChart3} label="Report" href="/report" />
         </>
@@ -489,7 +492,6 @@ const SecondarySidebarContent = ({
           <SectionLabel label="Organic Marketing" />
           <SecondaryNavItem icon={BarChart3} label="Dashboard" href="/organic/dashboard" exact />
           <SecondaryNavItem icon={ShieldCheck} label="GeoKnight" href="/organic/geoKnight" />
-          <SecondaryNavItem icon={Swords} label="Rival Analysis" href="/organic/rival-analysis" />
           <SecondaryNavItem icon={Crosshair} label="Bounty" href="/organic/bounty" exact />
           <SecondaryNavItem icon={FileText} label="Bounty Pages" href="/organic/bounty-pages" />
         </>
@@ -641,7 +643,7 @@ export default function AppSidebar({
     // eslint-disable-next-line react-hooks/set-state-in-effect
     else if (pathname?.startsWith('/templates')) setActiveSection('templates');
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    else if (pathname === '/home' || pathname?.startsWith('/manager') || pathname?.startsWith('/shop') || pathname?.startsWith('/report'))
+    else if (pathname === '/home' || pathname?.startsWith('/manager') || pathname?.startsWith('/shop') || pathname?.startsWith('/report') || pathname === '/organic/rival-analysis')
       setActiveSection('paid-growth');
     // eslint-disable-next-line react-hooks/set-state-in-effect
     else if (pathname?.startsWith('/create-ad')) setActiveSection('createAd');
