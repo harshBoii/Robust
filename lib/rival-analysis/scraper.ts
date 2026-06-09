@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { chromium } from 'playwright';
+import type { Browser } from 'playwright-core';
 
 export interface ScrapedAd {
   library_id: string;
@@ -18,6 +18,32 @@ export interface ScrapedAd {
 
 const HEADLESS = true;
 const MAX_SCROLLS = 15;
+
+const IS_SERVERLESS =
+  !!process.env.AWS_LAMBDA_FUNCTION_VERSION || !!process.env.VERCEL;
+
+/**
+ * Launch Chromium for the current environment.
+ * - Serverless (Vercel/Lambda): playwright-core + @sparticuz/chromium binary.
+ * - Local dev: the full `playwright` package with its downloaded Chromium.
+ */
+async function launchBrowser(): Promise<Browser> {
+  if (IS_SERVERLESS) {
+    const sparticuz = (await import('@sparticuz/chromium')).default;
+    const { chromium } = await import('playwright-core');
+    return chromium.launch({
+      args: [...sparticuz.args, '--no-sandbox', '--disable-setuid-sandbox'],
+      executablePath: await sparticuz.executablePath(),
+      headless: true,
+    });
+  }
+
+  const { chromium } = await import('playwright');
+  return chromium.launch({
+    headless: HEADLESS,
+    args: ['--no-sandbox', '--disable-setuid-sandbox'],
+  });
+}
 
 const DOM_EXTRACT_JS = `
 () => {
@@ -99,10 +125,7 @@ export async function scrapeRivalAds(
     `&q=${encodeURIComponent(pageName)}` +
     `&search_type=page`;
 
-  const browser = await chromium.launch({
-    headless: HEADLESS,
-    args: ['--no-sandbox', '--disable-setuid-sandbox'],
-  });
+  const browser = await launchBrowser();
 
   try {
     const ctx = await browser.newContext({
