@@ -156,7 +156,7 @@ export default function RivalAnalysisClient() {
               <button
                 onClick={startRun}
                 disabled={isRunning || starting}
-                className="flex items-center gap-1.5 rounded-xl bg-[var(--sibling-primary)] px-4 py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+                className="glass-button-primary flex items-center gap-1.5 px-4 py-2 text-sm font-semibold disabled:opacity-50"
               >
                 {isRunning ? (
                   <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Scraping…</>
@@ -212,7 +212,7 @@ export default function RivalAnalysisClient() {
             </p>
             <button
               onClick={() => setShowAddModal(true)}
-              className="flex items-center gap-1.5 rounded-xl bg-[var(--sibling-primary)] px-5 py-2.5 text-sm font-semibold text-white hover:opacity-90"
+              className="glass-button-primary flex items-center gap-1.5 px-5 py-2.5 text-sm font-semibold"
             >
               <Plus className="h-4 w-4" /> Add Your First Rival
             </button>

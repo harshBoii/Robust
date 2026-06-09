@@ -142,7 +142,7 @@ export default function AddRivalModal({ open, onClose, onCreated }: AddRivalModa
               <button
                 type="submit"
                 disabled={loading}
-                className="flex-1 rounded-xl bg-[var(--sibling-primary)] px-4 py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+                className="glass-button-primary flex-1 px-4 py-2.5 text-sm font-semibold disabled:opacity-50"
               >
                 {loading ? 'Adding…' : 'Add Rival'}
               </button>
