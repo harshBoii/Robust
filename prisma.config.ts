@@ -13,5 +13,11 @@ export default defineConfig({
     ...(process.env["DIRECT_URL"]
       ? { directUrl: process.env["DIRECT_URL"] }
       : {}),
+    // Separate Neon branch/DB for migrate diff replay (see .env.example)
+    ...(process.env["SHADOW_DATABASE_URL"]
+      ? { shadowDatabaseUrl: process.env["SHADOW_DATABASE_URL"] }
+      : process.env["DIRECT_URL"]
+        ? { shadowDatabaseUrl: process.env["DIRECT_URL"] }
+        : {}),
   },
 });

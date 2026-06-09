@@ -1530,17 +1530,74 @@ model ContentCluster {
 }
 
 model CompanyRival {
-  id             String   @id @default(cuid())
+  id             String    @id @default(cuid())
   companyId      String
-  rivalCompanyId String
-  createdAt      DateTime @default(now()) @db.Timestamptz(3)
-  company        Company  @relation("CompanyRivals", fields: [companyId], references: [id], onDelete: Cascade)
-  rivalCompany   Company  @relation("CompanyRivalTargets", fields: [rivalCompanyId], references: [id], onDelete: Cascade)
+  rivalCompanyId String?
+  brandName      String    @db.VarChar(255)
+  pageName       String    @db.VarChar(255)
+  country        String    @default("IN") @db.VarChar(10)
+  createdAt      DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime  @updatedAt @db.Timestamptz(3)
 
-  @@unique([companyId, rivalCompanyId])
+  company      Company          @relation("CompanyRivals", fields: [companyId], references: [id], onDelete: Cascade)
+  rivalCompany Company?         @relation("CompanyRivalTargets", fields: [rivalCompanyId], references: [id])
+  scrapeRuns   RivalScrapeRun[]
+
+  @@unique([companyId, pageName])
   @@index([companyId])
-  @@index([rivalCompanyId])
   @@map("company_rivals")
+}
+
+model RivalScrapeRun {
+  id             String            @id @default(cuid())
+  companyRivalId String
+  status         RivalScrapeStatus @default(PENDING)
+  error          String?           @db.Text
+  createdAt      DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime          @updatedAt @db.Timestamptz(3)
+
+  companyRival CompanyRival             @relation(fields: [companyRivalId], references: [id], onDelete: Cascade)
+  ads          RivalAd[]
+  summary      RivalIntelligenceSummary?
+
+  @@index([companyRivalId])
+  @@map("rival_scrape_runs")
+}
+
+model RivalAd {
+  id           String   @id @default(cuid())
+  scrapeRunId  String
+  libraryId    String   @db.VarChar(50)
+  startDate    String?  @db.VarChar(50)
+  adStatus     String   @db.VarChar(20)
+  cta          String?  @db.VarChar(100)
+  adCopy       String?  @db.Text
+  rawText      String?  @db.Text
+  daysRunning  Int?
+  images       String[] @default([])
+  videos       Json     @default("[]")
+  landingUrls  String[] @default([]) @map("landing_urls")
+  thumbnailUrl String?  @db.VarChar(1000) @map("thumbnail_url")
+  analysis     String?  @db.Text
+  imageVisible Boolean  @default(false) @map("image_visible")
+  rank         Int
+  createdAt    DateTime @default(now()) @db.Timestamptz(3)
+
+  scrapeRun RivalScrapeRun @relation(fields: [scrapeRunId], references: [id], onDelete: Cascade)
+
+  @@index([scrapeRunId])
+  @@map("rival_ads")
+}
+
+model RivalIntelligenceSummary {
+  id          String   @id @default(cuid())
+  scrapeRunId String   @unique @map("scrape_run_id")
+  markdown    String   @db.Text
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+
+  scrapeRun RivalScrapeRun @relation(fields: [scrapeRunId], references: [id], onDelete: Cascade)
+
+  @@map("rival_intelligence_summaries")
 }
 
 model Citation {
@@ -2057,4 +2114,11 @@ enum OfferingType {
   PRODUCT
   SERVICE
   OTHER
+}
+
+enum RivalScrapeStatus {
+  PENDING
+  PROCESSING
+  DONE
+  FAILED
 }

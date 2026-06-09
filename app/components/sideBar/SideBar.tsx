@@ -22,6 +22,7 @@ import {
   FileText,
   Plug,
   Package,
+  Swords,
 } from 'lucide-react';
 import ThemeToggle from '@/app/components/UI/ThemeToggle';
 import { ModalPortal } from '@/app/components/common/ModalPortal';
@@ -488,6 +489,7 @@ const SecondarySidebarContent = ({
           <SectionLabel label="Organic Marketing" />
           <SecondaryNavItem icon={BarChart3} label="Dashboard" href="/organic/dashboard" exact />
           <SecondaryNavItem icon={ShieldCheck} label="GeoKnight" href="/organic/geoKnight" />
+          <SecondaryNavItem icon={Swords} label="Rival Analysis" href="/organic/rival-analysis" />
           <SecondaryNavItem icon={Crosshair} label="Bounty" href="/organic/bounty" exact />
           <SecondaryNavItem icon={FileText} label="Bounty Pages" href="/organic/bounty-pages" />
         </>
