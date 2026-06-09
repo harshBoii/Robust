@@ -18,10 +18,8 @@ export async function GET(req: NextRequest) {
 
   const requesterCompanyId = session.companyId;
 
-  const allowed = await prisma.companyRival.findUnique({
-    where: {
-      companyId_rivalCompanyId: { companyId: requesterCompanyId, rivalCompanyId },
-    },
+  const allowed = await prisma.companyRival.findFirst({
+    where: { companyId: requesterCompanyId, rivalCompanyId },
     select: { id: true },
   });
 

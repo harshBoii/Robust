@@ -15,13 +15,8 @@ export async function GET(req: NextRequest) {
   const targetCompanyId = req.nextUrl.searchParams.get('companyId')?.trim() || requesterCompanyId;
 
   if (targetCompanyId !== requesterCompanyId) {
-    const allowed = await prisma.companyRival.findUnique({
-      where: {
-        companyId_rivalCompanyId: {
-          companyId: requesterCompanyId,
-          rivalCompanyId: targetCompanyId,
-        },
-      },
+    const allowed = await prisma.companyRival.findFirst({
+      where: { companyId: requesterCompanyId, rivalCompanyId: targetCompanyId },
       select: { id: true },
     });
     if (!allowed) {

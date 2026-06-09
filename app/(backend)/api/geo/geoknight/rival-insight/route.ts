@@ -84,13 +84,8 @@ export async function POST(req: NextRequest) {
 
   if (focus.kind === 'rival') {
     rivalCompanyId = String(focus.rivalCompanyId).trim();
-    const allowed = await prisma.companyRival.findUnique({
-      where: {
-        companyId_rivalCompanyId: {
-          companyId: requesterCompanyId,
-          rivalCompanyId,
-        },
-      },
+    const allowed = await prisma.companyRival.findFirst({
+      where: { companyId: requesterCompanyId, rivalCompanyId },
       select: { id: true },
     });
     if (!allowed) {
