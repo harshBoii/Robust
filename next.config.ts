@@ -3,7 +3,11 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   serverExternalPackages: ['playwright', 'playwright-core', '@sparticuz/chromium'],
   outputFileTracingIncludes: {
-    '/api/rival-analysis/run': ['./node_modules/@sparticuz/chromium/**'],
+    '/api/rival-analysis/run': [
+      'node_modules/@sparticuz/chromium/**/*',
+      'node_modules/playwright-core/**/*',
+      'node_modules/playwright/**/*',
+    ],
   },
   images: {
     remotePatterns: [
