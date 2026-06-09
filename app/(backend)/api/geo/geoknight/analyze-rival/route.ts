@@ -28,10 +28,8 @@ export async function POST(req: NextRequest) {
 
   const requesterCompanyId = session.companyId;
 
-  const allowed = await prisma.companyRival.findUnique({
-    where: {
-      companyId_rivalCompanyId: { companyId: requesterCompanyId, rivalCompanyId },
-    },
+  const allowed = await prisma.companyRival.findFirst({
+    where: { companyId: requesterCompanyId, rivalCompanyId },
     select: { id: true },
   });
 
@@ -114,7 +112,7 @@ export async function POST(req: NextRequest) {
             )
         : [],
       prisma.companyRival.findMany({
-        where: { companyId: rivalCompanyId },
+        where: { companyId: rivalCompanyId, rivalCompanyId: { not: null } },
         orderBy: { createdAt: 'desc' },
         select: { rivalCompany: { select: { name: true } } },
       }),
@@ -126,7 +124,7 @@ export async function POST(req: NextRequest) {
   const competitors: string[] = [];
   const seen = new Set<string>();
   for (const row of rivalRivals) {
-    const n = (row.rivalCompany.name ?? '').trim();
+    const n = (row.rivalCompany?.name ?? '').trim();
     if (!n) continue;
     const key = n.toLowerCase();
     if (seen.has(key)) continue;
