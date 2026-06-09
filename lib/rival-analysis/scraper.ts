@@ -46,7 +46,7 @@ async function launchBrowser(): Promise<Browser> {
 }
 
 const DOM_EXTRACT_JS = `
-() => {
+(() => {
   const results = [];
   const libraryNodes = [...document.querySelectorAll('span')].filter(
     el => el.innerText && el.innerText.includes('Library ID:')
@@ -110,7 +110,7 @@ const DOM_EXTRACT_JS = `
     unique.push(ad);
   }
   return unique;
-}
+})()
 `;
 
 export async function scrapeRivalAds(
@@ -160,7 +160,8 @@ export async function scrapeRivalAds(
       prevH = h;
     }
 
-    const rawAds = await page.evaluate(DOM_EXTRACT_JS) as Omit<ScrapedAd, 'days_running'>[];
+    const evaluated = await page.evaluate(DOM_EXTRACT_JS);
+    const rawAds = (Array.isArray(evaluated) ? evaluated : []) as Omit<ScrapedAd, 'days_running'>[];
     await browser.close();
 
     // compute longevity
