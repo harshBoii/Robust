@@ -226,7 +226,7 @@ export default function RivalAnalysisClient() {
               Ready to analyse <span className="text-[var(--sibling-primary)]">{activeRival.brandName}</span>
             </p>
             <p className="max-w-xs text-sm text-muted-foreground">
-              Hit &ldquo;Run Analysis&rdquo; to scrape their active Facebook ads and get GPT-4 Vision intelligence.
+              Hit &ldquo;Run Analysis&rdquo; to scrape their active Facebook ads.
             </p>
           </div>
         )}
