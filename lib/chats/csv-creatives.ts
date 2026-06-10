@@ -23,7 +23,7 @@ export const CREATIVE_CSV_TARGETS: CreativeCsvTargetDef[] = [
   {
     id: 'media',
     label: 'Media',
-    required: true,
+    required: false,
     aliases: [
       'media',
       'filename',
@@ -150,9 +150,30 @@ export function matchMediaValue(value: string, assets: Asset[]): Asset | null {
 export type CsvCreativeRowResult = {
   rowIndex: number;
   asset: Asset | null;
+  /** Raw media value from CSV when a media column is mapped. */
+  mediaHint?: string;
   creative: CreativeFields;
   errors: string[];
 };
+
+export function applyManualMediaToRows(
+  rows: CsvCreativeRowResult[],
+  manualByRow: Record<number, string>,
+  assets: Asset[],
+): CsvCreativeRowResult[] {
+  return rows.map((r) => {
+    const manualId = manualByRow[r.rowIndex];
+    const manualAsset = manualId ? assets.find((a) => a.id === manualId) ?? null : null;
+    const asset = manualAsset ?? r.asset;
+    const errors = r.errors.filter(
+      (e) =>
+        e !== 'Select media' &&
+        !e.startsWith('No session asset matches'),
+    );
+    if (!asset) errors.push('Select media');
+    return { ...r, asset, errors };
+  });
+}
 
 function cellValue(row: string[], headers: string[], column?: string): string {
   if (!column) return '';
@@ -183,19 +204,19 @@ export function buildCsvCreativeRowResults(input: {
     const pixelId =
       cellValue(row, headers, mapping.pixelId) || defaultPixelId?.trim() || '';
 
-    if (!mapping.media) errors.push('Media column not mapped');
-    else if (!mediaVal) errors.push('Missing media value');
+    if (mapping.media && !mediaVal) errors.push('Missing media value in CSV');
     if (!mapping.headline) errors.push('Headline column not mapped');
     else if (!headline) errors.push('Missing headline');
     if (!mapping.landingUrl) errors.push('Landing URL column not mapped');
     else if (!landingUrl) errors.push('Missing landing URL');
 
     const asset = mediaVal ? matchMediaValue(mediaVal, assets) : null;
-    if (mediaVal && !asset) errors.push(`No session asset matches "${mediaVal}"`);
+    const mediaHint = mediaVal || undefined;
 
     results.push({
       rowIndex: i,
       asset,
+      mediaHint,
       creative: {
         ...defaultCreativeFields(),
         headline,
@@ -269,5 +290,5 @@ export function validateCsvCreativeRows(groups: GroupModel[]): string | null {
 }
 
 export function isMappingComplete(mapping: CreativeCsvColumnMapping): boolean {
-  return Boolean(mapping.media && mapping.headline && mapping.landingUrl);
+  return Boolean(mapping.headline && mapping.landingUrl);
 }

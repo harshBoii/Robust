@@ -6,6 +6,7 @@ import type { GroupModel } from '@/app/components/createAd/types';
 import type { WorkflowState } from '@/lib/chats/types';
 import { parseCsv } from '@/lib/csv/parse-csv';
 import {
+  applyManualMediaToRows,
   buildCsvCreativeRowResults,
   buildGroupsFromCsvRows,
   CREATIVE_CSV_TARGETS,
@@ -36,6 +37,7 @@ export function CreativeCsvWidget({
   const [headers, setHeaders] = useState<string[]>([]);
   const [rows, setRows] = useState<string[][]>([]);
   const [mapping, setMapping] = useState<CreativeCsvColumnMapping>({});
+  const [manualMedia, setManualMedia] = useState<Record<number, string>>({});
   const [applying, setApplying] = useState(false);
 
   const sessionAssets = useMemo(() => flattenSessionAssets(groups), [groups]);
@@ -51,18 +53,26 @@ export function CreativeCsvWidget({
     });
   }, [headers, rows, mapping, sessionAssets, workflowState.pixelId]);
 
-  const duplicateErrors = useMemo(() => detectDuplicateAssetMatches(rowResults), [rowResults]);
+  const rowsWithManualMedia = useMemo(
+    () => applyManualMediaToRows(rowResults, manualMedia, sessionAssets),
+    [rowResults, manualMedia, sessionAssets],
+  );
+
+  const duplicateErrors = useMemo(
+    () => detectDuplicateAssetMatches(rowsWithManualMedia),
+    [rowsWithManualMedia],
+  );
 
   const reviewRows = useMemo(
     () =>
-      rowResults.map((r) => ({
+      rowsWithManualMedia.map((r) => ({
         ...r,
         errors: [
           ...r.errors,
           ...(duplicateErrors.has(r.rowIndex) ? [duplicateErrors.get(r.rowIndex)!] : []),
         ],
       })),
-    [rowResults, duplicateErrors],
+    [rowsWithManualMedia, duplicateErrors],
   );
 
   const validCount = reviewRows.filter((r) => r.errors.length === 0 && r.asset).length;
@@ -79,6 +89,7 @@ export function CreativeCsvWidget({
       setHeaders(parsed.headers);
       setRows(parsed.rows);
       setMapping(guessColumnMapping(parsed.headers));
+      setManualMedia({});
       setStep('map');
     };
     reader.readAsText(file);
@@ -159,6 +170,7 @@ export function CreativeCsvWidget({
                 setHeaders([]);
                 setRows([]);
                 setMapping({});
+                setManualMedia({});
               }}
             >
               Change file
@@ -166,13 +178,14 @@ export function CreativeCsvWidget({
           </div>
           <p className="text-[12px] text-muted-foreground">
             Map your CSV columns to ad fields ({rows.length} row{rows.length === 1 ? '' : 's'}).
+            Media can be mapped here or assigned per row in the review step.
           </p>
           <div className="grid gap-2 sm:grid-cols-2">
             {CREATIVE_CSV_TARGETS.map((t) => (
               <div key={t.id}>
                 <label className="mb-1 block text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
                   {t.label}
-                  {t.required ? ' *' : ''}
+                  {t.required ? ' *' : t.id === 'media' ? ' (optional)' : ''}
                 </label>
                 <select
                   className="glass-input w-full px-2 py-1.5 text-xs"
@@ -192,7 +205,10 @@ export function CreativeCsvWidget({
           <button
             type="button"
             disabled={!isMappingComplete(mapping)}
-            onClick={() => setStep('review')}
+            onClick={() => {
+              setManualMedia({});
+              setStep('review');
+            }}
             className="glass-button-primary rounded-lg px-3 py-1.5 text-xs disabled:opacity-50"
           >
             Review rows
@@ -212,7 +228,11 @@ export function CreativeCsvWidget({
               Edit mapping
             </button>
           </div>
-          <div className="max-h-64 overflow-auto rounded-lg border border-border/40">
+          <p className="text-[11px] text-muted-foreground">
+            Assign each row to a session asset. Auto-matched when the CSV media column matches a
+            filename or title.
+          </p>
+          <div className="max-h-72 overflow-auto rounded-lg border border-border/40">
             <table className="w-full text-left text-[11px]">
               <thead className="sticky top-0 bg-muted/80 text-[10px] uppercase tracking-wider text-muted-foreground">
                 <tr>
@@ -226,20 +246,41 @@ export function CreativeCsvWidget({
                 {reviewRows.map((r) => (
                   <tr key={r.rowIndex} className="border-t border-border/30">
                     <td className="px-2 py-1.5">
-                      <div className="flex items-center gap-2">
+                      <div className="flex min-w-[140px] items-center gap-2">
                         {r.asset?.thumbnailUrl ? (
                           // eslint-disable-next-line @next/next/no-img-element
                           <img
                             src={r.asset.thumbnailUrl}
                             alt=""
-                            className="h-8 w-8 rounded object-cover"
+                            className="h-8 w-8 shrink-0 rounded object-cover"
                           />
                         ) : (
-                          <div className="h-8 w-8 rounded bg-muted" />
+                          <div className="h-8 w-8 shrink-0 rounded bg-muted" />
                         )}
-                        <span className="max-w-[100px] truncate">
-                          {r.asset?.title ?? r.asset?.filename ?? '—'}
-                        </span>
+                        <select
+                          className="glass-input min-w-0 flex-1 px-1.5 py-1 text-[10px]"
+                          value={manualMedia[r.rowIndex] ?? r.asset?.id ?? ''}
+                          onChange={(e) => {
+                            const assetId = e.target.value;
+                            setManualMedia((prev) => {
+                              const next = { ...prev };
+                              if (!assetId) delete next[r.rowIndex];
+                              else next[r.rowIndex] = assetId;
+                              return next;
+                            });
+                          }}
+                        >
+                          <option value="">
+                            {r.mediaHint
+                              ? `Select — CSV: ${r.mediaHint}`
+                              : 'Select media…'}
+                          </option>
+                          {sessionAssets.map((a) => (
+                            <option key={a.id} value={a.id}>
+                              {a.title || a.filename || a.id}
+                            </option>
+                          ))}
+                        </select>
                       </div>
                     </td>
                     <td className="max-w-[120px] truncate px-2 py-1.5">
