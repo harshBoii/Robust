@@ -293,7 +293,7 @@ export default function RivalAnalysisClient() {
                 label={
                   run.status === 'PENDING'
                     ? 'Starting scrape…'
-                    : 'Scraping ads & running GPT-4 Vision analysis…'
+                    : 'Scraping ads & running analysis…'
                 }
               />
               <p className="max-w-sm text-sm text-muted-foreground">
