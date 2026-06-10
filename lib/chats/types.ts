@@ -125,7 +125,9 @@ export type ImageGenWidgetType =
   | 'imageGenBackgroundGallery'
   | 'imageGenPoseGallery'
   | 'imageGenPushToAds'
-  | 'imageGenNextStep';
+  | 'imageGenNextStep'
+  | 'imageGenRivalInspirationChoice'
+  | 'imageGenRivalBrandPicker';
 
 export type VideoGenWidgetType =
   | 'videoGenSubpathChoice'
@@ -136,7 +138,9 @@ export type VideoGenWidgetType =
   | 'videoGenAnalyzing'
   | 'videoGenGenerating'
   | 'videoGenHeygenProgress'
-  | 'videoGenDone';
+  | 'videoGenDone'
+  | 'videoGenRivalInspirationChoice'
+  | 'videoGenRivalBrandPicker';
 
 export type WidgetType = AdWidgetType | ImageGenWidgetType | VideoGenWidgetType;
 
@@ -187,6 +191,8 @@ export type ChatActionType =
   | 'imageGen.onModelAccepted'
   | 'imageGen.onModelRejected'
   | 'imageGen.pushToAds'
+  | 'imageGen.rivalInspirationChosen'
+  | 'imageGen.rivalBrandChosen'
   | 'videoGen.subpathChosen'
   | 'videoGen.offeringSelected'
   | 'videoGen.adTypeSelected'
@@ -195,6 +201,8 @@ export type ChatActionType =
   | 'videoGen.scriptChangeRequested'
   | 'videoGen.adSelected'
   | 'videoGen.retryIntel'
+  | 'videoGen.rivalInspirationChosen'
+  | 'videoGen.rivalBrandChosen'
   | 'geo.redditTargetPicked';
 
 export type SerializedMessage = {

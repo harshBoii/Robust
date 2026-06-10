@@ -90,6 +90,8 @@ const VIDEO_GEN_WIDGET_STEP: Record<string, VideoGenStep | VideoGenStep[]> = {
   videoGenGenerating: 'generatingScript',
   videoGenHeygenProgress: ['heygenGenerating', 'heygenPolling'],
   videoGenDone: 'done',
+  videoGenRivalInspirationChoice: 'rivalInspirationAsk',
+  videoGenRivalBrandPicker: 'rivalBrandPick',
 };
 
 export function isVideoGenWidgetActive(

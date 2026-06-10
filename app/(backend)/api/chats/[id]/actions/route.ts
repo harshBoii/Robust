@@ -47,6 +47,8 @@ const ACTIONS: ChatActionType[] = [
   'imageGen.onModelAccepted',
   'imageGen.onModelRejected',
   'imageGen.pushToAds',
+  'imageGen.rivalInspirationChosen',
+  'imageGen.rivalBrandChosen',
   'videoGen.subpathChosen',
   'videoGen.offeringSelected',
   'videoGen.adTypeSelected',
@@ -55,6 +57,8 @@ const ACTIONS: ChatActionType[] = [
   'videoGen.scriptChangeRequested',
   'videoGen.adSelected',
   'videoGen.retryIntel',
+  'videoGen.rivalInspirationChosen',
+  'videoGen.rivalBrandChosen',
   'geo.redditTargetPicked',
 ];
 

@@ -45,6 +45,9 @@ export async function generateVariantPrompts(input: {
     input.state.aspectRatio ? `Aspect ratio: ${input.state.aspectRatio}` : '',
     input.userIntention ? `User intention: ${input.userIntention}` : '',
     input.state.agentMemory ? `Session notes: ${input.state.agentMemory}` : '',
+    input.state.rivalIntelligenceBrief
+      ? `Rival competitive intelligence:\n${input.state.rivalIntelligenceBrief}`
+      : '',
     'Respond JSON: { "variants": [{ "ideaLabel": "...", "prompt": "..." }] }',
   ]
     .filter(Boolean)

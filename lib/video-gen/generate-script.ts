@@ -94,6 +94,7 @@ Respond with JSON only: { "adScript": "...", "directorPrompt": "..." }`;
 export type GenerateScriptInput = {
   companyContext?: VideoGenCompanyContext | null;
   intelligenceBrief?: string | null;
+  rivalIntelligenceBrief?: string | null;
   replicateMode?: boolean;
   adCategory?: VideoGenAdCategory;
   trendTopic?: string;
@@ -109,6 +110,11 @@ export async function generateVideoScript(input: GenerateScriptInput): Promise<G
   }
   if (input.intelligenceBrief) {
     userParts.push('## Creative brief (from winning ads)\n' + input.intelligenceBrief);
+  }
+  if (input.rivalIntelligenceBrief) {
+    userParts.push(
+      '## Rival competitive intelligence\n' + input.rivalIntelligenceBrief,
+    );
   }
   if (input.replicateMode) {
     userParts.push(

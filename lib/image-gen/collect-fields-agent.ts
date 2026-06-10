@@ -53,6 +53,7 @@ Rules:
 - If the user's message already contains missing fields, extract them and do not re-ask.
 - When all required fields are present, set complete=true and reply with a brief confirmation.
 - copyCount defaults to 4 for variant flows if user says "a few" without a number.
+- If rivalIntelligenceBrief is present in state, use rival hooks/offers/visual angles when suggesting brand tone or creative direction — do not dump raw markdown to the user.
 
 ${LLM_USER_REPLY_PRIVACY_RULES}
 
@@ -83,6 +84,8 @@ export async function runCollectorTurn(input: {
     aspectRatio: merged.aspectRatio ?? null,
     subpath: merged.subpath,
     collectorTurns: turns,
+    hasRivalIntelligence: Boolean(merged.rivalIntelligenceBrief?.trim()),
+    rivalIntelligenceBrief: merged.rivalIntelligenceBrief ?? null,
   };
 
   const raw = await completeJsonChatWithHistory({

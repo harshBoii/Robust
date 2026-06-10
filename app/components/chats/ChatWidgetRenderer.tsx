@@ -52,6 +52,10 @@ import {
   parseGeoRedditTargetPickerPayload,
 } from './widgets/GeoRedditTargetPickerWidget';
 import {
+  RivalBrandPickerWidget,
+  RivalInspirationChoiceWidget,
+} from './widgets/RivalInspirationWidgets';
+import {
   VideoGenAdLibraryPickerWidget,
   VideoGenAdTypePickerWidget,
   VideoGenAnalyzingWidget,
@@ -300,6 +304,16 @@ export function ChatWidgetRenderer({
           onAction={onAction}
         />
       );
+    case 'imageGenRivalInspirationChoice':
+      return <RivalInspirationChoiceWidget actionPrefix="imageGen" onAction={onAction} />;
+    case 'imageGenRivalBrandPicker':
+      return (
+        <RivalBrandPickerWidget
+          payload={payload}
+          actionPrefix="imageGen"
+          onAction={onAction}
+        />
+      );
     case 'videoGenSubpathChoice':
       return <VideoGenSubpathChoiceWidget payload={payload} onAction={onAction} />;
     case 'videoGenOfferingPicker':
@@ -326,6 +340,16 @@ export function ChatWidgetRenderer({
       );
     case 'videoGenDone':
       return <VideoGenDoneWidget payload={payload} />;
+    case 'videoGenRivalInspirationChoice':
+      return <RivalInspirationChoiceWidget actionPrefix="videoGen" onAction={onAction} />;
+    case 'videoGenRivalBrandPicker':
+      return (
+        <RivalBrandPickerWidget
+          payload={payload}
+          actionPrefix="videoGen"
+          onAction={onAction}
+        />
+      );
     case 'platformChoice':
       return <PlatformChoiceWidget onAction={onAction} />;
     case 'googleCampaignType':

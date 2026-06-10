@@ -52,7 +52,13 @@ import { generateImage } from './generate-image';
 import { importProductImageFromUrl } from './import-product-image';
 import { appendGeneratedAsset, initialImageGenState, mergeImageGenIntoWorkflow, parseImageGenState } from './state';
 import { storeGeneratedImage } from './store-generated';
-import type { ImageGenActionType, ImageGenState, ImageGenSubpath, ImageGenWidgetType } from './types';
+import type {
+  ImageGenActionType,
+  ImageGenState,
+  ImageGenStep,
+  ImageGenSubpath,
+  ImageGenWidgetType,
+} from './types';
 import {
   applyLastGeneratedAsProductImage,
   applyLastGeneratedForVariantGen,
@@ -61,6 +67,13 @@ import { resolveAssetImageUrl } from './resolve-asset-image-url';
 import { handleIdeaReviewTurn } from './handle-idea-review-turn';
 import { buildIdeaReviewWidgetPayload } from './idea-review-widget-payload';
 import { generateVariantPrompts, regenerateVariantPrompts } from './variant-prompts';
+import {
+  handleRivalBrandChosen,
+  handleRivalInspirationChosen,
+  parseRivalInspirationYesNo,
+  promptRivalInspirationIfAvailable,
+} from '@/lib/rival-analysis/rival-inspiration-chat';
+import { listRivalsWithCompletedSummaries } from '@/lib/rival-analysis/fetch-summary-for-chat';
 
 const IMAGE_GEN_STEP = 'imageGen';
 
@@ -77,6 +90,62 @@ function generatingLabel(ig: ImageGenState): string {
   const artist = findImageArtist(ig.imageArtistId);
   const q = ig.imageQuality ?? DEFAULT_IMAGE_QUALITY;
   return `Generating with ${artist.name} · ${q} quality…`;
+}
+
+function imageRivalCallbacks(
+  session: DbChatSession,
+  ig: ImageGenState,
+  newMessages: SerializedMessage[],
+) {
+  return {
+    widgetPrefix: 'imageGen' as const,
+    setStep: (step: 'rivalInspirationAsk' | 'rivalBrandPick') => {
+      ig.step = step as ImageGenStep;
+    },
+    appendAssistant: (content: string, widgetType?: string | null, widgetPayload?: unknown) =>
+      assistantMsg(session.id, content, widgetType as ImageGenWidgetType | undefined, widgetPayload),
+    onContinue: async () => {
+      await promptImageCollectFields(session, ig, newMessages);
+    },
+    setRivalInspirationEnabled: (enabled: boolean) => {
+      ig.rivalInspirationEnabled = enabled;
+    },
+    setRivalBrandName: (name: string | null) => {
+      ig.rivalBrandName = name;
+    },
+    setRivalIntelligenceBrief: (brief: string | undefined) => {
+      ig.rivalIntelligenceBrief = brief;
+    },
+  };
+}
+
+async function promptImageCollectFields(
+  session: DbChatSession,
+  ig: ImageGenState,
+  newMessages: SerializedMessage[],
+): Promise<void> {
+  ig.step = 'collectFields';
+  const artist = findImageArtist(ig.imageArtistId);
+  newMessages.push(
+    await assistantMsg(
+      session.id,
+      `${artist.name} · ${ig.imageQuality} quality. Share product description, brand tone, and how many copies you want.`,
+    ),
+  );
+}
+
+async function beginRivalInspirationOrCollectFields(
+  session: DbChatSession,
+  ig: ImageGenState,
+  newMessages: SerializedMessage[],
+): Promise<ImageGenState> {
+  if (ig.subpath !== 'productAd' && ig.subpath !== 'variantGen') {
+    await promptImageCollectFields(session, ig, newMessages);
+    return ig;
+  }
+
+  await promptRivalInspirationIfAvailable(session, imageRivalCallbacks(session, ig, newMessages));
+  return ig;
 }
 
 async function promptArtistSettings(
@@ -338,6 +407,59 @@ export async function handleImageGenMessage(
     newMessages.push(await assistantMsg(sessionId, result.reply));
     if (result.readyToGenerate) {
       return runTemplateGenerateFlow(session, workflowState, ig, newMessages);
+    }
+    const nextWorkflow = mergeImageGenIntoWorkflow(workflowState, ig);
+    await persist(session, nextWorkflow);
+    const updated = await getChatSession(sessionId, companyId);
+    return packageResult(updated!, nextWorkflow, newMessages);
+  }
+
+  if (ig.step === 'rivalInspirationAsk') {
+    const yesNo = parseRivalInspirationYesNo(text);
+    if (yesNo === null) {
+      newMessages.push(
+        await assistantMsg(
+          sessionId,
+          'Please choose **Yes** or **No** using the buttons below.',
+          'imageGenRivalInspirationChoice',
+        ),
+      );
+    } else {
+      await handleRivalInspirationChosen(
+        session,
+        yesNo,
+        imageRivalCallbacks(session, ig, newMessages),
+      );
+    }
+    const nextWorkflow = mergeImageGenIntoWorkflow(workflowState, ig);
+    await persist(session, nextWorkflow);
+    const updated = await getChatSession(sessionId, companyId);
+    return packageResult(updated!, nextWorkflow, newMessages);
+  }
+
+  if (ig.step === 'rivalBrandPick') {
+    const available = await listRivalsWithCompletedSummaries(companyId);
+    const lower = text.trim().toLowerCase();
+    const isMix = /\b(mix|top rivals?|all rivals?|any|no preference)\b/i.test(text);
+    const match = available.find((r) => r.brandName.toLowerCase() === lower);
+
+    if (isMix) {
+      await handleRivalBrandChosen(session, null, imageRivalCallbacks(session, ig, newMessages));
+    } else if (match) {
+      await handleRivalBrandChosen(
+        session,
+        match.brandName,
+        imageRivalCallbacks(session, ig, newMessages),
+      );
+    } else {
+      newMessages.push(
+        await assistantMsg(
+          sessionId,
+          'Pick a rival from the list below, choose **Mix of top rivals**, or type the exact brand name.',
+          'imageGenRivalBrandPicker',
+          { rivals: available.map((r) => ({ id: r.id, brandName: r.brandName })) },
+        ),
+      );
     }
     const nextWorkflow = mergeImageGenIntoWorkflow(workflowState, ig);
     await persist(session, nextWorkflow);
@@ -1178,15 +1300,31 @@ export async function handleImageGenAction(
       } else if (ig.subpath === 'templates') {
         // Artist/quality only — step stays on templateUpload / templateNotes / generate / review
       } else {
-        ig.step = 'collectFields';
-        const artist = findImageArtist(ig.imageArtistId);
-        newMessages.push(
-          await assistantMsg(
-            session.id,
-            `${artist.name} · ${ig.imageQuality} quality. Share product description, brand tone, and how many copies you want.`,
-          ),
-        );
+        ig = await beginRivalInspirationOrCollectFields(session, ig, newMessages);
       }
+      break;
+    }
+
+    case 'imageGen.rivalInspirationChosen': {
+      const enabled = Boolean(payload.enabled);
+      await handleRivalInspirationChosen(
+        session,
+        enabled,
+        imageRivalCallbacks(session, ig, newMessages),
+      );
+      break;
+    }
+
+    case 'imageGen.rivalBrandChosen': {
+      const brandName =
+        payload.brandName === null || payload.brandName === undefined
+          ? null
+          : String(payload.brandName);
+      await handleRivalBrandChosen(
+        session,
+        brandName,
+        imageRivalCallbacks(session, ig, newMessages),
+      );
       break;
     }
 

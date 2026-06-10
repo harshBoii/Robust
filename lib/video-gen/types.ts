@@ -42,6 +42,8 @@ export type VideoGenStep =
   | 'runningIntel'
   | 'heygenGenerating'
   | 'heygenPolling'
+  | 'rivalInspirationAsk'
+  | 'rivalBrandPick'
   | 'done';
 
 export type VideoGenCompanyContext = {
@@ -100,6 +102,9 @@ export type VideoGenState = {
   generatedAssetId?: string;
   changeTurns?: number;
   agentMemory?: string;
+  rivalInspirationEnabled?: boolean;
+  rivalBrandName?: string | null;
+  rivalIntelligenceBrief?: string;
   lastError?: string | null;
 };
 
@@ -111,7 +116,9 @@ export type VideoGenActionType =
   | 'videoGen.scriptApproved'
   | 'videoGen.scriptChangeRequested'
   | 'videoGen.adSelected'
-  | 'videoGen.retryIntel';
+  | 'videoGen.retryIntel'
+  | 'videoGen.rivalInspirationChosen'
+  | 'videoGen.rivalBrandChosen';
 
 export const VIDEO_GEN_ACTIONS: VideoGenActionType[] = [
   'videoGen.subpathChosen',
@@ -122,6 +129,8 @@ export const VIDEO_GEN_ACTIONS: VideoGenActionType[] = [
   'videoGen.scriptChangeRequested',
   'videoGen.adSelected',
   'videoGen.retryIntel',
+  'videoGen.rivalInspirationChosen',
+  'videoGen.rivalBrandChosen',
 ];
 
 export type VideoGenWidgetType =
@@ -133,4 +142,6 @@ export type VideoGenWidgetType =
   | 'videoGenAnalyzing'
   | 'videoGenGenerating'
   | 'videoGenHeygenProgress'
-  | 'videoGenDone';
+  | 'videoGenDone'
+  | 'videoGenRivalInspirationChoice'
+  | 'videoGenRivalBrandPicker';

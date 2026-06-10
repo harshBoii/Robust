@@ -15,6 +15,9 @@ export function buildProductAdBasePrompt(state: ImageGenState, feedback?: string
     state.productDescription ? `Product: ${state.productDescription}` : null,
     state.brandTone ? `Brand tone: ${state.brandTone}` : null,
     state.aspectRatio ? `Aspect ratio preference: ${state.aspectRatio}` : null,
+    state.rivalIntelligenceBrief
+      ? `Rival competitive intelligence (use hooks, offers, and visual patterns — do not copy verbatim):\n${state.rivalIntelligenceBrief}`
+      : null,
     'Keep the product recognizable and prominent. Professional lighting, clean composition, suitable for paid social ads.',
   ].filter(Boolean);
   return parts.join('\n');

@@ -25,6 +25,8 @@ export type ImageGenStep =
   | 'poseSelect'
   | 'generateOnModel'
   | 'reviewOnModel'
+  | 'rivalInspirationAsk'
+  | 'rivalBrandPick'
   | 'done';
 
 export type ImageGenVariantStatus = 'pending' | 'done' | 'failed';
@@ -78,6 +80,10 @@ export type ImageGenState = {
   onModelGeneratedImageUrl?: string;
   generatedAssets?: GeneratedAssetRef[];
   agentMemory?: string;
+  rivalInspirationEnabled?: boolean;
+  /** null = mix top rivals */
+  rivalBrandName?: string | null;
+  rivalIntelligenceBrief?: string;
   rejectFeedback?: string;
   /** Templates subpath */
   templateId?: string;
@@ -111,7 +117,9 @@ export type ImageGenActionType =
   | 'imageGen.onModelAccepted'
   | 'imageGen.onModelRejected'
   | 'imageGen.pushToAds'
-  | 'imageGen.templateRegenerate';
+  | 'imageGen.templateRegenerate'
+  | 'imageGen.rivalInspirationChosen'
+  | 'imageGen.rivalBrandChosen';
 
 export const IMAGE_GEN_ACTIONS: ImageGenActionType[] = [
   'imageGen.source',
@@ -133,6 +141,8 @@ export const IMAGE_GEN_ACTIONS: ImageGenActionType[] = [
   'imageGen.onModelRejected',
   'imageGen.pushToAds',
   'imageGen.templateRegenerate',
+  'imageGen.rivalInspirationChosen',
+  'imageGen.rivalBrandChosen',
 ];
 
 export type ImageGenWidgetType =
@@ -151,4 +161,6 @@ export type ImageGenWidgetType =
   | 'imageGenPoseGallery'
   | 'imageGenPushToAds'
   | 'imageGenNextStep'
-  | 'imageGenTemplateGrid';
+  | 'imageGenTemplateGrid'
+  | 'imageGenRivalInspirationChoice'
+  | 'imageGenRivalBrandPicker';

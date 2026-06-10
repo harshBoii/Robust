@@ -37,6 +37,13 @@ import type {
   VideoGenWidgetType,
 } from './types';
 import { VIDEO_GEN_AD_CATEGORIES } from './types';
+import {
+  handleRivalBrandChosen,
+  handleRivalInspirationChosen,
+  parseRivalInspirationYesNo,
+  promptRivalInspirationIfAvailable,
+} from '@/lib/rival-analysis/rival-inspiration-chat';
+import { listRivalsWithCompletedSummaries } from '@/lib/rival-analysis/fetch-summary-for-chat';
 
 const VIDEO_GEN_STEP = 'videoGen';
 
@@ -139,6 +146,7 @@ async function runScriptGeneration(
     const generated = await generateVideoScript({
       companyContext: vg.companyContext,
       intelligenceBrief,
+      rivalIntelligenceBrief: vg.rivalIntelligenceBrief ?? null,
       replicateMode: vg.subpath === 'replicate',
       adCategory: vg.adCategory,
       trendTopic: vg.trendTopic,
@@ -172,6 +180,63 @@ async function runScriptGeneration(
   return vg;
 }
 
+function videoRivalCallbacks(
+  session: DbChatSession,
+  vg: VideoGenState,
+  newMessages: SerializedMessage[],
+) {
+  return {
+    widgetPrefix: 'videoGen' as const,
+    setStep: (step: 'rivalInspirationAsk' | 'rivalBrandPick') => {
+      vg.step = step;
+    },
+    appendAssistant: (content: string, widgetType?: string | null, widgetPayload?: unknown) =>
+      assistantMsg(session.id, content, widgetType as VideoGenWidgetType | undefined, widgetPayload),
+    onContinue: async () => {
+      await promptVideoAdTypePick(session, vg, newMessages);
+    },
+    setRivalInspirationEnabled: (enabled: boolean) => {
+      vg.rivalInspirationEnabled = enabled;
+    },
+    setRivalBrandName: (name: string | null) => {
+      vg.rivalBrandName = name;
+    },
+    setRivalIntelligenceBrief: (brief: string | undefined) => {
+      vg.rivalIntelligenceBrief = brief;
+    },
+  };
+}
+
+async function promptVideoAdTypePick(
+  session: DbChatSession,
+  vg: VideoGenState,
+  newMessages: SerializedMessage[],
+): Promise<void> {
+  vg.step = 'adTypePick';
+  newMessages.push(
+    await assistantMsg(
+      session.id,
+      'What type of video ad would you like to create?',
+      'videoGenAdTypePicker',
+      { categories: VIDEO_GEN_AD_CATEGORIES },
+    ),
+  );
+}
+
+async function beginRivalInspirationOrAdTypePick(
+  session: DbChatSession,
+  vg: VideoGenState,
+  newMessages: SerializedMessage[],
+): Promise<VideoGenState> {
+  if (vg.subpath !== 'mrAdicasso') {
+    await promptVideoAdTypePick(session, vg, newMessages);
+    return vg;
+  }
+
+  await promptRivalInspirationIfAvailable(session, videoRivalCallbacks(session, vg, newMessages));
+  return vg;
+}
+
 async function beginMrAdicasso(
   session: DbChatSession,
   vg: VideoGenState,
@@ -198,16 +263,7 @@ async function beginMrAdicasso(
     vg.companyContext = applyOfferingToContext(vg.companyContext, offerings[0].id);
   }
 
-  vg.step = 'adTypePick';
-  newMessages.push(
-    await assistantMsg(
-      session.id,
-      'What type of video ad would you like to create?',
-      'videoGenAdTypePicker',
-      { categories: VIDEO_GEN_AD_CATEGORIES },
-    ),
-  );
-  return vg;
+  return beginRivalInspirationOrAdTypePick(session, vg, newMessages);
 }
 
 async function beginLearnAndBuild(
@@ -414,7 +470,48 @@ export async function handleVideoGenMessage(
   const newMessages: SerializedMessage[] = [];
   newMessages.push(await userMsg(sessionId, text));
 
-  if (vg.step === 'offeringPick') {
+  if (vg.step === 'rivalInspirationAsk') {
+    const yesNo = parseRivalInspirationYesNo(text);
+    if (yesNo === null) {
+      newMessages.push(
+        await assistantMsg(
+          session.id,
+          'Please choose **Yes** or **No** using the buttons below.',
+          'videoGenRivalInspirationChoice',
+        ),
+      );
+    } else {
+      await handleRivalInspirationChosen(
+        session,
+        yesNo,
+        videoRivalCallbacks(session, vg, newMessages),
+      );
+    }
+  } else if (vg.step === 'rivalBrandPick') {
+    const available = await listRivalsWithCompletedSummaries(companyId);
+    const lower = text.trim().toLowerCase();
+    const isMix = /\b(mix|top rivals?|all rivals?|any|no preference)\b/i.test(text);
+    const match = available.find((r) => r.brandName.toLowerCase() === lower);
+
+    if (isMix) {
+      await handleRivalBrandChosen(session, null, videoRivalCallbacks(session, vg, newMessages));
+    } else if (match) {
+      await handleRivalBrandChosen(
+        session,
+        match.brandName,
+        videoRivalCallbacks(session, vg, newMessages),
+      );
+    } else {
+      newMessages.push(
+        await assistantMsg(
+          session.id,
+          'Pick a rival from the list below, choose **Mix of top rivals**, or type the exact brand name.',
+          'videoGenRivalBrandPicker',
+          { rivals: available.map((r) => ({ id: r.id, brandName: r.brandName })) },
+        ),
+      );
+    }
+  } else if (vg.step === 'offeringPick') {
     const offeringId = matchOfferingByText(vg, text);
     if (offeringId) {
       return handleVideoGenAction(
@@ -561,14 +658,29 @@ export async function handleVideoGenAction(
       if (vg.companyContext) {
         vg.companyContext = applyOfferingToContext(vg.companyContext, offeringId);
       }
-      vg.step = 'adTypePick';
-      newMessages.push(
-        await assistantMsg(
-          session.id,
-          'What type of video ad would you like to create?',
-          'videoGenAdTypePicker',
-          { categories: VIDEO_GEN_AD_CATEGORIES },
-        ),
+      vg = await beginRivalInspirationOrAdTypePick(session, vg, newMessages);
+      break;
+    }
+
+    case 'videoGen.rivalInspirationChosen': {
+      const enabled = Boolean(payload.enabled);
+      await handleRivalInspirationChosen(
+        session,
+        enabled,
+        videoRivalCallbacks(session, vg, newMessages),
+      );
+      break;
+    }
+
+    case 'videoGen.rivalBrandChosen': {
+      const brandName =
+        payload.brandName === null || payload.brandName === undefined
+          ? null
+          : String(payload.brandName);
+      await handleRivalBrandChosen(
+        session,
+        brandName,
+        videoRivalCallbacks(session, vg, newMessages),
       );
       break;
     }
