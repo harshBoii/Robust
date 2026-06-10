@@ -7,6 +7,7 @@ export type AssetBucket = { id: string; label: string; assetCount?: number };
 export type Asset = {
   id: string;
   title: string;
+  filename?: string | null;
   thumbnailUrl: string | null;
   playbackUrl?: string | null;
   assetType: string;

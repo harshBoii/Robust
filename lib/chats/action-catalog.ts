@@ -39,6 +39,7 @@ Payload: { "target": "campaign" | "adset" | "both", "instruction": "what to set/
 **adset.selected** — { "adSetId", "adSetName" }
 **adset.approved** — create ad set on Meta. ONLY on explicit Meta confirmation.
 **creative.mode** — { "mode": "ai" | "csv" }
+**creative.csvParsed** — { "groups": GroupModel[] } full replacement (one row per ad from CSV mapper widget)
 **preview.approved** / **preview.changes** — after ad preview.
 **publish.submit** — { "scheduledAt"?: ISO string }
 **workflow.goBack** — { "step": "<ChatWorkflowStep>", "label"?: string }

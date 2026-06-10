@@ -17,11 +17,9 @@ import {
 
 import { AnalyzingCraftLoader } from '../AnalyzingCraftLoader';
 
-export type ChatWidgetDispatch = (
-  action: string,
-  payload?: Record<string, unknown>,
-  userMessage?: string,
-) => Promise<void>;
+import type { ChatWidgetDispatch } from './types';
+
+export type { ChatWidgetDispatch } from './types';
 
 export function MediaSourceWidget({ onAction }: { onAction: ChatWidgetDispatch }) {
   return (
@@ -581,54 +579,7 @@ export function PresetPreviewWidget({
   );
 }
 
-export function CreativeCsvWidget({
-  groups,
-  onAction,
-}: {
-  groups?: GroupModel[];
-  onAction: ChatWidgetDispatch;
-}) {
-  const [csv, setCsv] = useState('');
-
-  function parse() {
-    const lines = csv.trim().split('\n');
-    if (lines.length < 2) return;
-    const headers = lines[0].split(',').map((h) => h.trim().toLowerCase());
-    const idx = (k: string) => headers.indexOf(k);
-    const rows: Array<{ bucketId: string; creative: Record<string, string> }> = [];
-    for (let i = 1; i < lines.length; i++) {
-      const cols = lines[i].split(',').map((c) => c.trim());
-      const groupKey = cols[idx('groupkey')] ?? cols[idx('bucketid')] ?? '';
-      const bucket = groups?.find((g) => g.bucketId === groupKey || g.label === groupKey);
-      if (!bucket) continue;
-      rows.push({
-        bucketId: bucket.bucketId,
-        creative: {
-          headline: cols[idx('headline')] ?? '',
-          primaryText: cols[idx('primarytext')] ?? cols[idx('primary_text')] ?? '',
-          landingUrl: cols[idx('landingurl')] ?? cols[idx('landing_url')] ?? '',
-          ctaType: cols[idx('ctatype')] ?? 'LEARN_MORE',
-        },
-      });
-    }
-    void onAction('creative.csvParsed', { groups: rows }, 'Applied CSV copy');
-  }
-
-  return (
-    <div className="mt-2 space-y-2">
-      <textarea
-        value={csv}
-        onChange={(e) => setCsv(e.target.value)}
-        placeholder="groupKey,headline,primaryText,landingUrl,ctaType"
-        rows={5}
-        className="w-full rounded-lg border border-border/50 bg-background/50 p-2 text-xs"
-      />
-      <button type="button" onClick={parse} className="glass-button-primary rounded-lg px-3 py-1.5 text-xs">
-        Apply CSV
-      </button>
-    </div>
-  );
-}
+export { CreativeCsvWidget } from './CreativeCsvWidget';
 
 function logCreativeAi(phase: string, detail?: Record<string, unknown>) {
   if (detail) console.log(`[chats:creative-ai] ${phase}`, detail);

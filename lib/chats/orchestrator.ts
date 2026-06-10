@@ -699,7 +699,10 @@ export async function handleChatAction(
       nextState.creativeMode = mode;
       if (mode === 'csv') {
         nextStep = 'creativeCsv';
-        await say('Upload a CSV with columns: groupKey, headline, primaryText, landingUrl, ctaType (optional).','creativeCsv');
+        await say(
+          'Upload a CSV with one row per ad. Map your columns to session media, headline, landing URL, and other copy fields.',
+          'creativeCsv',
+        );
       } else {
         nextStep = 'creativeBuild';
         console.log('[chats:creative-ai] creative.mode → creativeBuild', {
@@ -713,27 +716,25 @@ export async function handleChatAction(
     }
 
     case 'creative.csvParsed': {
-      const rows = payload.groups as Array<{
-        bucketId: string;
-        creative: Record<string, string>;
-      }>;
-      if (nextState.groups && rows?.length) {
-        const byId = new Map(rows.map((r) => [r.bucketId, r.creative]));
-        nextState.groups = nextState.groups.map((g) => {
-          const patch = byId.get(g.bucketId);
-          if (!patch) return g;
-          return {
-            ...g,
-            creative: {
-              ...g.creative,
-              headline: patch.headline ?? g.creative.headline,
-              primaryText: patch.primaryText ?? g.creative.primaryText,
-              landingUrl: patch.landingUrl ?? g.creative.landingUrl,
-              ctaType: patch.ctaType ?? g.creative.ctaType,
-              description: patch.description ?? g.creative.description,
-            },
-          };
-        });
+      const incoming = payload.groups as typeof nextState.groups | undefined;
+      if (incoming?.length) {
+        const defaultAdSetId = nextState.defaultAdSetId ?? '';
+        nextState.groups = incoming.map((g) => ({
+          ...g,
+          adSetId: g.adSetId || defaultAdSetId,
+        }));
+      }
+      const included = (nextState.groups ?? []).filter((g) => g.included);
+      const invalid = included.find(
+        (g) => !g.assetIds[0] || !g.creative.headline.trim() || !g.creative.landingUrl.trim(),
+      );
+      if (invalid) {
+        nextStep = 'creativeCsv';
+        await say(
+          'Some CSV rows are missing media, headline, or landing URL. Fix the mapping and try again.',
+          'creativeCsv',
+        );
+        break;
       }
       nextStep = 'preview';
       await say('Here is your ad preview. Approve or request changes.', 'adPreview', {

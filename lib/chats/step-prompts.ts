@@ -80,6 +80,12 @@ export function getStepResumePrompt(step: ChatWorkflowStep): {
         content: 'How should we fill in ad copy for each creative group?',
         widgetType: 'creativeMode',
       };
+    case 'creativeCsv':
+      return {
+        content:
+          'Upload a CSV with one row per ad. Map your columns to session media, headline, landing URL, and other copy fields.',
+        widgetType: 'creativeCsv',
+      };
     case 'preview':
       return {
         content: 'Here is your ad preview. Approve or request changes.',

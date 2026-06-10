@@ -219,7 +219,13 @@ export function ChatWidgetRenderer({
         />
       );
     case 'creativeCsv':
-      return <CreativeCsvWidget groups={groups} onAction={onAction} />;
+      return (
+        <CreativeCsvWidget
+          groups={groups}
+          workflowState={workflowState}
+          onAction={onAction}
+        />
+      );
     case 'creativeBuilding':
       return (
         <CreativeAiWidget

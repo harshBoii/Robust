@@ -25,6 +25,7 @@ export async function loadGroupsForBulk(
     select: {
       id: true,
       title: true,
+      filename: true,
       assetType: true,
       bulkUploadId: true,
       assetBucketId: true,
@@ -36,6 +37,7 @@ export async function loadGroupsForBulk(
   const mappedAssets: Asset[] = assets.map((a) => ({
     id: a.id,
     title: a.title,
+    filename: a.filename,
     thumbnailUrl: a.thumbnailUrl,
     playbackUrl: a.playbackUrl,
     assetType: a.assetType,

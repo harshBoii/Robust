@@ -74,8 +74,14 @@ export function resolveActionUserMessage(
         : payload.step
           ? 'Go back'
           : 'Go back';
-    case 'creative.csvParsed':
+    case 'creative.csvParsed': {
+      const groups = payload.groups;
+      if (Array.isArray(groups) && groups.length > 0) {
+        const n = groups.length;
+        return `Applied CSV (${n} ad${n === 1 ? '' : 's'})`;
+      }
       return 'Applied CSV copy';
+    }
     case 'imageGen.source':
       return payload.source === 'shopify' ? 'Shopify product' : 'Custom upload';
     case 'imageGen.shopifySelected':
