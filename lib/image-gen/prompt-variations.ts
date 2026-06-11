@@ -39,6 +39,28 @@ export const AD_FORMATS = [
   'designed as a premium brand awareness creative, minimal copy',
 ] as const;
 
+export const TEXT_LAYOUTS = [
+  'text treatment: logo mark only, no headline or body copy — let the product speak',
+  'text treatment: brand name in small caps at bottom edge only, nothing else',
+  'text treatment: single 2-3 word headline in large type, no supporting copy, no price',
+  'text treatment: bold headline top-aligned, product name beneath it, logo bottom-right corner',
+  'text treatment: headline on left side vertically, product occupies right two-thirds',
+  'text treatment: offer or benefit as oversized number (e.g. \'3X\', \'₹299\', \'100%\') dominating upper area, small descriptor below',
+  'text treatment: headline split across two lines with a visual break between them, logo tucked bottom-left',
+  'text treatment: headline + one-line subtext + CTA button visible, stacked left-aligned',
+  'text treatment: bold problem statement at top, product in middle, solution line at bottom — three-row layout',
+  'text treatment: social proof line at top (\'10L+ customers\'), product center, price + CTA bottom strip',
+] as const;
+
+export const TEXT_STYLES = [
+  'typography style: serif editorial font, high contrast weight — thin body, ultra-bold headline',
+  'typography style: clean geometric sans-serif, uniform weight, lots of tracking',
+  'typography style: handwritten accent font for headline, clean sans for supporting text',
+  'typography style: condensed bold all-caps headline, small regular-weight descriptor',
+  'typography style: oversized single word as background texture behind product, semi-transparent',
+  'typography style: outlined/stroke text only — no filled letterforms',
+] as const;
+
 export function pickRandom<T>(arr: readonly T[]): T {
   return arr[Math.floor(Math.random() * arr.length)]!;
 }
@@ -48,6 +70,8 @@ export function buildVariationBlock(): string {
     `Composition: ${pickRandom(COMPOSITIONS)}`,
     `Lighting mood: ${pickRandom(LIGHTING_MOODS)}`,
     `Background: ${pickRandom(BACKGROUND_TREATMENTS)}`,
+    pickRandom(TEXT_LAYOUTS),
+    pickRandom(TEXT_STYLES),
     `Format intent: ${pickRandom(AD_FORMATS)}`,
   ].join('\n');
 }
