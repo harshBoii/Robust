@@ -8,6 +8,16 @@ const nextConfig: NextConfig = {
       'node_modules/playwright-core/**/*',
       'node_modules/playwright/**/*',
     ],
+    '/api/brands/[brandId]/dna/visual/generate': [
+      'node_modules/@sparticuz/chromium/**/*',
+      'node_modules/playwright-core/**/*',
+      'node_modules/playwright/**/*',
+    ],
+    '/api/brands/[brandId]/dna/communication/analyze-blogs': [
+      'node_modules/@sparticuz/chromium/**/*',
+      'node_modules/playwright-core/**/*',
+      'node_modules/playwright/**/*',
+    ],
   },
   images: {
     remotePatterns: [

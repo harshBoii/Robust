@@ -120,8 +120,114 @@ model BrandEntity {
   company               Company                @relation(fields: [companyId], references: [id], onDelete: Cascade)
   offerings             Offering[]
   aeoGenerationProfiles AeoGenerationProfile[]
+  visualDna             VisualDna?
+  communicationDna      CommunicationDna?
+  audienceDna           AudienceDna?
+  complianceDna         ComplianceDna?
 
   @@map("brand_entities")
+}
+
+model VisualDna {
+  id                    String   @id @default(cuid())
+  brandEntityId         String   @unique @map("brand_entity_id")
+  visualStyle           String?  @map("visual_style") @db.VarChar(128)
+  visualMaturity        String?  @map("visual_maturity") @db.VarChar(128)
+  designComplexity      String?  @map("design_complexity") @db.VarChar(64)
+  primaryColor          String?  @map("primary_color") @db.VarChar(32)
+  secondaryColor        String?  @map("secondary_color") @db.VarChar(32)
+  accentColor           String?  @map("accent_color") @db.VarChar(32)
+  backgroundColor       String?  @map("background_color") @db.VarChar(32)
+  headingFont           String?  @map("heading_font") @db.VarChar(255)
+  bodyFont              String?  @map("body_font") @db.VarChar(255)
+  typographyPersonality String?  @map("typography_personality") @db.VarChar(128)
+  whitespaceLevel       String?  @map("whitespace_level") @db.VarChar(64)
+  contentDensity        String?  @map("content_density") @db.VarChar(64)
+  alignmentStyle        String?  @map("alignment_style") @db.VarChar(128)
+  cornerRadiusStyle     String?  @map("corner_radius_style") @db.VarChar(64)
+  shadowStyle           String?  @map("shadow_style") @db.VarChar(64)
+  preferredVisualMotif  String?  @map("preferred_visual_motif") @db.VarChar(128)
+  visualEmotion         String?  @map("visual_emotion") @db.VarChar(128)
+  createdAt             DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt             DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  brandEntity BrandEntity @relation(fields: [brandEntityId], references: [id], onDelete: Cascade)
+
+  @@map("visual_dna")
+}
+
+model CommunicationDna {
+  id                        String   @id @default(cuid())
+  brandEntityId             String   @unique @map("brand_entity_id")
+  tone                      String?  @db.VarChar(128)
+  voice                     String?  @db.VarChar(128)
+  brandPersonality          String?  @map("brand_personality") @db.VarChar(128)
+  emotionalIntensity        String?  @map("emotional_intensity") @db.VarChar(64)
+  headlineStyle             String?  @map("headline_style") @db.VarChar(128)
+  ctaStyle                  String?  @map("cta_style") @db.VarChar(128)
+  urgencyLevel              String?  @map("urgency_level") @db.VarChar(64)
+  socialProofUsage          String?  @map("social_proof_usage") @db.VarChar(64)
+  primaryMessagingTheme     String?  @map("primary_messaging_theme") @db.Text
+  secondaryMessagingTheme   String?  @map("secondary_messaging_theme") @db.Text
+  avoidedMessagingTheme     String?  @map("avoided_messaging_theme") @db.Text
+  readingLevel              String?  @map("reading_level") @db.VarChar(64)
+  avgSentenceLength         Int?     @map("avg_sentence_length")
+  paragraphDensity          String?  @map("paragraph_density") @db.VarChar(64)
+  activeVoicePercentage     Int?     @map("active_voice_percentage")
+  positioningStatement      String?  @map("positioning_statement") @db.Text
+  valuePropositionStyle     String?  @map("value_proposition_style") @db.VarChar(128)
+  differentiationStrategy   String?  @map("differentiation_strategy") @db.VarChar(128)
+  introPattern              String?  @map("intro_pattern") @db.VarChar(128)
+  storytellingPattern       String?  @map("storytelling_pattern") @db.VarChar(128)
+  conclusionPattern         String?  @map("conclusion_pattern") @db.VarChar(128)
+  createdAt                 DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt                 DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  brandEntity BrandEntity @relation(fields: [brandEntityId], references: [id], onDelete: Cascade)
+
+  @@map("communication_dna")
+}
+
+model AudienceDna {
+  id                   String   @id @default(cuid())
+  brandEntityId        String   @unique @map("brand_entity_id")
+  primaryPersona       String?  @map("primary_persona") @db.VarChar(255)
+  secondaryPersona     String?  @map("secondary_persona") @db.VarChar(255)
+  industryFocus        String?  @map("industry_focus") @db.VarChar(255)
+  technicalLevel       String?  @map("technical_level") @db.VarChar(64)
+  domainKnowledgeLevel String?  @map("domain_knowledge_level") @db.VarChar(64)
+  audiencePainPoints   String[] @default([]) @map("audience_pain_points")
+  audienceMotivations  String[] @default([]) @map("audience_motivations")
+  audienceObjections   String[] @default([]) @map("audience_objections")
+  createdAt            DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt            DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  brandEntity BrandEntity @relation(fields: [brandEntityId], references: [id], onDelete: Cascade)
+
+  @@map("audience_dna")
+}
+
+model ComplianceDna {
+  id                          String   @id @default(cuid())
+  brandEntityId               String   @unique @map("brand_entity_id")
+  bannedAbsoluteClaims        String[] @default([]) @map("banned_absolute_claims")
+  bannedComparativeClaims     String[] @default([]) @map("banned_comparative_claims")
+  allowedClaims               String[] @default([]) @map("allowed_claims")
+  bannedWords                 String[] @default([]) @map("banned_words")
+  allowedWords                String[] @default([]) @map("allowed_words")
+  fearBasedMarketingAllowed   Boolean  @default(false) @map("fear_based_marketing_allowed")
+  sensationalLanguageAllowed  Boolean  @default(false) @map("sensational_language_allowed")
+  politicalContentAllowed     Boolean  @default(false) @map("political_content_allowed")
+  religiousContentAllowed     Boolean  @default(false) @map("religious_content_allowed")
+  controversialTopicsAllowed    Boolean  @default(false) @map("controversial_topics_allowed")
+  sourceFileUrl               String?  @map("source_file_url") @db.VarChar(2000)
+  sourceFileName              String?  @map("source_file_name") @db.VarChar(500)
+  createdAt                   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt                   DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  brandEntity BrandEntity @relation(fields: [brandEntityId], references: [id], onDelete: Cascade)
+
+  @@map("compliance_dna")
 }
 
 model Offering {

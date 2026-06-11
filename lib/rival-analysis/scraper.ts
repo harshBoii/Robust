@@ -1,6 +1,8 @@
 import 'server-only';
 
-import type { Browser } from 'playwright-core';
+import { createScrapeContext } from '@/lib/playwright/browser-context';
+import { dismissCookieBanners, navigateForScrape } from '@/lib/playwright/navigate-page';
+import { IS_SERVERLESS, launchBrowser } from '@/lib/playwright/launch-browser';
 
 export interface ScrapedAd {
   library_id: string;
@@ -16,34 +18,7 @@ export interface ScrapedAd {
   days_running: number | null;
 }
 
-const HEADLESS = true;
 const MAX_SCROLLS = 15;
-
-const IS_SERVERLESS =
-  !!process.env.AWS_LAMBDA_FUNCTION_VERSION || !!process.env.VERCEL;
-
-/**
- * Launch Chromium for the current environment.
- * - Serverless (Vercel/Lambda): playwright-core + @sparticuz/chromium binary.
- * - Local dev: the full `playwright` package with its downloaded Chromium.
- */
-async function launchBrowser(): Promise<Browser> {
-  if (IS_SERVERLESS) {
-    const sparticuz = (await import('@sparticuz/chromium')).default;
-    const { chromium } = await import('playwright-core');
-    return chromium.launch({
-      args: [...sparticuz.args, '--no-sandbox', '--disable-setuid-sandbox'],
-      executablePath: await sparticuz.executablePath(),
-      headless: true,
-    });
-  }
-
-  const { chromium } = await import('playwright');
-  return chromium.launch({
-    headless: HEADLESS,
-    args: ['--no-sandbox', '--disable-setuid-sandbox'],
-  });
-}
 
 const DOM_EXTRACT_JS = `
 (() => {
@@ -142,33 +117,12 @@ export async function scrapeRivalAds(
   log('Browser launched.');
 
   try {
-    const ctx = await browser.newContext({
-      userAgent:
-        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) ' +
-        'AppleWebKit/537.36 (KHTML, like Gecko) ' +
-        'Chrome/124.0.0.0 Safari/537.36',
-      viewport: { width: 1280, height: 900 },
-      locale: 'en-US',
-    });
-
+    const ctx = await createScrapeContext(browser);
     const page = await ctx.newPage();
     log('Navigating to FB Ad Library…');
-    await page.goto(url, { waitUntil: 'networkidle', timeout: 30000 });
-    log('Page loaded (networkidle). Waiting 3 s…');
-    await page.waitForTimeout(3000);
-
-    // dismiss cookie banner
-    try {
-      const btn = page.locator('[data-testid="cookie-policy-manage-dialog-accept-button"]');
-      if (await btn.isVisible({ timeout: 3000 })) {
-        log('Cookie banner visible — dismissing…');
-        await btn.click();
-        await page.waitForTimeout(1000);
-        log('Cookie banner dismissed.');
-      } else {
-        log('No cookie banner detected.');
-      }
-    } catch { /* ignore */ }
+    await navigateForScrape(page, url);
+    log('Page loaded. Waiting for hydration…');
+    await dismissCookieBanners(page);
 
     // scroll to load ads
     log(`Scrolling up to ${MAX_SCROLLS} times to load ads…`);

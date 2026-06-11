@@ -135,7 +135,11 @@ function ModalShell({
   );
 }
 
-export default function DataMineSection() {
+export default function DataMineSection({
+  onSnapshotChange,
+}: {
+  onSnapshotChange?: (snap: DataMineSnapshot) => void;
+} = {}) {
   const router = useRouter();
   const toast = useToast();
 
@@ -154,12 +158,16 @@ export default function DataMineSection() {
   const [offeringForm, setOfferingForm] = useState<OfferingFormState>(emptyOfferingForm);
   const [savingOffering, setSavingOffering] = useState(false);
 
-  const applySnapshot = useCallback((snap: DataMineSnapshot) => {
-    setWebsite(snap.website ?? '');
-    setLinkedinUrl(snap.linkedinUrl ?? '');
-    setBrand(snap.brandEntity);
-    setOfferings(snap.offerings);
-  }, []);
+  const applySnapshot = useCallback(
+    (snap: DataMineSnapshot) => {
+      setWebsite(snap.website ?? '');
+      setLinkedinUrl(snap.linkedinUrl ?? '');
+      setBrand(snap.brandEntity);
+      setOfferings(snap.offerings);
+      onSnapshotChange?.(snap);
+    },
+    [onSnapshotChange],
+  );
 
   const load = useCallback(async () => {
     setLoading(true);
