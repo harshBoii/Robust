@@ -31,7 +31,8 @@ import {
 import { tryHandleImageGenEmptyPickerTurn } from '@/lib/chats/handle-empty-picker-turn';
 import { tryHandleImageGenWidgetChoiceTurn } from '@/lib/chats/handle-widget-choice-turn';
 import { classifyImageGenSubpath } from './classify-subpath';
-import { runCollectorTurn } from './collect-fields-agent';
+import { isCollectionComplete, runCollectorTurn } from './collect-fields-agent';
+import { ensureBrandDnaOnState, hydrateFromCompany } from './load-brand-dna';
 import { runTemplateNotesTurn } from './template-collector-agent';
 import {
   runTemplateGenerate,
@@ -92,10 +93,40 @@ function generatingLabel(ig: ImageGenState): string {
   return `Generating with ${artist.name} · ${q} quality…`;
 }
 
+function buildCollectFieldsMessage(ig: ImageGenState): string {
+  const artist = findImageArtist(ig.imageArtistId);
+  const prefix = `${artist.name} · ${ig.imageQuality} quality.`;
+  const missing: string[] = [];
+  if (!ig.productDescription?.trim()) missing.push('product description');
+  if (!ig.brandTone?.trim()) missing.push('brand tone');
+  if (typeof ig.copyCount !== 'number' || ig.copyCount < 1) {
+    missing.push('how many copies you want');
+  }
+
+  if (!missing.length) {
+    return `${prefix} Share any final details, or say go when ready.`;
+  }
+
+  if (ig.brandDnaApplied && ig.brandTone?.trim() && missing.length === 1 && missing[0] === 'how many copies you want') {
+    return `${prefix} Brand tone loaded from your DNA profile. How many copies do you want?`;
+  }
+
+  if (ig.brandDnaApplied && ig.brandTone?.trim() && !missing.includes('brand tone')) {
+    const withoutTone = missing.filter((m) => m !== 'brand tone');
+    if (withoutTone.length) {
+      return `${prefix} Brand tone loaded from your DNA profile. Share ${withoutTone.join(' and ')}.`;
+    }
+  }
+
+  return `${prefix} Share ${missing.join(', ')}.`;
+}
+
 function imageRivalCallbacks(
   session: DbChatSession,
   ig: ImageGenState,
   newMessages: SerializedMessage[],
+  workflowState: WorkflowState,
+  autoRoute?: { result: OrchestratorResult | null },
 ) {
   return {
     widgetPrefix: 'imageGen' as const,
@@ -105,7 +136,8 @@ function imageRivalCallbacks(
     appendAssistant: (content: string, widgetType?: string | null, widgetPayload?: unknown) =>
       assistantMsg(session.id, content, widgetType as ImageGenWidgetType | undefined, widgetPayload),
     onContinue: async () => {
-      await promptImageCollectFields(session, ig, newMessages);
+      const result = await enterCollectFieldsOrGenerate(session, workflowState, ig, newMessages);
+      if (result && autoRoute) autoRoute.result = result;
     },
     setRivalInspirationEnabled: (enabled: boolean) => {
       ig.rivalInspirationEnabled = enabled;
@@ -125,27 +157,48 @@ async function promptImageCollectFields(
   newMessages: SerializedMessage[],
 ): Promise<void> {
   ig.step = 'collectFields';
-  const artist = findImageArtist(ig.imageArtistId);
   newMessages.push(
-    await assistantMsg(
-      session.id,
-      `${artist.name} · ${ig.imageQuality} quality. Share product description, brand tone, and how many copies you want.`,
-    ),
+    await assistantMsg(session.id, buildCollectFieldsMessage(ig)),
   );
+}
+
+async function enterCollectFieldsOrGenerate(
+  session: DbChatSession,
+  workflowState: WorkflowState,
+  ig: ImageGenState,
+  newMessages: SerializedMessage[],
+): Promise<OrchestratorResult | null> {
+  const patch = await hydrateFromCompany(session.companyId, ig);
+  Object.assign(ig, patch);
+
+  if (isCollectionComplete(ig)) {
+    newMessages.push(
+      await assistantMsg(session.id, 'Using your Brand DNA profile — generating…'),
+    );
+    if (ig.subpath === 'productAd') {
+      return runGenerateBase(session, workflowState, ig, newMessages);
+    }
+    if (ig.subpath === 'variantGen') {
+      return runGenerateIdeas(session, workflowState, ig, newMessages);
+    }
+  }
+
+  await promptImageCollectFields(session, ig, newMessages);
+  return null;
 }
 
 async function beginRivalInspirationOrCollectFields(
   session: DbChatSession,
+  workflowState: WorkflowState,
   ig: ImageGenState,
   newMessages: SerializedMessage[],
-): Promise<ImageGenState> {
-  if (ig.subpath !== 'productAd' && ig.subpath !== 'variantGen') {
-    await promptImageCollectFields(session, ig, newMessages);
-    return ig;
-  }
-
-  await promptRivalInspirationIfAvailable(session, imageRivalCallbacks(session, ig, newMessages));
-  return ig;
+): Promise<OrchestratorResult | null> {
+  const autoRoute = { result: null as OrchestratorResult | null };
+  await promptRivalInspirationIfAvailable(
+    session,
+    imageRivalCallbacks(session, ig, newMessages, workflowState, autoRoute),
+  );
+  return autoRoute.result;
 }
 
 async function promptArtistSettings(
@@ -425,11 +478,13 @@ export async function handleImageGenMessage(
         ),
       );
     } else {
+      const autoRoute = { result: null as OrchestratorResult | null };
       await handleRivalInspirationChosen(
         session,
         yesNo,
-        imageRivalCallbacks(session, ig, newMessages),
+        imageRivalCallbacks(session, ig, newMessages, workflowState, autoRoute),
       );
+      if (autoRoute.result) return autoRoute.result;
     }
     const nextWorkflow = mergeImageGenIntoWorkflow(workflowState, ig);
     await persist(session, nextWorkflow);
@@ -443,13 +498,18 @@ export async function handleImageGenMessage(
     const isMix = /\b(mix|top rivals?|all rivals?|any|no preference)\b/i.test(text);
     const match = available.find((r) => r.brandName.toLowerCase() === lower);
 
+    const autoRoute = { result: null as OrchestratorResult | null };
     if (isMix) {
-      await handleRivalBrandChosen(session, null, imageRivalCallbacks(session, ig, newMessages));
+      await handleRivalBrandChosen(
+        session,
+        null,
+        imageRivalCallbacks(session, ig, newMessages, workflowState, autoRoute),
+      );
     } else if (match) {
       await handleRivalBrandChosen(
         session,
         match.brandName,
-        imageRivalCallbacks(session, ig, newMessages),
+        imageRivalCallbacks(session, ig, newMessages, workflowState, autoRoute),
       );
     } else {
       newMessages.push(
@@ -460,7 +520,12 @@ export async function handleImageGenMessage(
           { rivals: available.map((r) => ({ id: r.id, brandName: r.brandName })) },
         ),
       );
+      const nextWorkflow = mergeImageGenIntoWorkflow(workflowState, ig);
+      await persist(session, nextWorkflow);
+      const updated = await getChatSession(sessionId, companyId);
+      return packageResult(updated!, nextWorkflow, newMessages);
     }
+    if (autoRoute.result) return autoRoute.result;
     const nextWorkflow = mergeImageGenIntoWorkflow(workflowState, ig);
     await persist(session, nextWorkflow);
     const updated = await getChatSession(sessionId, companyId);
@@ -664,6 +729,7 @@ async function runTemplateGenerateFlow(
   priorMessages: SerializedMessage[],
 ): Promise<OrchestratorResult> {
   const newMessages = [...priorMessages];
+  ig = await ensureBrandDnaOnState(session.companyId, ig);
   const def = ig.templateId ? getTemplateById(ig.templateId) : undefined;
   ig.step = 'generateTemplate';
   let nextWorkflow = mergeImageGenIntoWorkflow(workflowState, ig);
@@ -892,6 +958,7 @@ async function runProductOnModelGenerate(
   priorMessages: SerializedMessage[] = [],
 ): Promise<OrchestratorResult> {
   const newMessages = [...priorMessages];
+  ig = await ensureBrandDnaOnState(session.companyId, ig);
 
   newMessages.push(await assistantMsg(session.id, generatingLabel(ig), 'imageGenGenerating'));
 
@@ -1291,6 +1358,8 @@ export async function handleImageGenAction(
           : DEFAULT_IMAGE_QUALITY;
 
       if (ig.subpath === 'productOnModel') {
+        const patch = await hydrateFromCompany(companyId, ig);
+        ig = { ...ig, ...patch };
         ig.step = 'modelSelect';
         newMessages.push(
           await assistantMsg(session.id, 'Choose a photoshoot model.', 'imageGenModelGallery', {
@@ -1298,20 +1367,29 @@ export async function handleImageGenAction(
           }),
         );
       } else if (ig.subpath === 'templates') {
-        // Artist/quality only — step stays on templateUpload / templateNotes / generate / review
+        const patch = await hydrateFromCompany(companyId, ig);
+        ig = { ...ig, ...patch };
       } else {
-        ig = await beginRivalInspirationOrCollectFields(session, ig, newMessages);
+        const autoResult = await beginRivalInspirationOrCollectFields(
+          session,
+          workflowState,
+          ig,
+          newMessages,
+        );
+        if (autoResult) return autoResult;
       }
       break;
     }
 
     case 'imageGen.rivalInspirationChosen': {
       const enabled = Boolean(payload.enabled);
+      const autoRoute = { result: null as OrchestratorResult | null };
       await handleRivalInspirationChosen(
         session,
         enabled,
-        imageRivalCallbacks(session, ig, newMessages),
+        imageRivalCallbacks(session, ig, newMessages, workflowState, autoRoute),
       );
+      if (autoRoute.result) return autoRoute.result;
       break;
     }
 
@@ -1320,11 +1398,13 @@ export async function handleImageGenAction(
         payload.brandName === null || payload.brandName === undefined
           ? null
           : String(payload.brandName);
+      const autoRoute = { result: null as OrchestratorResult | null };
       await handleRivalBrandChosen(
         session,
         brandName,
-        imageRivalCallbacks(session, ig, newMessages),
+        imageRivalCallbacks(session, ig, newMessages, workflowState, autoRoute),
       );
+      if (autoRoute.result) return autoRoute.result;
       break;
     }
 

@@ -20,12 +20,32 @@ function additionalRequest(state: ImageGenState): string | null {
   return extra.trim() || null;
 }
 
+function visualDnaColorPalette(state: ImageGenState): string | null {
+  const visual = state.brandDnaStructured?.visual;
+  if (!visual) return null;
+  const colors = [
+    visual.primaryColor,
+    visual.secondaryColor,
+    visual.accentColor,
+    visual.backgroundColor,
+  ]
+    .filter((c): c is string => Boolean(c?.trim()))
+    .join(', ');
+  return colors || null;
+}
+
+function dnaColorOr(state: ImageGenState, fieldKey: string, fallback: string): string {
+  return visualDnaColorPalette(state) ?? str(state, fieldKey, fallback);
+}
+
 function baseParts(state: ImageGenState, templateName: string, specifics: string[]): string {
   const extra = additionalRequest(state);
   const parts = [
     `Template: ${templateName}.`,
     ...specifics.filter(Boolean),
     extra ? `Additional user request: ${extra}` : null,
+    state.brandTone ? `Brand tone: ${state.brandTone}` : null,
+    state.brandDnaPromptBlock?.trim() ?? null,
     'Photorealistic, ad-ready, accurate product representation.',
   ].filter(Boolean);
   return parts.join('\n');
@@ -65,7 +85,7 @@ export function buildPromptForTemplate(
         'Flat lay overhead product composition.',
         `Surface: ${str(state, 'surfaceMaterial', 'white paper')}.`,
         fieldVal(state, 'props') ? `Props: ${String(fieldVal(state, 'props'))}.` : null,
-        `Palette: ${str(state, 'colorPalette', 'neutral')}.`,
+        `Palette: ${dnaColorOr(state, 'colorPalette', 'neutral')}.`,
       ].filter(Boolean) as string[]);
 
     case 'shadow-reflection':
@@ -119,7 +139,7 @@ export function buildPromptForTemplate(
       return baseParts(state, def.name, [
         'Convert to anime/illustrated style.',
         `Style: ${str(state, 'illustrationStyle', 'anime')}.`,
-        `Colors: ${str(state, 'colorPalette', 'stylized')}.`,
+        `Colors: ${dnaColorOr(state, 'colorPalette', 'stylized')}.`,
       ]);
 
     case 'luxury-editorial':
@@ -175,7 +195,7 @@ export function buildPromptForTemplate(
         fieldVal(state, 'cta')
           ? `CTA zone: "${String(fieldVal(state, 'cta'))}".`
           : 'Reserve bottom safe zone for CTA.',
-        `Brand color: ${str(state, 'brandColor', 'white on dark overlay')}.`,
+        `Brand color: ${dnaColorOr(state, 'brandColor', 'white on dark overlay')}.`,
       ]);
 
     case 'ugc-style':

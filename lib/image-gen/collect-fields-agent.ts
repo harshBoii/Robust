@@ -43,13 +43,16 @@ function hasRequiredFields(state: ImageGenState): boolean {
 const SYSTEM = `You collect fields for AI product ad image generation. Required before complete=true:
 - product image (already provided via asset — do not ask again if set)
 - product description
-- brand tone (voice/style)
+- brand tone (voice/style) — skip asking if brandDnaApplied is true and brandTone is already set
 - number of copies/variants (copyCount, integer 1-8)
 
 Optional: aspectRatio (e.g. "1:1", "16:9", "9:16", "square", "landscape", "portrait").
 
 Rules:
 - Ask at most ONE focused question per turn when fields are missing.
+- Only ask for fields that are still null/empty in state — never re-ask DNA-filled fields unless the user wants to change them.
+- If brandDnaApplied is true, brand tone may already be set from Brand DNA — do not ask for tone unless the user explicitly wants to override it.
+- User overrides in chat always win over DNA defaults.
 - If the user's message already contains missing fields, extract them and do not re-ask.
 - When all required fields are present, set complete=true and reply with a brief confirmation.
 - copyCount defaults to 4 for variant flows if user says "a few" without a number.
@@ -84,6 +87,16 @@ export async function runCollectorTurn(input: {
     aspectRatio: merged.aspectRatio ?? null,
     subpath: merged.subpath,
     collectorTurns: turns,
+    brandDnaApplied: Boolean(merged.brandDnaApplied),
+    brandDnaSummary: merged.brandDnaStructured
+      ? [
+          merged.brandDnaStructured.brand.name,
+          merged.brandDnaStructured.communication?.tone,
+          merged.brandDnaStructured.visual?.visualStyle,
+        ]
+          .filter(Boolean)
+          .join(' · ')
+      : null,
     hasRivalIntelligence: Boolean(merged.rivalIntelligenceBrief?.trim()),
     rivalIntelligenceBrief: merged.rivalIntelligenceBrief ?? null,
   };
@@ -104,8 +117,17 @@ export async function runCollectorTurn(input: {
   try {
     parsed = responseSchema.parse(JSON.parse(raw));
   } catch {
+    const needsTone = !merged.brandTone?.trim();
+    const needsDesc = !merged.productDescription?.trim();
+    let reply = 'Tell me more about your product';
+    if (needsDesc && needsTone) reply += ' and the brand tone you want for the ad';
+    else if (needsTone && !merged.brandDnaApplied) reply += ' and the brand tone you want for the ad';
+    else if (needsDesc) reply += ' description';
+    else if (needsTone) reply += ' brand tone';
+    else reply += ' and how many copies you want';
+    reply += '.';
     return {
-      reply: 'Tell me more about your product and the brand tone you want for the ad.',
+      reply,
       state: { collectorTurns: turns + 1 },
       complete: false,
     };

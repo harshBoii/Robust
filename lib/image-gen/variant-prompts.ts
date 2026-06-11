@@ -18,6 +18,9 @@ const variantSchema = z.object({
   ),
 });
 
+const VARIANT_DNA_SYSTEM =
+  'You receive a Brand DNA profile (visual, communication, audience, compliance). Every variant idea and image prompt MUST align with visual colors/style, communication voice, audience persona, and compliance guardrails. Variations should explore the taxonomy axes but stay on-brand.';
+
 const TAXONOMY = `
 Variation taxonomy — each variant must target a DISTINCT axis:
 1. Compositional: framing, angle, product placement, negative space
@@ -45,9 +48,14 @@ export async function generateVariantPrompts(input: {
     input.state.aspectRatio ? `Aspect ratio: ${input.state.aspectRatio}` : '',
     input.userIntention ? `User intention: ${input.userIntention}` : '',
     input.state.agentMemory ? `Session notes: ${input.state.agentMemory}` : '',
+    input.state.brandDnaPromptBlock ?? '',
+    input.state.brandDnaStructured
+      ? `Brand DNA (structured — honor all constraints when generating ideas):\n${JSON.stringify(input.state.brandDnaStructured)}`
+      : '',
     input.state.rivalIntelligenceBrief
       ? `Rival competitive intelligence:\n${input.state.rivalIntelligenceBrief}`
       : '',
+    'Each prompt must embed relevant Visual DNA tokens (palette hex, visual emotion, corner/shadow style) and Compliance negatives inline where applicable.',
     'Respond JSON: { "variants": [{ "ideaLabel": "...", "prompt": "..." }] }',
   ]
     .filter(Boolean)
@@ -64,8 +72,7 @@ export async function generateVariantPrompts(input: {
     messages: [
       {
         role: 'system',
-        content:
-          'You are an expert ad creative director generating image variation briefs. JSON only.',
+        content: `You are an expert ad creative director generating image variation briefs. JSON only. ${VARIANT_DNA_SYSTEM}`,
       },
       { role: 'user', content },
     ],
@@ -117,8 +124,14 @@ export async function regenerateVariantPrompts(input: {
       2,
     )}`,
     TAXONOMY,
+    input.state.brandDnaPromptBlock ?? '',
+    input.state.brandDnaStructured
+      ? `Brand DNA (structured — honor all constraints):\n${JSON.stringify(input.state.brandDnaStructured)}`
+      : '',
     'Respond JSON: { "variants": [{ "index": number, "ideaLabel": "...", "prompt": "..." }] }',
-  ].join('\n');
+  ]
+    .filter(Boolean)
+    .join('\n');
 
   const content: OpenAI.Chat.Completions.ChatCompletionContentPart[] = [
     { type: 'text', text: userText },
@@ -129,7 +142,10 @@ export async function regenerateVariantPrompts(input: {
     model: VARIANT_PROMPT_MODEL,
     response_format: { type: 'json_object' },
     messages: [
-      { role: 'system', content: 'Regenerate specific variant prompts. JSON only.' },
+      {
+        role: 'system',
+        content: `Regenerate specific variant prompts. JSON only. ${VARIANT_DNA_SYSTEM}`,
+      },
       { role: 'user', content },
     ],
   });

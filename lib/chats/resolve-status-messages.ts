@@ -94,6 +94,11 @@ const IMAGE_GEN_FIXING: readonly string[] = [
 ];
 
 /** Subpath 1 — single product ad image. */
+const SP1_DNA_APPLYING: readonly string[] = [
+  'Applying brand DNA…',
+  'Using your brand profile…',
+];
+
 const SP1_COLLECT: readonly string[] = [
   'Gathering your product story…',
   'Noting brand tone and format…',
@@ -241,6 +246,11 @@ function imageGenStatusPool(ig: NonNullable<ReturnType<typeof parseImageGen>>): 
   const { subpath, step } = ig;
 
   if (IMAGE_GEN_GENERATING_STEPS.has(step)) {
+    if (ig.brandDnaApplied) {
+      if (subpath === 'variantGen') return [...SP1_DNA_APPLYING, ...SP2_GENERATING];
+      if (subpath === 'productOnModel') return [...SP1_DNA_APPLYING, ...SP3_GENERATING];
+      return [...SP1_DNA_APPLYING, ...SP1_GENERATING];
+    }
     if (subpath === 'variantGen') return SP2_GENERATING;
     if (subpath === 'productOnModel') return SP3_GENERATING;
     return SP1_GENERATING;

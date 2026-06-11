@@ -1,3 +1,5 @@
+import type { BrandDnaStructured } from './brand-dna-llm-types';
+
 export type ImageGenSubpath = 'productAd' | 'variantGen' | 'productOnModel' | 'templates';
 
 export type ImageGenStep =
@@ -84,6 +86,10 @@ export type ImageGenState = {
   /** null = mix top rivals */
   rivalBrandName?: string | null;
   rivalIntelligenceBrief?: string;
+  /** Set when Brand DNA was loaded from BrandEntity at hydrate time */
+  brandDnaApplied?: boolean;
+  brandDnaStructured?: BrandDnaStructured;
+  brandDnaPromptBlock?: string;
   rejectFeedback?: string;
   /** Templates subpath */
   templateId?: string;
