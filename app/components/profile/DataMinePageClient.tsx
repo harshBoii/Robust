@@ -33,8 +33,8 @@ export default function DataMinePageClient() {
         </div>
       </div>
 
-      <div className={`${profileCard} flex min-h-0 flex-1 flex-col`}>
-        <div className="min-h-0 flex-1 overflow-hidden px-3 py-2">
+      <div className={`${profileCard} flex min-h-0 flex-1 flex-col overflow-hidden`}>
+        <div className="custom-scrollbar min-h-0 flex-1 overflow-y-auto px-3 py-2">
           <DataMineSection />
         </div>
       </div>

@@ -390,7 +390,7 @@ export default function DataMineSection() {
   }
 
   return (
-    <div className="custom-scrollbar flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto">
+    <div className="flex flex-col gap-3">
       {/* Seed inputs */}
       <div>
         <p className="mb-1.5 font-ui text-[9px] font-bold uppercase tracking-wide text-muted-foreground/60">
