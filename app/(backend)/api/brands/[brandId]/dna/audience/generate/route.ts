@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server';
 
 import { generateAudienceDna } from '@/lib/brand-dna/audience/generate';
-import { brandProfileFromEntity, dnaRouteConfig, requireBrandDnaSession } from '@/lib/brand-dna/api-helpers';
+import { brandProfileFromEntity, requireBrandDnaSession } from '@/lib/brand-dna/api-helpers';
 
-export const dynamic = dnaRouteConfig.dynamic;
-export const runtime = dnaRouteConfig.runtime;
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
 
 type Params = { params: Promise<{ brandId: string }> };
 

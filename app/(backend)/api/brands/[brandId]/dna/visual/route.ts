@@ -1,12 +1,12 @@
 import { NextResponse } from 'next/server';
 
 import { prisma } from '@/lib/prisma';
-import { dnaRouteConfig, requireBrandDnaSession } from '@/lib/brand-dna/api-helpers';
+import { requireBrandDnaSession } from '@/lib/brand-dna/api-helpers';
 import { visualDnaUpsertSchema } from '@/lib/brand-dna/schemas';
 import { serializeVisualDna } from '@/lib/brand-dna/serialize';
 
-export const dynamic = dnaRouteConfig.dynamic;
-export const runtime = dnaRouteConfig.runtime;
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
 
 type Params = { params: Promise<{ brandId: string }> };
 

@@ -3,12 +3,12 @@ import { NextResponse } from 'next/server';
 import { analyzeVisualScreenshot } from '@/lib/brand-dna/visual/analyze-visual-screenshot';
 import { mergeVisualDna } from '@/lib/brand-dna/visual/merge-visual-dna';
 import { scrapeLandingPage } from '@/lib/brand-dna/visual/scrape-landing-page';
-import { dnaLongRouteConfig, requireBrandDnaSession } from '@/lib/brand-dna/api-helpers';
+import { requireBrandDnaSession } from '@/lib/brand-dna/api-helpers';
 import { visualGenerateSchema } from '@/lib/brand-dna/schemas';
 
-export const dynamic = dnaLongRouteConfig.dynamic;
-export const runtime = dnaLongRouteConfig.runtime;
-export const maxDuration = dnaLongRouteConfig.maxDuration;
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
+export const maxDuration = 300;
 
 type Params = { params: Promise<{ brandId: string }> };
 

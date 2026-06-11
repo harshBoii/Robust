@@ -33,13 +33,3 @@ export function brandProfileFromEntity(
     primaryOffering,
   });
 }
-
-export const dnaRouteConfig = {
-  dynamic: 'force-dynamic' as const,
-  runtime: 'nodejs' as const,
-};
-
-export const dnaLongRouteConfig = {
-  ...dnaRouteConfig,
-  maxDuration: 300,
-};

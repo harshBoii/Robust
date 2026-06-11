@@ -7,11 +7,11 @@ import {
 } from '@/lib/brand-dna/compliance/extract-text';
 import { extractComplianceRulesFromText } from '@/lib/brand-dna/compliance/extract-rules';
 import { uploadBrandDnaBuffer } from '@/lib/brand-dna/r2';
-import { dnaLongRouteConfig, requireBrandDnaSession } from '@/lib/brand-dna/api-helpers';
+import { requireBrandDnaSession } from '@/lib/brand-dna/api-helpers';
 
-export const dynamic = dnaLongRouteConfig.dynamic;
-export const runtime = dnaLongRouteConfig.runtime;
-export const maxDuration = dnaLongRouteConfig.maxDuration;
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
+export const maxDuration = 300;
 
 type Params = { params: Promise<{ brandId: string }> };
 
