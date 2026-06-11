@@ -1,3 +1,5 @@
+import { getArtistStylePrompt } from './artist-styles';
+import { buildVariationBlock } from './prompt-variations';
 import type { ImageGenState } from './types';
 
 /** Minimal edit instruction when regenerating from a prior image (images.edit). */
@@ -17,15 +19,20 @@ export function buildProductAdBasePrompt(state: ImageGenState, feedback?: string
     return buildImageEditPrompt(feedback);
   }
 
+  const variation = buildVariationBlock();
+  const artistStyle = getArtistStylePrompt(state.imageArtistId);
+
   const parts = appendBrandDnaBlock(state, [
     'Create a high-quality product advertisement image.',
     state.productDescription ? `Product: ${state.productDescription}` : null,
     state.brandTone ? `Brand tone: ${state.brandTone}` : null,
-    state.aspectRatio ? `Aspect ratio preference: ${state.aspectRatio}` : null,
+    state.aspectRatio ? `Aspect ratio: ${state.aspectRatio}` : null,
+    artistStyle ? `Artist style: ${artistStyle}` : null,
+    `\n--- Creative Direction ---\n${variation}`,
     state.rivalIntelligenceBrief
-      ? `Rival competitive intelligence (use hooks, offers, and visual patterns — do not copy verbatim):\n${state.rivalIntelligenceBrief}`
+      ? `Rival intelligence (use hooks and patterns, do not copy):\n${state.rivalIntelligenceBrief}`
       : null,
-    'Keep the product recognizable and prominent. Professional lighting, clean composition, suitable for paid social ads.',
+    'Keep product recognizable. Apply the creative direction above strictly — do not default to a centered product on a white background.',
   ].filter(Boolean) as string[]);
   return parts.join('\n');
 }
