@@ -33,6 +33,7 @@ import { tryHandleImageGenWidgetChoiceTurn } from '@/lib/chats/handle-widget-cho
 import { classifyImageGenSubpath } from './classify-subpath';
 import { isCollectionComplete, runCollectorTurn } from './collect-fields-agent';
 import { ensureBrandDnaOnState, hydrateFromCompany } from './load-brand-dna';
+import { appendLogoRef, resolveCompanyLogoUrl } from './resolve-company-logo';
 import { runTemplateNotesTurn } from './template-collector-agent';
 import {
   runTemplateGenerate,
@@ -210,7 +211,7 @@ async function promptArtistSettings(
   newMessages.push(
     await assistantMsg(
       session.id,
-      'Pick your image artist and quality. Mr Adicasso is the best in the game; Mr Crafta is a solid budget option; Tintin is the cheaper pick.',
+      'Pick your image artist and quality. Mr Adicasso is the best in the game; Mr Crafta is a solid budget option; Tintin is the cheaper pick; Mr Adasta uses Seedream 4.5 for stylized transforms.',
       'imageGenArtistSettings',
       artistSettingsWidgetPayload(ig),
     ),
@@ -660,10 +661,12 @@ async function runGenerateBase(
       throw new Error(editFeedback ? 'No generated image to edit.' : 'Product image is missing');
     }
 
-    const prompt = buildProductAdBasePrompt(ig, editFeedback);
+    const logoUrl = editFeedback ? null : await resolveCompanyLogoUrl(session.companyId);
+    const refUrls = appendLogoRef([refUrl], logoUrl);
+    const prompt = buildProductAdBasePrompt(ig, editFeedback, Boolean(logoUrl));
     const gen = await generateImage({
       prompt,
-      referenceImageUrl: refUrl,
+      referenceImageUrls: refUrls,
       aspectRatio: ig.aspectRatio,
       imageArtistId: ig.imageArtistId,
       quality: ig.imageQuality,
@@ -860,11 +863,13 @@ async function runGenerateVariants(
   try {
     const refUrl = await resolveProductImageUrl(session.companyId, ig);
     if (!refUrl) throw new Error('Product image missing');
+    const logoUrl = await resolveCompanyLogoUrl(session.companyId);
 
     const batch = await batchGenerateVariants({
       companyId: session.companyId,
       sessionId: session.id,
       referenceImageUrl: refUrl,
+      logoUrl,
       aspectRatio: ig.aspectRatio,
       imageArtistId: ig.imageArtistId,
       imageQuality: ig.imageQuality,
@@ -922,6 +927,7 @@ async function runRegenerateVariant(
   const newMessages = [...priorMessages];
   const refUrl = await resolveProductImageUrl(session.companyId, ig);
   if (!refUrl) throw new Error('Product image missing');
+  const logoUrl = await resolveCompanyLogoUrl(session.companyId);
 
   const variants = [...(ig.variants ?? [])];
   variants[index] = { ...variants[index], status: 'pending' };
@@ -930,6 +936,7 @@ async function runRegenerateVariant(
     companyId: session.companyId,
     sessionId: session.id,
     referenceImageUrl: refUrl,
+    logoUrl,
     aspectRatio: ig.aspectRatio,
     imageArtistId: ig.imageArtistId,
     imageQuality: ig.imageQuality,
@@ -986,17 +993,25 @@ async function runProductOnModelGenerate(
       const { urls, refs } = await resolveOnModelReferenceUrls(session.companyId, refUrl, ig);
       storedLabel = `${refs.model.label} · ${refs.pose.label}`;
 
-      const prompt = buildProductOnModelPrompt(ig, {
-        modelLabel: refs.model.label,
-        backgroundLabel: refs.background.label,
-        poseLabel: refs.pose.label,
-        modelSource: refs.model.source,
-        backgroundSource: refs.background.source,
-        poseSource: refs.pose.source,
-      });
+      const logoUrl = await resolveCompanyLogoUrl(session.companyId);
+      const refUrls = appendLogoRef(urls, logoUrl);
+
+      const prompt = buildProductOnModelPrompt(
+        ig,
+        {
+          modelLabel: refs.model.label,
+          backgroundLabel: refs.background.label,
+          poseLabel: refs.pose.label,
+          modelSource: refs.model.source,
+          backgroundSource: refs.background.source,
+          poseSource: refs.pose.source,
+        },
+        undefined,
+        Boolean(logoUrl),
+      );
       gen = await generateImage({
         prompt,
-        referenceImageUrls: urls,
+        referenceImageUrls: refUrls,
         aspectRatio: ig.aspectRatio,
         imageArtistId: ig.imageArtistId,
         quality: ig.imageQuality,

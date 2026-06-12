@@ -14,7 +14,11 @@ function appendBrandDnaBlock(state: ImageGenState, parts: string[]): string[] {
   return parts;
 }
 
-export function buildProductAdBasePrompt(state: ImageGenState, feedback?: string): string {
+export function buildProductAdBasePrompt(
+  state: ImageGenState,
+  feedback?: string,
+  hasLogo?: boolean,
+): string {
   if (feedback?.trim()) {
     return buildImageEditPrompt(feedback);
   }
@@ -24,6 +28,8 @@ export function buildProductAdBasePrompt(state: ImageGenState, feedback?: string
 
   const parts = appendBrandDnaBlock(state, [
     'Create a high-quality product advertisement image.',
+    'Reference images are provided in this order: (1) product image.',
+    hasLogo ? '(2) brand logo — incorporate it naturally in the composition (corner badge, watermark, or inline brand element).' : null,
     state.productDescription ? `Product: ${state.productDescription}` : null,
     state.brandTone ? `Brand tone: ${state.brandTone}` : null,
     state.aspectRatio ? `Aspect ratio: ${state.aspectRatio}` : null,
@@ -48,14 +54,19 @@ export function buildProductOnModelPrompt(
     poseSource?: string;
   },
   feedback?: string,
+  hasLogo?: boolean,
 ): string {
   if (feedback?.trim()) {
     return buildImageEditPrompt(feedback);
   }
 
+  const refOrder = hasLogo
+    ? 'You receive five reference images in order: (1) product hero, (2) model reference, (3) background scene, (4) pose reference, (5) brand logo — include the logo naturally in the composite (subtle watermark, corner badge, or apparel print).'
+    : 'You receive four reference images in order: (1) product hero, (2) model reference, (3) background scene, (4) pose reference.';
+
   const parts = appendBrandDnaBlock(state, [
     'Create a professional ecommerce product-on-model photoshoot composite.',
-    'You receive four reference images in order: (1) product hero, (2) model reference, (3) background scene, (4) pose reference.',
+    refOrder,
     'Place the product on the model using the pose and background. Keep the product accurate and clearly visible.',
     state.productDescription ? `Product description: ${state.productDescription}` : null,
     `Model (${refs.modelSource ?? 'reference'}): ${refs.modelLabel}.`,

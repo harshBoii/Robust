@@ -15,6 +15,7 @@ const ARTIST_AVATAR_COLORS: Record<ImageArtistId, string> = {
   adicasso: 'bg-violet-500/90',
   crafta: 'bg-amber-600/90',
   tintin: 'bg-sky-600/90',
+  adasta: 'bg-rose-600/90',
 };
 
 function artistAvatar(id: ImageArtistId, name: string, size: 'sm' | 'md' = 'md') {

@@ -10,6 +10,8 @@ export type BatchGenerateInput = {
   companyId: string;
   sessionId: string;
   referenceImageUrl: string;
+  /** Company logo URL, appended as an extra reference image after the product image. */
+  logoUrl?: string | null;
   aspectRatio?: string | null;
   imageArtistId?: string | null;
   imageQuality?: ImageGenState['imageQuality'];
@@ -27,15 +29,17 @@ async function generateOneWithRetry(input: {
   companyId: string;
   sessionId: string;
   referenceImageUrl: string;
+  logoUrl?: string | null;
   aspectRatio?: string | null;
   imageArtistId?: string | null;
   imageQuality?: ImageGenState['imageQuality'];
   variant: ImageGenVariant;
 }): Promise<ImageGenVariant> {
+  const refUrls = [input.referenceImageUrl, ...(input.logoUrl ? [input.logoUrl] : [])];
   const run = async () => {
     const gen = await generateImage({
       prompt: input.variant.prompt,
-      referenceImageUrl: input.referenceImageUrl,
+      referenceImageUrls: refUrls,
       aspectRatio: input.aspectRatio,
       imageArtistId: input.imageArtistId,
       quality: input.imageQuality,
@@ -87,6 +91,7 @@ export async function batchGenerateVariants(
       companyId: input.companyId,
       sessionId: input.sessionId,
       referenceImageUrl: input.referenceImageUrl,
+      logoUrl: input.logoUrl,
       aspectRatio: input.aspectRatio,
       imageArtistId: input.imageArtistId,
       imageQuality: input.imageQuality,

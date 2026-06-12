@@ -8,6 +8,8 @@ export const ARTIST_STYLE_MAP: Record<ImageArtistId, string> = {
     'commercial studio product photography, clean lines, professional retouching, reliable e-commerce look',
   tintin:
     'bold graphic design, flat illustration accents, high contrast, solid color blocks, direct-response energy',
+  adasta:
+    'stylized Seedream aesthetic, bold transforms, expressive color grading, editorial ad composition with crisp typography',
 };
 
 export function getArtistStylePrompt(artistId: string | undefined | null): string | null {

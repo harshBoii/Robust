@@ -5,6 +5,7 @@ import { getTemplateById } from '@/lib/templates/catalog';
 import type { TemplateDefinition } from '@/lib/templates/types';
 
 import { buildImageEditPrompt } from './base-prompts';
+import { appendLogoRef, resolveCompanyLogoUrl } from './resolve-company-logo';
 import { generateImage } from './generate-image';
 import { resolveTemplateReferenceUrls as resolveTemplateRefs } from './resolve-asset-image-url';
 import { resolveLastGeneratedImageUrl } from './resolve-last-generated-image';
@@ -110,6 +111,8 @@ export async function runTemplateGenerate(input: {
   } else {
     refUrls = await resolveTemplateReferenceUrls(input.companyId, def, ig);
     if (!refUrls.length) throw new Error('Required images are missing');
+    const logoUrl = await resolveCompanyLogoUrl(input.companyId);
+    refUrls = appendLogoRef(refUrls, logoUrl);
     prompt = def.buildGenerationPrompt(ig, 0);
   }
 
@@ -167,6 +170,8 @@ export async function runTemplateRegenerateSlot(input: {
   } else {
     refUrls = await resolveTemplateReferenceUrls(input.companyId, def, input.ig);
     if (!refUrls.length) throw new Error('Required images are missing');
+    const logoUrl = await resolveCompanyLogoUrl(input.companyId);
+    refUrls = appendLogoRef(refUrls, logoUrl);
     prompt = def.buildGenerationPrompt(input.ig, input.index);
   }
 

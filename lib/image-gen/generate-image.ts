@@ -8,6 +8,7 @@ import { fetchImageBytesFromUrl } from '@/lib/cloudfare/r2-video-thumbnail';
 import { normalizeReferenceImageForOpenAI } from './normalize-reference-image';
 import { loadCatalogImageBytes } from './read-catalog-image';
 
+import { generateFalSeedreamImage } from './fal-seedream';
 import {
   DEFAULT_IMAGE_ARTIST_ID,
   DEFAULT_IMAGE_QUALITY,
@@ -41,7 +42,8 @@ function resolveSize(aspectRatio?: string | null): '1024x1024' | '1536x1024' | '
 
 function resolveModel(input: GenerateImageInput): string {
   if (input.model?.trim()) return input.model.trim();
-  return findImageArtist(input.imageArtistId ?? DEFAULT_IMAGE_ARTIST_ID).openAiModel;
+  const artist = findImageArtist(input.imageArtistId ?? DEFAULT_IMAGE_ARTIST_ID);
+  return artist.openAiModel ?? artist.falTextToImageModel ?? 'gpt-image-1';
 }
 
 function resolveQuality(input: GenerateImageInput): ImageQuality {
@@ -51,9 +53,26 @@ function resolveQuality(input: GenerateImageInput): ImageQuality {
 }
 
 export async function generateImage(input: GenerateImageInput): Promise<GenerateImageResult> {
+  const artist = findImageArtist(input.imageArtistId ?? DEFAULT_IMAGE_ARTIST_ID);
+  const quality = resolveQuality(input);
+
+  const refUrls =
+    input.referenceImageUrls?.filter((u) => typeof u === 'string' && u.trim()) ??
+    (input.referenceImageUrl ? [input.referenceImageUrl] : []);
+
+  if (artist.provider === 'fal') {
+    const fal = await generateFalSeedreamImage({
+      artist,
+      prompt: input.prompt,
+      referenceImageUrls: refUrls,
+      aspectRatio: input.aspectRatio,
+      quality,
+    });
+    return { imageBase64: fal.imageBase64, revisedPrompt: undefined };
+  }
+
   const size = resolveSize(input.aspectRatio);
   const model = resolveModel(input);
-  const quality = resolveQuality(input);
 
   const commonParams = {
     model,
@@ -62,10 +81,6 @@ export async function generateImage(input: GenerateImageInput): Promise<Generate
     n: 1 as const,
     quality,
   };
-
-  const refUrls =
-    input.referenceImageUrls?.filter((u) => typeof u === 'string' && u.trim()) ??
-    (input.referenceImageUrl ? [input.referenceImageUrl] : []);
 
   if (refUrls.length > 0) {
     const files = await Promise.all(

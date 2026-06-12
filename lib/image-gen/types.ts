@@ -59,7 +59,7 @@ export type ImageGenState = {
   brandTone?: string;
   copyCount?: number;
   aspectRatio?: string;
-  /** Mr Adicasso / Mr Crafta / Tintin */
+  /** Mr Adicasso / Mr Crafta / Tintin / Mr Adasta */
   imageArtistId?: string;
   imageQuality?: 'low' | 'medium' | 'high';
   collectorTurns?: number;
