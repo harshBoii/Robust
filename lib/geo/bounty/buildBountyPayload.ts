@@ -1,4 +1,8 @@
 import { prisma } from "@/lib/prisma";
+import {
+  buildAeoPageDnaPayload,
+  type AeoPageDnaPayload,
+} from "@/lib/geo/bounty/aeoDnaPayload";
 
 function moneyToString(value: unknown): string {
   if (value == null) return "";
@@ -80,7 +84,7 @@ export type BountyGenerationPayload = {
   topic_pages: string[];
   topic_page_names: string[];
   existing_slugs: string[];
-};
+} & AeoPageDnaPayload;
 
 export async function buildBountyGenerationPayload(opts: {
   companyId: string;
@@ -92,6 +96,9 @@ export async function buildBountyGenerationPayload(opts: {
       brandEntity: {
         include: {
           offerings: true,
+          communicationDna: true,
+          audienceDna: true,
+          complianceDna: true,
         },
       },
       aeoGenerationProfiles: {
@@ -227,6 +234,8 @@ export async function buildBountyGenerationPayload(opts: {
     .map((p) => topicTitleToPathSegment(p.title ?? ""))
     .filter((x): x is string => Boolean(x));
 
+  const dnaPayload = buildAeoPageDnaPayload(brand);
+
   return {
     base_url: baseUrl,
     same_as_links: sameAsLinks,
@@ -252,5 +261,6 @@ export async function buildBountyGenerationPayload(opts: {
     topic_pages: topicPagesSummaries,
     topic_page_names: topicPageNames,
     existing_slugs: existingSlugs,
+    ...dnaPayload,
   };
 }
