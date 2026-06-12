@@ -62,16 +62,30 @@ function optimisticUserMessage(text: string, id: string): SerializedMessage {
   };
 }
 
+function pendingCoveredByAttachmentMessage(
+  serverMsgs: SerializedMessage[],
+  pendingText: string,
+): boolean {
+  return serverMsgs.some((m) => {
+    if (m.role !== 'user' || m.widgetType !== 'chatAttachments') return false;
+    const items = (m.widgetPayload as { items?: { fileName?: string }[] } | undefined)?.items;
+    return items?.some((item) => item.fileName?.trim() === pendingText) ?? false;
+  });
+}
+
 function mergeMessagesKeepingPendingUser(
   serverMsgs: SerializedMessage[],
   prev: SerializedMessage[],
 ): SerializedMessage[] {
   const pendingUser = prev.find((m) => m.id.startsWith('pending-user-'));
   if (!pendingUser?.content?.trim()) return serverMsgs;
+  const pendingText = pendingUser.content.trim();
   const hasSameUser = serverMsgs.some(
-    (m) => m.role === 'user' && m.content?.trim() === pendingUser.content?.trim(),
+    (m) => m.role === 'user' && m.content?.trim() === pendingText,
   );
-  if (hasSameUser) return serverMsgs;
+  if (hasSameUser || pendingCoveredByAttachmentMessage(serverMsgs, pendingText)) {
+    return serverMsgs;
+  }
   return [...serverMsgs, pendingUser];
 }
 
@@ -352,8 +366,11 @@ export function useChatSession(sessionId: string, options?: UseChatSessionOption
         hadOperationError: Boolean(operationErrorRef.current),
       });
 
+      const skipAttachmentTextBubble =
+        action === 'imageGen.uploaded' && typeof payload.assetId === 'string' && payload.assetId;
       const skipUserBubble =
-        Boolean(displayText) && shouldSkipActionUserBubble(messages, action);
+        skipAttachmentTextBubble ||
+        (Boolean(displayText) && shouldSkipActionUserBubble(messages, action));
 
       let optimisticId: string | null = null;
       if (!silent && displayText && !skipUserBubble) {

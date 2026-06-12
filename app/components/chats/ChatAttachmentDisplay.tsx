@@ -63,12 +63,17 @@ export function ChatAttachmentMessage({
   items: ChatAttachmentItem[];
   content?: string | null;
 }) {
+  const trimmedContent = content?.trim() ?? '';
+  const contentDuplicatesFileName =
+    trimmedContent.length > 0 &&
+    items.some((item) => item.fileName.trim() === trimmedContent);
+
   return (
     <div className="flex flex-col items-end gap-2">
       {items.map((item, i) => (
         <ChatAttachmentFileCard key={`${item.assetId ?? item.fileName}-${i}`} item={item} />
       ))}
-      {content?.trim() ? (
+      {trimmedContent && !contentDuplicatesFileName ? (
         <div
           className={[
             'max-w-[min(85%,32rem)] rounded-2xl rounded-br-md px-4 py-2.5 text-[15px] leading-relaxed',
@@ -77,7 +82,7 @@ export function ChatAttachmentMessage({
             'text-foreground shadow-sm',
           ].join(' ')}
         >
-          <span className="whitespace-pre-wrap">{content}</span>
+          <span className="whitespace-pre-wrap">{trimmedContent}</span>
         </div>
       ) : null}
     </div>
