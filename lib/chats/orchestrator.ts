@@ -200,7 +200,7 @@ export async function handleChatMessage(
   const session = await getChatSession(sessionId, companyId);
   if (!session) throw new Error('Session not found');
 
-  const state = parseWorkflowState(session.workflowState);
+  let state = parseWorkflowState(session.workflowState);
   const step = session.currentStep as ChatWorkflowStep;
   const priorMessages = (session.messages ?? []).map(serializeMessage);
   const pathType = sessionPathType(session);
