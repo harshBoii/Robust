@@ -250,12 +250,11 @@ export async function handleChatMessage(
       };
       const assistant = await assistantMsg(sessionId, clarification.reply);
       await persistSession(session, 'intent', nextState);
-      const serialized = serializeSession({
-        ...session,
-        currentStep: 'intent',
-        workflowState: nextState,
-      });
-      return packageOrchestratorResult(serialized, 'intent', nextState, [assistant]);
+      const refreshed = await getChatSession(sessionId, companyId);
+      if (!refreshed) throw new Error('Session not found');
+      const serialized = serializeSession(refreshed);
+      const newMessages = intentUserRow ? [intentUserRow, assistant] : [assistant];
+      return packageOrchestratorResult(serialized, 'intent', nextState, newMessages);
     }
 
     const routeText = buildIntentRoutingText([

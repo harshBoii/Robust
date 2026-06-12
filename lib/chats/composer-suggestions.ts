@@ -23,8 +23,7 @@ export function composerSuggestions(
     return ['Draft campaign for me', '₹1500/day traffic campaign'];
   }
   if (step === 'intent') {
-    const chips = workflowState.intentClarificationSuggestions;
-    return chips?.length ? chips.slice(0, 4) : undefined;
+    return undefined;
   }
   if (step === 'geo') {
     const chips = workflowState.geo?.composerSuggestions;

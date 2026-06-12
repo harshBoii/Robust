@@ -142,7 +142,52 @@ export default function ChatsClient({
     return null;
   })();
 
+  const handleComposerSend = useCallback(
+    (text: string) => {
+      const trimmed = text.trim();
+      if (!trimmed || busy || attachUploading) return;
+      const backOpts = getBackStepOptions(
+        (session?.currentStep ?? 'intent') as ChatWorkflowStep,
+        session?.workflowState ?? {},
+      );
+      const backHit = backOpts.find((o) => o.label === trimmed);
+      if (backHit) {
+        void dispatchAction(
+          'workflow.goBack',
+          { step: backHit.step, label: backHit.label },
+          session?.currentStep,
+          backHit.label,
+        );
+        return;
+      }
+      if (trimmed === 'Go back') {
+        void dispatchAction('workflow.goBack', {}, session?.currentStep, 'Go back');
+        return;
+      }
+      void sendMessage(trimmed, session?.currentStep);
+      clearPendingAttachments();
+    },
+    [
+      attachUploading,
+      busy,
+      clearPendingAttachments,
+      dispatchAction,
+      sendMessage,
+      session?.currentStep,
+      session?.workflowState,
+    ],
+  );
+
+  const intentClarificationChips =
+    session?.currentStep === 'intent'
+      ? session.workflowState.intentClarificationSuggestions?.slice(0, 4)
+      : undefined;
+  const intentChipMessageId = intentClarificationChips?.length
+    ? [...messages].reverse().find((m) => m.role !== 'user' && m.content?.trim())?.id
+    : undefined;
+
   const threadMessages: ThreadMessage[] = messages.map((m: SerializedMessage) => {
+    const messageChips = m.id === intentChipMessageId ? intentClarificationChips : undefined;
     const isLatestWidget =
       m.role !== 'user' && Boolean(m.widgetType) && m.id === latestWidgetMessageId;
     const showMediaPreview =
@@ -166,6 +211,8 @@ export default function ChatsClient({
         id: m.id,
         role: m.role === 'user' ? 'user' : 'assistant',
         content: m.content ?? undefined,
+        suggestionChips: messageChips,
+        onSuggestionClick: messageChips ? handleComposerSend : undefined,
       };
     }
 
@@ -173,6 +220,8 @@ export default function ChatsClient({
       id: m.id,
       role: m.role === 'user' ? 'user' : 'assistant',
       content: m.content ?? undefined,
+      suggestionChips: messageChips,
+      onSuggestionClick: messageChips ? handleComposerSend : undefined,
       children: (
         <div className="space-y-2">
           {showMediaPreview ? (
@@ -280,29 +329,7 @@ export default function ChatsClient({
           currentStep={session?.currentStep ?? 'intent'}
           workflowState={session?.workflowState ?? {}}
           composer={{
-            onSend: (text) => {
-              const trimmed = text.trim();
-              const backOpts = getBackStepOptions(
-                (session?.currentStep ?? 'intent') as ChatWorkflowStep,
-                session?.workflowState ?? {},
-              );
-              const backHit = backOpts.find((o) => o.label === trimmed);
-              if (backHit) {
-                void dispatchAction(
-                  'workflow.goBack',
-                  { step: backHit.step, label: backHit.label },
-                  session?.currentStep,
-                  backHit.label,
-                );
-                return;
-              }
-              if (trimmed === 'Go back') {
-                void dispatchAction('workflow.goBack', {}, session?.currentStep, 'Go back');
-                return;
-              }
-              void sendMessage(text, session?.currentStep);
-              clearPendingAttachments();
-            },
+            onSend: handleComposerSend,
             onAttach:
               canAttach && !templateAwaitingUpload ? () => fileRef.current?.click() : undefined,
             loading: busy || attachUploading,

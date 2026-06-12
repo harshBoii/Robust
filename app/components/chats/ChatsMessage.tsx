@@ -25,6 +25,9 @@ export type ChatsMessageProps = {
   statusLabelBold?: boolean;
   /** Live ETA countdown beside the status label. */
   statusEtaSuffix?: string;
+  /** Inline chips shown below the assistant bubble (e.g. intent clarification). */
+  suggestionChips?: string[];
+  onSuggestionClick?: (text: string) => void;
 };
 
 function ThinkingPanel({
@@ -128,6 +131,8 @@ export function ChatsMessage({
   statusTextSaved,
   statusLabelBold,
   statusEtaSuffix,
+  suggestionChips,
+  onSuggestionClick,
 }: ChatsMessageProps) {
   if (role === 'user') {
     if (children) {
@@ -167,6 +172,20 @@ export function ChatsMessage({
         />
       ) : null}
       {children ? <div className="mt-3">{children}</div> : null}
+      {suggestionChips && suggestionChips.length > 0 ? (
+        <div className="mt-3 flex flex-wrap gap-2">
+          {suggestionChips.map((s) => (
+            <button
+              key={s}
+              type="button"
+              onClick={() => onSuggestionClick?.(s)}
+              className="rounded-full border border-border/40 bg-background/60 px-3.5 py-1.5 text-[13px] text-foreground/80 transition hover:border-border hover:bg-background hover:text-foreground"
+            >
+              {s}
+            </button>
+          ))}
+        </div>
+      ) : null}
     </article>
   );
 }

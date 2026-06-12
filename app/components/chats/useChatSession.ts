@@ -174,9 +174,16 @@ export function useChatSession(sessionId: string, options?: UseChatSessionOption
       recoveredFromError?: boolean;
     }) => {
       setSession(result.session);
-      setMessages((prev) =>
-        mergeMessagesKeepingPendingUser(result.messages ?? [], prev),
-      );
+      const serverMsgs = result.messages ?? [];
+      const mergedServer =
+        result.newMessages?.length ?
+          (() => {
+            const ids = new Set(serverMsgs.map((m) => m.id));
+            const extra = result.newMessages.filter((m) => !ids.has(m.id));
+            return extra.length ? [...serverMsgs, ...extra] : serverMsgs;
+          })()
+        : serverMsgs;
+      setMessages((prev) => mergeMessagesKeepingPendingUser(mergedServer, prev));
       clearInitialSendLock(sessionId);
       const err =
         result.operationError ??
