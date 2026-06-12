@@ -41,7 +41,7 @@ export const IMAGE_ARTISTS: ImageArtistOption[] = [
   {
     id: 'adasta',
     name: 'Mr Adasta',
-    tagline: 'Seedream 4.5 — stylized transforms',
+    tagline: 'stylized transforms',
     provider: 'fal',
     falTextToImageModel: 'fal-ai/bytedance/seedream/v4.5/text-to-image',
     falEditModel: 'fal-ai/bytedance/seedream/v4.5/edit',
