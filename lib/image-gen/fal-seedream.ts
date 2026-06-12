@@ -65,6 +65,9 @@ async function callFalModel(modelId: string, input: Record<string, unknown>): Pr
   return (await res.json()) as FalImageResponse;
 }
 
+const SEEDREAM_INDIAN_MODELS_HINT =
+  'When using models, make sure that they are Indian.';
+
 function buildFalEditPrompt(prompt: string, refCount: number): string {
   if (refCount <= 1) return prompt;
   const figureHint =
@@ -72,6 +75,11 @@ function buildFalEditPrompt(prompt: string, refCount: number): string {
       ? 'Reference images: Figure 1 is the primary product image; Figure 2 is the brand logo. Use them as directed below.'
       : `Reference images are numbered Figure 1 through Figure ${refCount}. Preserve product identity from Figure 1.`;
   return `${figureHint}\n\n${prompt}`;
+}
+
+function finalizeSeedreamPrompt(prompt: string, refCount: number): string {
+  const withRefs = refCount > 0 ? buildFalEditPrompt(prompt, refCount) : prompt;
+  return `${withRefs}\n\n${SEEDREAM_INDIAN_MODELS_HINT}`;
 }
 
 async function downloadImageAsBase64(url: string): Promise<string> {
@@ -98,7 +106,7 @@ export async function generateFalSeedreamImage(input: {
   if (!modelId) throw new Error('Fal model is not configured for this artist');
 
   const payload: Record<string, unknown> = {
-    prompt: input.prompt,
+    prompt: finalizeSeedreamPrompt(input.prompt, refUrls.length),
     image_size: imageSize,
     num_images: 1,
     enable_safety_checker: true,
@@ -106,7 +114,6 @@ export async function generateFalSeedreamImage(input: {
 
   if (refUrls.length > 0) {
     payload.image_urls = refUrls;
-    payload.prompt = buildFalEditPrompt(input.prompt, refUrls.length);
   }
 
   const result = await callFalModel(modelId, payload);
