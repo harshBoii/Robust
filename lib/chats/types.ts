@@ -77,6 +77,8 @@ export type WorkflowState = {
   trafficOptimizationGoal?: 'LINK_CLICKS' | 'LANDING_PAGE_VIEWS';
   /** Agent notes from conversation (not sent to Meta). */
   intentNotes?: string;
+  /** How many top-level intent clarification questions have been asked (max 2). */
+  intentClarificationTurns?: number;
   /** Last actionable step the agent chose (persisted for next turn). */
   agentNextStep?: string;
   /** Rolling session memory from the agent (not sent to Meta). */

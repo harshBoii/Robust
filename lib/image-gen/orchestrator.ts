@@ -211,7 +211,7 @@ async function promptArtistSettings(
   newMessages.push(
     await assistantMsg(
       session.id,
-      'Pick your image artist and quality. Mr Adicasso is the best in the game; Mr Crafta is a solid budget option; Tintin is the cheaper pick; Mr Adasta uses Seedream 4.5 for stylized transforms.',
+      'Pick your image artist and quality. Mr Adicasso is the best in the game; Mr Crafta is a solid budget option; Tintin is the cheaper pick; Mr Adasta for stylized transforms.',
       'imageGenArtistSettings',
       artistSettingsWidgetPayload(ig),
     ),

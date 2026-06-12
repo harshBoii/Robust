@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { enqueueBulkPublish } from '@/lib/meta/process-publish-jobs';
 
 import { classifyTopLevelPath } from '@/lib/image-gen/classify-top-level';
+import { buildIntentRoutingText, runIntentClarificationTurn } from './intent-clarification';
 import {
   handleImageGenAction,
   handleImageGenMessage,
@@ -171,6 +172,14 @@ function packageOrchestratorResult(
   };
 }
 
+function clearedIntentState(state: WorkflowState, routeText: string): WorkflowState {
+  return {
+    ...state,
+    intentClarificationTurns: undefined,
+    intentNotes: state.intentNotes ?? routeText.slice(0, 500),
+  };
+}
+
 function sessionPathType(session: DbChatSession): 'ADS' | 'IMAGE_GEN' | 'VIDEO_GEN' | 'GEO' | null {
   const pt = (session as DbChatSession & { pathType?: string | null }).pathType;
   if (pt === 'IMAGE_GEN') return 'IMAGE_GEN';
@@ -213,30 +222,81 @@ export async function handleChatMessage(
     return handleGeoMessage(sessionId, companyId, text);
   }
 
+  let intentUserRow: SerializedMessage | null = null;
+
   if (pathType === null && step === 'intent') {
-    const route = await classifyTopLevelPath(text);
+    intentUserRow = await userMsg(sessionId, text);
+
+    const clarificationTurns = state.intentClarificationTurns ?? 0;
+    const messageHistory = (session.messages ?? [])
+      .filter((m) => m.content)
+      .map((m) => ({
+        role: (m.role === 'USER' ? 'user' : 'assistant') as 'user' | 'assistant',
+        content: m.content!,
+      }));
+
+    const clarification = await runIntentClarificationTurn({
+      userText: text,
+      history: messageHistory,
+      clarificationQuestionsAsked: clarificationTurns,
+    });
+
+    if (!clarification.ready) {
+      const nextState: WorkflowState = {
+        ...state,
+        intentClarificationTurns: clarificationTurns + 1,
+      };
+      const assistant = await assistantMsg(sessionId, clarification.reply);
+      await persistSession(session, 'intent', nextState);
+      const serialized = serializeSession({
+        ...session,
+        currentStep: 'intent',
+        workflowState: nextState,
+      });
+      return packageOrchestratorResult(serialized, 'intent', nextState, [assistant]);
+    }
+
+    const routeText = buildIntentRoutingText([
+      ...messageHistory,
+      { role: 'USER', content: text },
+    ]);
+    const route =
+      clarification.path ??
+      (await classifyTopLevelPath(routeText || text));
+    const nextState = clearedIntentState(state, routeText || text);
+
     if (route === 'geo') {
-      await userMsg(sessionId, text);
-      await updateChatSession(sessionId, companyId, { pathType: 'GEO' });
+      await updateChatSession(sessionId, companyId, {
+        pathType: 'GEO',
+        workflowState: nextState,
+      });
       const refreshed = await getChatSession(sessionId, companyId);
       if (!refreshed) throw new Error('Session not found');
-      return initGeoFromFirstMessage(sessionId, companyId, text);
+      return initGeoFromFirstMessage(sessionId, companyId, routeText || text);
     }
     if (route === 'imageGen') {
-      await userMsg(sessionId, text);
-      await updateChatSession(sessionId, companyId, { pathType: 'IMAGE_GEN' });
+      await updateChatSession(sessionId, companyId, {
+        pathType: 'IMAGE_GEN',
+        workflowState: nextState,
+      });
       const refreshed = await getChatSession(sessionId, companyId);
       if (!refreshed) throw new Error('Session not found');
-      return initImageGenFromFirstMessage(refreshed, state, text);
+      return initImageGenFromFirstMessage(refreshed, nextState, routeText || text);
     }
     if (route === 'videoGen') {
-      await userMsg(sessionId, text);
-      await updateChatSession(sessionId, companyId, { pathType: 'VIDEO_GEN' });
+      await updateChatSession(sessionId, companyId, {
+        pathType: 'VIDEO_GEN',
+        workflowState: nextState,
+      });
       const refreshed = await getChatSession(sessionId, companyId);
       if (!refreshed) throw new Error('Session not found');
-      return initVideoGenFromFirstMessage(refreshed, state, text);
+      return initVideoGenFromFirstMessage(refreshed, nextState, routeText || text);
     }
-    await updateChatSession(sessionId, companyId, { pathType: 'ADS' });
+    await updateChatSession(sessionId, companyId, {
+      pathType: 'ADS',
+      workflowState: nextState,
+    });
+    state = nextState;
   }
 
   const emptyPickerResult = await tryHandleAdsEmptyPickerTurn(sessionId, companyId, text);
@@ -246,7 +306,7 @@ export async function handleChatMessage(
   const widgetChoiceResult = await tryHandleAdsWidgetChoiceTurn(sessionId, companyId, text);
   if (widgetChoiceResult) return widgetChoiceResult;
 
-  const userRow = await userMsg(sessionId, text);
+  const userRow = intentUserRow ?? (await userMsg(sessionId, text));
 
   const plan = await runAdAgentTurn({
     userText: text,
