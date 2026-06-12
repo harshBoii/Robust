@@ -79,6 +79,8 @@ export type WorkflowState = {
   intentNotes?: string;
   /** How many top-level intent clarification questions have been asked (max 2). */
   intentClarificationTurns?: number;
+  /** LLM-picked composer chips while clarifying intent (max 4). */
+  intentClarificationSuggestions?: string[];
   /** Last actionable step the agent chose (persisted for next turn). */
   agentNextStep?: string;
   /** Rolling session memory from the agent (not sent to Meta). */

@@ -4,9 +4,11 @@ import { z } from 'zod';
 
 import { completeJsonChatWithHistory } from '@/lib/assistant/openai-json';
 import { LLM_USER_REPLY_PRIVACY_RULES } from '@/lib/assistant/user-facing-llm-error';
+import { CHATS_INTENT_SUGGESTIONS } from '@/lib/chats/chat-path-suggestions';
 import { CLASSIFIER_MODEL } from '@/lib/image-gen/models';
 
 export const MAX_INTENT_CLARIFICATION_QUESTIONS = 2;
+const MAX_INTENT_SUGGESTIONS = 4;
 
 export type TopLevelPath = 'ads' | 'imageGen' | 'videoGen' | 'geo';
 
@@ -14,11 +16,14 @@ const responseSchema = z.object({
   ready: z.boolean(),
   path: z.enum(['ads', 'imageGen', 'videoGen', 'geo']).optional(),
   reply: z.string().optional(),
+  suggestions: z.array(z.string().min(1).max(120)).min(1).max(MAX_INTENT_SUGGESTIONS).optional(),
 });
 
 export type IntentClarificationResult =
   | { ready: true; path: TopLevelPath }
-  | { ready: false; reply: string };
+  | { ready: false; reply: string; suggestions: string[] };
+
+const CHIP_CATALOG = CHATS_INTENT_SUGGESTIONS.map((s) => `- ${s}`).join('\n');
 
 const SYSTEM = `You decide whether to route a new chat to the correct workflow or ask ONE clarifying follow-up question first.
 
@@ -35,22 +40,52 @@ Examples of CLEAR intent (route immediately, do not ask):
 - "Post an ad to Meta" → ads
 - "What's my share of voice?" → geo
 
-When intent is ambiguous between paths, set ready=false and ask ONE short, focused question in reply.
+When intent is ambiguous between paths, set ready=false and:
+1. Ask ONE short, focused question in reply.
+2. End reply by inviting the user to tap one of the suggestion chips below or type their own answer.
+3. Include suggestions: 2–4 short chip labels (≤12 words each) for only the paths you are unsure between — do NOT list every option.
+
+Chip catalog (pick only labels that match the ambiguity; use exact wording when possible):
+${CHIP_CATALOG}
+
 Examples of AMBIGUOUS intent (ask first):
-- "I want to generate an ad" → could be image, video, or posting — ask whether they want a static image, a video, or to publish to Meta/Google.
-- "Make me an ad" → ask what kind (image creative vs video vs launch campaign).
-- "Help with ads" → ask if they want to create visuals, a video, or set up/publish a campaign.
+- "I want to generate an ad" → reply asks image vs video vs publish; suggestions e.g. ["Create product ad images", "Generate a video ad with HeyGen", "Post an ad to Meta"]
+- "Make me an ad" → ask what kind; suggestions for the 2–3 most likely paths only.
+- "Help with ads" → ask if visuals, video, or campaign setup; pick matching chips.
 
 Rules:
 - Ask at most one question per turn when ready=false.
-- Keep clarification questions concise and offer 2–3 concrete options when helpful.
-- If clarificationQuestionsAsked is already ${MAX_INTENT_CLARIFICATION_QUESTIONS}, you MUST set ready=true and pick the best path from the full conversation — do not ask another question.
-- When ready=true, reply must be omitted or empty.
+- suggestions is REQUIRED when ready=false (2–4 items, never more than 4).
+- When ready=true, omit reply and suggestions.
+- If clarificationQuestionsAsked is already ${MAX_INTENT_CLARIFICATION_QUESTIONS}, you MUST set ready=true and pick the best path — do not ask another question.
 
 ${LLM_USER_REPLY_PRIVACY_RULES}
 
 Respond JSON only:
-{ "ready": boolean, "path"?: "ads" | "imageGen" | "videoGen" | "geo", "reply"?: string }`;
+{ "ready": boolean, "path"?: "ads" | "imageGen" | "videoGen" | "geo", "reply"?: string, "suggestions"?: string[] }`;
+
+const DEFAULT_CLARIFICATION_REPLY =
+  'Happy to help — are you looking to create a **static image ad**, a **video ad**, or **set up and publish** a campaign on Meta/Google? Tap one of the options below or type your answer.';
+
+const DEFAULT_CLARIFICATION_SUGGESTIONS = [
+  'Create product ad images',
+  'Generate a video ad with HeyGen',
+  'Post an ad to Meta',
+  'Launch a Google Search campaign',
+] as const;
+
+export function normalizeIntentSuggestions(input: unknown): string[] | undefined {
+  if (!Array.isArray(input)) return undefined;
+  const out: string[] = [];
+  for (const item of input) {
+    if (typeof item !== 'string') continue;
+    const s = item.trim();
+    if (!s || out.includes(s)) continue;
+    out.push(s.slice(0, 120));
+    if (out.length >= MAX_INTENT_SUGGESTIONS) break;
+  }
+  return out.length ? out : undefined;
+}
 
 export function buildIntentRoutingText(
   messages: Array<{ role: string; content?: string | null }>,
@@ -88,15 +123,17 @@ export async function runIntentClarificationTurn(input: {
     }
     const reply = parsed.reply?.trim();
     if (!reply) throw new Error('missing reply');
-    return { ready: false, reply };
+    const suggestions =
+      normalizeIntentSuggestions(parsed.suggestions) ?? [...DEFAULT_CLARIFICATION_SUGGESTIONS];
+    return { ready: false, reply, suggestions };
   } catch {
     if (forceRoute) {
       return { ready: true, path: inferPathFromText(input.userText) };
     }
     return {
       ready: false,
-      reply:
-        'Quick check — do you want to create a **static image ad**, a **video ad**, or **set up and publish** a campaign on Meta/Google?',
+      reply: DEFAULT_CLARIFICATION_REPLY,
+      suggestions: [...DEFAULT_CLARIFICATION_SUGGESTIONS],
     };
   }
 }

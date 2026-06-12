@@ -176,6 +176,7 @@ function clearedIntentState(state: WorkflowState, routeText: string): WorkflowSt
   return {
     ...state,
     intentClarificationTurns: undefined,
+    intentClarificationSuggestions: undefined,
     intentNotes: state.intentNotes ?? routeText.slice(0, 500),
   };
 }
@@ -245,6 +246,7 @@ export async function handleChatMessage(
       const nextState: WorkflowState = {
         ...state,
         intentClarificationTurns: clarificationTurns + 1,
+        intentClarificationSuggestions: clarification.suggestions,
       };
       const assistant = await assistantMsg(sessionId, clarification.reply);
       await persistSession(session, 'intent', nextState);
