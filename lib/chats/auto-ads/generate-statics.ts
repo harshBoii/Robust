@@ -5,13 +5,16 @@ import { randomUUID } from 'crypto';
 import { getArtistStylePrompt } from '@/lib/image-gen/artist-styles';
 import { generateImage } from '@/lib/image-gen/generate-image';
 import { buildBrandDnaPromptBlock, composeBrandTone, loadBrandDnaContext } from '@/lib/image-gen/load-brand-dna';
+import { appendLogoRef, resolveCompanyLogoUrl } from '@/lib/image-gen/resolve-company-logo';
 import { storeGeneratedImage } from '@/lib/image-gen/store-generated';
 import type { MetaAdsAutoConfigData } from '@/lib/meta-ads-auto/config';
 import { prisma } from '@/lib/prisma';
 import { buildAutoStaticGroups } from '@/lib/chats/expand-groups-one-ad-per-asset';
 import type { WorkflowState } from '@/lib/chats/types';
 
+import { buildAutoStaticPrompt } from './build-auto-static-prompt';
 import { decideStaticBrief } from './decide-campaign-adset';
+import { pickRandomShopifyProductRefs, type ShopifyProductRef } from './pick-shopify-product-refs';
 
 export type GenerateStaticsResult = {
   state: WorkflowState;
@@ -21,22 +24,41 @@ export type GenerateStaticsResult = {
 async function generateOneStatic(input: {
   companyId: string;
   sessionId: string;
-  prompt: string;
+  briefPrompt: string;
+  brandDnaBlock: string | null;
+  brandTone: string | null;
+  artistStyle: string | null;
   aspectRatio: string;
   imageArtistId: string;
   index: number;
   count: number;
   title: string;
   label: string;
+  productRef?: ShopifyProductRef | null;
+  logoUrl?: string | null;
 }): Promise<string | null> {
   try {
-    const variantPrompt =
-      input.count > 1
-        ? `${input.prompt}\n\nVariation ${input.index + 1} of ${input.count}.`
-        : input.prompt;
+    const prompt = buildAutoStaticPrompt({
+      briefPrompt: input.briefPrompt,
+      brandDnaBlock: input.brandDnaBlock,
+      brandTone: input.brandTone,
+      artistStyle: input.artistStyle,
+      aspectRatio: input.aspectRatio,
+      productRef: input.productRef
+        ? { title: input.productRef.title, description: input.productRef.description }
+        : null,
+      hasLogo: Boolean(input.logoUrl?.trim()),
+      variationIndex: input.index,
+      variationCount: input.count,
+    });
+
+    const referenceImageUrls = input.productRef
+      ? appendLogoRef([input.productRef.imageUrl], input.logoUrl)
+      : undefined;
 
     const { imageBase64 } = await generateImage({
-      prompt: variantPrompt,
+      prompt,
+      referenceImageUrls,
       aspectRatio: input.aspectRatio,
       imageArtistId: input.imageArtistId,
     });
@@ -76,30 +98,32 @@ export async function generateAutoAdsStatics(input: {
   });
 
   const artistStyle = getArtistStylePrompt(input.config.defaultArtistId);
-  const promptParts = [
-    brief.prompt,
-    brandDnaBlock ? `Brand DNA:\n${brandDnaBlock}` : null,
-    artistStyle ? `Style: ${artistStyle}` : null,
-    'High quality Meta ad static, no watermark, commercial photography.',
-  ].filter(Boolean);
-
-  const prompt = promptParts.join('\n\n');
   const count = Math.min(5, Math.max(1, brief.variantCount));
   const title = brief.campaignTheme ?? 'Auto ad';
   const label = brief.campaignTheme ?? input.userText.slice(0, 60);
+
+  const [productRefs, logoUrl] = await Promise.all([
+    pickRandomShopifyProductRefs(input.companyId, count),
+    resolveCompanyLogoUrl(input.companyId),
+  ]);
 
   const results = await Promise.all(
     Array.from({ length: count }, (_, i) =>
       generateOneStatic({
         companyId: input.companyId,
         sessionId: input.sessionId,
-        prompt,
+        briefPrompt: brief.prompt,
+        brandDnaBlock,
+        brandTone,
+        artistStyle,
         aspectRatio: brief.aspectRatio,
         imageArtistId: input.config.defaultArtistId,
         index: i,
         count,
         title,
         label,
+        productRef: productRefs[i] ?? null,
+        logoUrl,
       }),
     ),
   );
