@@ -9,6 +9,10 @@ import {
   optimizationGoalRequiresPixel,
   withConversionTrackingFlag,
 } from '@/lib/meta/adset-preset-meta';
+import {
+  alignAdsetPresetToCampaignSiblings,
+  isOptimizationDeliveryMismatchError,
+} from '@/lib/meta/campaign-adset-alignment';
 import { prisma } from '@/lib/prisma';
 
 export function isPixelMissingError(message: string): boolean {
@@ -76,6 +80,24 @@ export async function tryFixAdsetDraftForPixelError(
   }
 
   return null;
+}
+
+export async function tryFixAdsetDraftForOptimizationMismatch(
+  draft: AdsetPreset,
+  campaignDbId: string,
+): Promise<AdsetPreset | null> {
+  const { draft: aligned, convention } = await alignAdsetPresetToCampaignSiblings(
+    campaignDbId,
+    draft,
+  );
+  if (!convention) return null;
+  if (
+    aligned.optimizationGoal === draft.optimizationGoal &&
+    aligned.billingEvent === draft.billingEvent
+  ) {
+    return null;
+  }
+  return aligned;
 }
 
 export function tryFixCampaignDraftForError(

@@ -14,6 +14,10 @@ import { presetChatResponseSchema } from '@/lib/assistant/schemas';
 import { validateFullOrPartial } from '@/lib/assistant/validate-with-retry';
 
 import { defaultAdsetDraft, defaultCampaignDraft } from './preset-drafts';
+import {
+  formatConventionForLlm,
+  getCampaignAdSetConvention,
+} from '@/lib/meta/campaign-adset-alignment';
 import type { WorkflowState } from './types';
 
 export type PresetChatTurnResult = {
@@ -41,6 +45,12 @@ export async function runPresetChatTurn(input: {
   const adType = resolvePresetChatAdType(input.state.adType ?? null, draftCampaign);
   const tone = resolvePresetChatTone(input.state.tone ?? null);
 
+  let campaignAdSetConvention: string | null = null;
+  if (input.target === 'adset' && input.state.campaignId) {
+    const convention = await getCampaignAdSetConvention(input.state.campaignId);
+    if (convention) campaignAdSetConvention = formatConventionForLlm(convention);
+  }
+
   const system = buildPresetChatSystemPrompt(input.target);
   const apiMessages = buildPresetChatMessagesForApi({
     messages,
@@ -51,6 +61,7 @@ export async function runPresetChatTurn(input: {
     currentAdsetDraft: draftAdset,
     hasPixel: input.state.hasPixel,
     pixelId: input.state.pixelId,
+    campaignAdSetConvention,
   });
 
   const content = await completeJsonChatWithHistory({
@@ -113,6 +124,12 @@ export async function runPresetChatTurnForMetaError(input: {
   const adType = resolvePresetChatAdType(input.state.adType ?? null, draftCampaign);
   const tone = resolvePresetChatTone(input.state.tone ?? null);
 
+  let campaignAdSetConvention: string | null = null;
+  if (input.target === 'adset' && input.state.campaignId) {
+    const convention = await getCampaignAdSetConvention(input.state.campaignId);
+    if (convention) campaignAdSetConvention = formatConventionForLlm(convention);
+  }
+
   const contextMessages = buildPresetChatMessagesForApi({
     messages: [{ role: 'user', content: '(meta error recovery)' }],
     presetTarget: input.target,
@@ -122,6 +139,7 @@ export async function runPresetChatTurnForMetaError(input: {
     currentAdsetDraft: draftAdset,
     hasPixel: input.state.hasPixel,
     pixelId: input.state.pixelId,
+    campaignAdSetConvention,
   });
   const contextBlock =
     contextMessages.find((m) => m.role === 'user')?.content ?? '(no context block)';

@@ -7,8 +7,10 @@ import { prisma } from '@/lib/prisma';
 import {
   isPixelMissingError,
   tryFixAdsetDraftForPixelError,
+  tryFixAdsetDraftForOptimizationMismatch,
   tryFixCampaignDraftForError,
 } from './preset-error-recovery';
+import { alignAdsetPresetToCampaignSiblings, isOptimizationDeliveryMismatchError } from '@/lib/meta/campaign-adset-alignment';
 import { runPresetChatTurnForMetaError } from './preset-chat-turn';
 import type { WorkflowState } from './types';
 
@@ -200,7 +202,11 @@ export async function approveAdsetWithRecovery(
   campaignObjective: string | null | undefined,
 ): Promise<ApproveAdsetResult> {
   let current = draft;
-  let recovered = false;
+  const preAligned = await alignAdsetPresetToCampaignSiblings(campaignId, current);
+  if (preAligned.convention) {
+    current = preAligned.draft;
+  }
+  let recovered = preAligned.convention != null;
   let lastError = '';
   let presetId: string | undefined;
 
@@ -223,6 +229,16 @@ export async function approveAdsetWithRecovery(
         const fixed = await tryFixAdsetDraftForPixelError(current, campaignObjective, companyId);
         if (fixed) {
           logAutoFix('deterministic', 'adset', companyId, attempt + 1, 'pixel/conversion tracking');
+          current = fixed;
+          recovered = true;
+          continue;
+        }
+      }
+
+      if (isOptimizationDeliveryMismatchError(lastError)) {
+        logAutoFix('deterministic', 'adset', companyId, attempt + 1, 'optimization delivery match');
+        const fixed = await tryFixAdsetDraftForOptimizationMismatch(current, campaignId);
+        if (fixed) {
           current = fixed;
           recovered = true;
           continue;

@@ -22,6 +22,11 @@ import {
   runPublishWorkerForCompany,
 } from '@/lib/meta/process-publish-jobs';
 import { storeAdCreativeForAsset } from '@/lib/meta/store-ad-creative';
+import {
+  alignAdsetPresetToCampaignSiblings,
+  formatConventionForLlm,
+  getCampaignAdSetConvention,
+} from '@/lib/meta/campaign-adset-alignment';
 import { syncAdSets, syncCampaigns } from '@/lib/meta/sync';
 import { checkAutoPermission } from '@/lib/meta-ads-auto/permissions';
 import type { MetaAdsAutoConfigData } from '@/lib/meta-ads-auto/config';
@@ -166,6 +171,8 @@ async function applyAdsetDecision(
     defaultCampaignDraft(next.adType ?? 'OUTCOME_TRAFFIC');
 
   next.draftAdset = buildAdsetDraftFromCampaign(campaignDraft, campaignDbId, next);
+  const aligned = await alignAdsetPresetToCampaignSiblings(campaignDbId, next.draftAdset as AdsetPreset);
+  next.draftAdset = aligned.draft;
   if (decision.dailyBudget) {
     next.draftAdset = {
       ...next.draftAdset,
@@ -176,6 +183,7 @@ async function applyAdsetDecision(
     next.draftAdset = { ...next.draftAdset, name: decision.adsetName };
   }
   next.presetTarget = 'adset';
+  next.campaignId = campaignDbId;
 
   const presetTurn = await runPresetChatTurn({
     target: 'adset',
@@ -183,6 +191,12 @@ async function applyAdsetDecision(
     state: next,
   });
   next.draftAdset = presetTurn.draftAdset;
+
+  const postLlmAlign = await alignAdsetPresetToCampaignSiblings(
+    campaignDbId,
+    next.draftAdset as AdsetPreset,
+  );
+  next.draftAdset = postLlmAlign.draft;
 
   const campaignRow = await prisma.metaCampaign.findUnique({
     where: { id: campaignDbId },
@@ -192,7 +206,7 @@ async function applyAdsetDecision(
   const approved = await approveAdsetWithRecovery(
     companyId,
     campaignDbId,
-    presetTurn.draftAdset,
+    postLlmAlign.draft as AdsetPreset,
     next,
     campaignRow?.objective,
   );
@@ -376,11 +390,25 @@ export async function runAutoAdsPipeline(
       id: a.id,
       name: a.name ?? a.id,
       campaignId: campaignDbId,
+      optimizationGoal: a.optimizationGoal,
+      billingEvent: a.billingEvent,
     }));
+
+    const convention = await getCampaignAdSetConvention(campaignDbId);
+    const adsetRawDecision = await decideCampaignAdset({
+      userText,
+      campaigns: campaignOptions,
+      adsets: adsetOptions,
+      hasPixel: pixel.hasPixel,
+      pixelId: pixel.pixelId,
+      config,
+      intentNotes: state.intentNotes,
+      campaignAdSetConvention: convention ? formatConventionForLlm(convention) : null,
+    });
 
     const adsetDecision = validateCampaignAdsetDecision(
       {
-        ...decision,
+        ...adsetRawDecision,
         campaignId: campaignDbId,
         campaignAction: 'use_existing',
       },

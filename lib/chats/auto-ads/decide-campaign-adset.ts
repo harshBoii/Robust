@@ -61,7 +61,13 @@ const campaignAdsetDecisionSchema = z.object({
 export type CampaignAdsetDecision = z.infer<typeof campaignAdsetDecisionSchema>;
 
 export type CampaignOption = { id: string; name: string; objective: string };
-export type AdsetOption = { id: string; name: string; campaignId: string };
+export type AdsetOption = {
+  id: string;
+  name: string;
+  campaignId: string;
+  optimizationGoal?: string | null;
+  billingEvent?: string | null;
+};
 
 export async function decideCampaignAdset(input: {
   userText: string;
@@ -71,6 +77,8 @@ export async function decideCampaignAdset(input: {
   pixelId?: string | null;
   config: MetaAdsAutoConfigData;
   intentNotes?: string;
+  /** When adding to an existing campaign with ad sets — Meta lowest-cost rule */
+  campaignAdSetConvention?: string | null;
 }): Promise<CampaignAdsetDecision> {
   const allowedObjectives = [
     'OUTCOME_TRAFFIC',
@@ -88,7 +96,8 @@ Rules:
 - objective must be one of: ${allowedObjectives.join(', ')}
 - dailyBudget in smallest currency unit (e.g. paise for INR, cents for USD). Default ${input.config.defaultDailyBudget ?? 2000} if user didn't specify.
 - campaignId/adsetId must be from the provided lists when use_existing.
-- If no pixel, never pick OUTCOME_SALES or OUTCOME_LEADS.`;
+- If no pixel, never pick OUTCOME_SALES or OUTCOME_LEADS.
+- META RULE: On lowest-cost campaigns, every ad set must share the same optimizationGoal and billingEvent. When create_new on a campaign that already has ad sets, you MUST set optimizationGoal/billingEvent to match siblings (see convention block). Prefer use_existing ad set when it fits the request.`;
 
   const user = [
     `User request: ${input.userText}`,
@@ -97,7 +106,8 @@ Rules:
     `Permissions: newCampaign=${input.config.allowNewCampaign}, newAdset=${input.config.allowNewAdset}`,
     `Default objective: ${input.config.defaultObjective ?? 'OUTCOME_TRAFFIC'}`,
     `Campaigns:\n${input.campaigns.map((c) => `- ${c.id}: ${c.name} (${c.objective})`).join('\n') || '(none)'}`,
-    `Ad sets:\n${input.adsets.map((a) => `- ${a.id}: ${a.name}`).join('\n') || '(none)'}`,
+    `Ad sets:\n${input.adsets.map((a) => `- ${a.id}: ${a.name}${a.optimizationGoal ? ` [opt=${a.optimizationGoal}]` : ''}`).join('\n') || '(none)'}`,
+    input.campaignAdSetConvention ? `Campaign ad set convention:\n${input.campaignAdSetConvention}` : null,
   ]
     .filter(Boolean)
     .join('\n\n');

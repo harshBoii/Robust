@@ -31,7 +31,8 @@ const adsetFieldsBlock = `Allowed adset fields: name, dailyBudget, lifetimeBudge
 - targeting: Meta Marketing API targeting object. You may read and write ALL of these subfields:
 ${buildTargetingFieldDocumentation().replace(/^/gm, '  ')}
 - Align optimizationGoal and billingEvent with the parent campaign objective and budget model (CBO vs ABO).
-- Every adset.targeting you output MUST include non-empty device_platforms, publisher_platforms, facebook_positions, and instagram_positions.`;
+- Every adset.targeting you output MUST include non-empty device_platforms, publisher_platforms, facebook_positions, and instagram_positions.
+- META CAMPAIGN RULE: When the campaign uses lowest-cost bidding (LOWEST_COST_WITHOUT_CAP etc.) and already has ad sets, every NEW ad set MUST use the exact same optimizationGoal and billingEvent as existing ad sets on that campaign. Never invent a different optimization goal for a sibling ad set.`;
 
 export function buildPresetChatSystemPrompt(target: 'campaign' | 'adset'): string {
   const shared = `You are Miss Robusta — a Meta Ads setup assistant for Robust SaaS.
@@ -102,6 +103,8 @@ export function buildPresetChatMessagesForApi(input: {
   currentAdsetDraft?: unknown;
   hasPixel?: boolean;
   pixelId?: string | null;
+  /** Meta sibling ad set rules when adding to an existing campaign */
+  campaignAdSetConvention?: string | null;
 }): { role: 'user' | 'assistant'; content: string }[] {
   const adTypeLine = input.adType?.trim()
     ? `Ad type (objective): ${input.adType}`
@@ -125,7 +128,7 @@ Current campaign draft: ${campaignJson}`
       : `Context — ${adTypeLine}
 ${toneLine}
 ${pixelLine}
-Editing: AD SET preset only.
+${input.campaignAdSetConvention ? `${input.campaignAdSetConvention}\n` : ''}Editing: AD SET preset only.
 Parent campaign (read-only — align ad set fields with this): ${campaignJson}
 Current adset draft: ${adsetJson}`;
 
