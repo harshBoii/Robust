@@ -85,6 +85,17 @@ const ADS_DEFAULT: readonly string[] = [
   'Almost there — hang tight…',
 ];
 
+/** Auto pipeline — skip intent/routing copy while server runs end-to-end. */
+const AUTO_ADS_PIPELINE: readonly string[] = [
+  'Generating ad statics from your brand DNA…',
+  'Resolving campaign and ad set…',
+  'Aligning Meta optimization rules…',
+  'Writing AI ad copy…',
+  'Uploading Meta creatives…',
+  'Preparing your ads…',
+  'Almost there — hang tight…',
+];
+
 const IMAGE_GEN_FIXING: readonly string[] = [
   'Adjusting your image settings…',
   'Retrying the render pipeline…',
@@ -217,6 +228,10 @@ function parseImageGen(workflowState: WorkflowState) {
 
 function parseVideoGen(workflowState: WorkflowState) {
   return workflowState.videoGen ?? null;
+}
+
+export function isAutoAdsBusy(workflowState: WorkflowState): boolean {
+  return workflowState.autoMode === true || Boolean(workflowState.autoPipelineRunId);
 }
 
 function isVideoGenPath(ctx: ChatStatusContext): boolean {
@@ -353,6 +368,10 @@ export function resolveChatStatusMessages(ctx: ChatStatusContext): readonly stri
     return CHAT_FIXING_STATUS_MESSAGES;
   }
 
+  if (isAutoAdsBusy(ctx.workflowState)) {
+    return AUTO_ADS_PIPELINE;
+  }
+
   const vg = parseVideoGen(ctx.workflowState);
   if (isVideoGenPath(ctx)) {
     if (vg) return videoGenStatusPool(vg);
@@ -370,6 +389,8 @@ export function resolveChatStatusMessages(ctx: ChatStatusContext): readonly stri
 
 export function resolveChatStatusLabel(ctx: ChatStatusContext): string {
   if (ctx.busyTone === 'fixing') return 'Fixing…';
+
+  if (isAutoAdsBusy(ctx.workflowState)) return 'Auto mode…';
 
   const vg = parseVideoGen(ctx.workflowState);
   if ((isVideoGenPath(ctx) || vg) && vg && VIDEO_GEN_GENERATING_STEPS.has(vg.step)) {

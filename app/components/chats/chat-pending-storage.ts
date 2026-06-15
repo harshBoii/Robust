@@ -6,6 +6,7 @@ export type PendingChatStart = {
   sessionId: string;
   text: string;
   title?: string;
+  autoMode?: boolean;
 };
 
 function initialSendLockKey(sessionId: string) {

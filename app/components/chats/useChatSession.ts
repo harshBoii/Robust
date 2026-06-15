@@ -10,7 +10,7 @@ import {
   hasInitialSendLock,
   setInitialSendLock,
 } from './chat-pending-storage';
-import { resolveInitialHandoffText } from './resolve-initial-handoff-text';
+import { resolveInitialHandoffText, resolveInitialHandoffAutoMode } from './resolve-initial-handoff-text';
 import { resolveChatBusyTone, type ChatBusyTone } from './chat-busy-tone';
 import {
   captureReconcileSnapshot,
@@ -40,13 +40,13 @@ export type UseChatSessionOptions = {
   initialTitle?: string | null;
 };
 
-function stubSession(sessionId: string, title: string): ChatSessionData {
+function stubSession(sessionId: string, title: string, autoMode = false): ChatSessionData {
   return {
     id: sessionId,
     title,
     status: 'ACTIVE',
     currentStep: 'intent',
-    workflowState: {},
+    workflowState: autoMode ? { autoMode: true } : {},
     bulkUploadId: null,
     campaignId: null,
     messages: [],
@@ -119,12 +119,13 @@ async function pollSessionAfterInitialSend(
 
 export function useChatSession(sessionId: string, options?: UseChatSessionOptions) {
   const initialText = resolveInitialHandoffText(sessionId, options?.initialMessage);
+  const initialAutoMode = resolveInitialHandoffAutoMode(sessionId);
   const hasInitialSend = Boolean(initialText);
   const initialTitle = options?.initialTitle?.trim() || initialText.slice(0, 80) || 'New chat';
   const initialOptimisticId = `pending-user-initial-${sessionId}`;
 
   const [session, setSession] = useState<ChatSessionData | null>(() =>
-    hasInitialSend ? stubSession(sessionId, initialTitle) : null,
+    hasInitialSend ? stubSession(sessionId, initialTitle, initialAutoMode) : null,
   );
   const [messages, setMessages] = useState<SerializedMessage[]>(() =>
     hasInitialSend ? [optimisticUserMessage(initialText, initialOptimisticId)] : [],

@@ -198,11 +198,12 @@ export async function createAndStoreCampaignFromPreset(input: {
   const lifetimeBudget = preset.lifetimeBudget ? Number(preset.lifetimeBudget) : null;
   const usesAdsetBudget = dailyBudget == null && lifetimeBudget == null;
 
+  const { normalizeObjective } = await import('@/lib/meta/normalize-objective');
   const created = await createCampaign({
     companyId: integration.companyId,
     adAccountId,
     name: input.name ?? preset.name,
-    objective: preset.objective ?? 'OUTCOME_TRAFFIC',
+    objective: normalizeObjective(preset.objective ?? 'OUTCOME_TRAFFIC'),
     status: asMetaCampaignStatus(preset.status) ?? 'PAUSED',
     bidStrategy: preset.bidStrategy,
     dailyBudget,
@@ -222,7 +223,7 @@ export async function createAndStoreCampaignFromPreset(input: {
       metaCampaignId: created.id,
       campaignPresetId: preset.id,
       name: input.name ?? preset.name,
-      objective: preset.objective ?? 'OUTCOME_TRAFFIC',
+      objective: normalizeObjective(preset.objective ?? 'OUTCOME_TRAFFIC'),
       status: preset.status ?? 'PAUSED',
       dailyBudget: preset.dailyBudget ? Number(preset.dailyBudget) : 0,
       lifetimeBudget: preset.lifetimeBudget ? Number(preset.lifetimeBudget) : null,

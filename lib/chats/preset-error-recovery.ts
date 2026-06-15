@@ -13,6 +13,7 @@ import {
   alignAdsetPresetToCampaignSiblings,
   isOptimizationDeliveryMismatchError,
 } from '@/lib/meta/campaign-adset-alignment';
+import { isLegacyObjectiveError, normalizeObjective } from '@/lib/meta/normalize-objective';
 import { prisma } from '@/lib/prisma';
 
 export function isPixelMissingError(message: string): boolean {
@@ -104,6 +105,13 @@ export function tryFixCampaignDraftForError(
   draft: CampaignPreset,
   errorMessage: string,
 ): CampaignPreset | null {
+  if (isLegacyObjectiveError(errorMessage)) {
+    const normalized = normalizeObjective(draft.objective);
+    if (normalized !== draft.objective) {
+      return { ...draft, objective: normalized };
+    }
+    // Objective was already OUTCOME_* — fall through to LLM
+  }
   if (isSpecialAdCategoriesError(errorMessage)) {
     const cats = draft.specialAdCategories;
     if (!cats || cats.length === 0) {

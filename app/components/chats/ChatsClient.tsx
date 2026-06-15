@@ -2,11 +2,12 @@
 
 import { motion } from 'framer-motion';
 import Link from 'next/link';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { SerializedMessage } from '@/lib/chats/types';
 
 import { resolveInitialHandoffText } from './resolve-initial-handoff-text';
+import { readChatAutoModePreference } from '@/lib/chats/chat-auto-mode-preference';
 import { ChatMessageMediaPreview, messageHasMediaPreview } from './ChatMessageMediaPreview';
 import { ChatWidgetRenderer } from './ChatWidgetRenderer';
 import { ChatsThread, type ThreadMessage } from './ChatsThread';
@@ -103,6 +104,22 @@ export default function ChatsClient({
 
   const [composerArtistId, setComposerArtistId] = useState<ImageArtistId>(DEFAULT_IMAGE_ARTIST_ID);
   const [composerQuality, setComposerQuality] = useState<ImageQuality>(DEFAULT_IMAGE_QUALITY);
+  const [composerAutoMode, setComposerAutoMode] = useState<boolean | undefined>(() => {
+    const stored = readChatAutoModePreference();
+    return stored ?? undefined;
+  });
+
+  const statusWorkflowState = useMemo((): WorkflowState => {
+    const ws = session?.workflowState ?? {};
+    const autoMode = ws.autoMode ?? composerAutoMode ?? false;
+    return autoMode === ws.autoMode ? ws : { ...ws, autoMode };
+  }, [session?.workflowState, composerAutoMode]);
+
+  useEffect(() => {
+    if (session?.workflowState?.autoMode !== undefined) {
+      setComposerAutoMode(session.workflowState.autoMode);
+    }
+  }, [session?.workflowState?.autoMode]);
 
   const showAdsAutoToggle =
     session?.currentStep !== 'imageGen' &&
@@ -304,6 +321,7 @@ export default function ChatsClient({
                 sessionId={sessionId}
                 sessionAutoMode={session?.workflowState?.autoMode}
                 disabled={session?.status === 'COMPLETED'}
+                onChange={setComposerAutoMode}
               />
             ) : null}
             <Link
@@ -344,7 +362,7 @@ export default function ChatsClient({
           showSavedEta={showSavedEta}
           savedEtaMessage={savedEtaMessage}
           currentStep={session?.currentStep ?? 'intent'}
-          workflowState={session?.workflowState ?? {}}
+          workflowState={statusWorkflowState}
           composer={{
             onSend: handleComposerSend,
             onAttach:
@@ -383,6 +401,7 @@ export default function ChatsClient({
                 sessionId={sessionId}
                 sessionAutoMode={session?.workflowState?.autoMode}
                 disabled={busy || session?.status === 'COMPLETED'}
+                onChange={setComposerAutoMode}
               />
             ) : undefined,
             sticky: true,

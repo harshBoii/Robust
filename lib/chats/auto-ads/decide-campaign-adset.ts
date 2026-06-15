@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { completeJsonChat } from '@/lib/assistant/openai-json';
 import { PRESET_BUILD_MODEL } from '@/lib/assistant/models';
 import { isCampaignObjectiveAllowed } from '@/lib/chats/campaign-objective-rules';
+import { normalizeObjective } from '@/lib/meta/normalize-objective';
 import type { MetaAdsAutoConfigData } from '@/lib/meta-ads-auto/config';
 
 const staticBriefSchema = z.object({
@@ -119,14 +120,19 @@ Rules:
       campaignAction: input.campaigns.length ? 'use_existing' : 'create_new',
       campaignId: input.campaigns[0]?.id,
       campaignName: input.userText.slice(0, 60),
-      objective: input.config.defaultObjective ?? 'OUTCOME_TRAFFIC',
+      objective: normalizeObjective(input.config.defaultObjective ?? 'OUTCOME_TRAFFIC'),
       adsetAction: 'create_new',
       adsetName: `${input.userText.slice(0, 40)} — Ad set`,
       dailyBudget: input.config.defaultDailyBudget ?? 2000,
       rationale: 'Fallback decision',
     };
   }
-  return parsed.data;
+  const data = parsed.data;
+  // Normalise any legacy objective the LLM may have output (e.g. CONVERSIONS → OUTCOME_SALES)
+  if (data.objective) {
+    data.objective = normalizeObjective(data.objective);
+  }
+  return data;
 }
 
 export function validateCampaignAdsetDecision(
@@ -165,9 +171,12 @@ export function validateCampaignAdsetDecision(
     }
   }
 
-  const objective = d.objective ?? 'OUTCOME_TRAFFIC';
+  const rawObjective = d.objective ?? 'OUTCOME_TRAFFIC';
+  const objective = normalizeObjective(rawObjective);
   if (!isCampaignObjectiveAllowed(objective, hasPixel)) {
     d.objective = 'OUTCOME_TRAFFIC';
+  } else {
+    d.objective = objective;
   }
 
   return d;

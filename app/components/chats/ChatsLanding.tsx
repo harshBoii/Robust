@@ -41,6 +41,7 @@ export default function ChatsLanding({ userName }: { userName: string; companyId
         sessionId: created.session.id,
         text: trimmed,
         title: created.session.title ?? trimmed.slice(0, 80),
+        autoMode,
       });
 
       window.dispatchEvent(new CustomEvent('robust-chats-refresh'));

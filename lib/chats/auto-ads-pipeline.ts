@@ -27,6 +27,7 @@ import {
   formatConventionForLlm,
   getCampaignAdSetConvention,
 } from '@/lib/meta/campaign-adset-alignment';
+import { normalizeObjective } from '@/lib/meta/normalize-objective';
 import { syncAdSets, syncCampaigns } from '@/lib/meta/sync';
 import { checkAutoPermission } from '@/lib/meta-ads-auto/permissions';
 import type { MetaAdsAutoConfigData } from '@/lib/meta-ads-auto/config';
@@ -111,7 +112,17 @@ async function applyCampaignDecision(
       where: { id: decision.campaignId },
       select: { objective: true },
     });
-    if (row?.objective) next.adType = row.objective;
+    if (row?.objective) {
+      const normalizedObj = normalizeObjective(row.objective);
+      next.adType = normalizedObj;
+      // Silently update the DB record if it still carries a legacy objective
+      if (normalizedObj !== row.objective) {
+        await prisma.metaCampaign.update({
+          where: { id: decision.campaignId },
+          data: { objective: normalizedObj },
+        });
+      }
+    }
     return { state: next, campaignDbId: decision.campaignId };
   }
 
@@ -122,7 +133,7 @@ async function applyCampaignDecision(
   next.hasPixel = pixel.hasPixel;
   next.pixelId = pixel.pixelId;
 
-  const objective = decision.objective ?? config.defaultObjective ?? 'OUTCOME_TRAFFIC';
+  const objective = normalizeObjective(decision.objective ?? config.defaultObjective ?? 'OUTCOME_TRAFFIC');
   next.draftCampaign = defaultCampaignDraft(objective);
   next.adType = objective;
   next.presetTarget = 'campaign';
@@ -281,9 +292,16 @@ export async function runAutoAdsPipeline(
   const runId = newAutoPipelineRunId();
   let state: WorkflowState = {
     ...input.state,
+    autoMode: true,
     autoPipelineRunId: runId,
     intentNotes: input.state.intentNotes ?? userText,
   };
+
+  await updateChatSession(sessionId, companyId, {
+    pathType: 'ADS',
+    currentStep: 'campaignChoice',
+    workflowState: state,
+  });
 
   const newMessages: SerializedMessage[] = [];
   if (input.userMessageRow) newMessages.push(input.userMessageRow);
