@@ -150,6 +150,9 @@ function inferPathFromText(text: string): TopLevelPath {
     return 'videoGen';
   }
   if (/image|photo|variant|on model|visual|static/.test(lower) && !/video/.test(lower)) {
+    if (/\bads?\b/.test(lower) || /campaign/.test(lower) || /static ad/.test(lower)) {
+      return 'ads';
+    }
     return 'imageGen';
   }
   return 'ads';

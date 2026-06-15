@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { enqueueBulkPublish } from '@/lib/meta/process-publish-jobs';
 
 import { classifyTopLevelPath } from '@/lib/image-gen/classify-top-level';
+import { isAutoModeActive, looksLikeMetaAdsCreationIntent } from './auto-mode-intent';
 import { buildIntentRoutingText, runIntentClarificationTurn } from './intent-clarification';
 import {
   handleImageGenAction,
@@ -226,9 +227,42 @@ export async function handleChatMessage(
 
   let intentUserRow: SerializedMessage | null = null;
 
+  const { getMetaAdsAutoConfig } = await import('@/lib/meta-ads-auto/config');
+  const autoConfig = await getMetaAdsAutoConfig(companyId);
+  const autoModeActive = isAutoModeActive(state, autoConfig);
+
   if (pathType === null && step === 'intent') {
     intentUserRow = await userMsg(sessionId, text);
 
+    const skipClarification =
+      autoModeActive || looksLikeMetaAdsCreationIntent(text);
+
+    if (skipClarification) {
+      const routeText = text.trim();
+      const nextState: WorkflowState = {
+        ...clearedIntentState(state, routeText),
+        autoMode: autoModeActive ? true : state.autoMode,
+        intentNotes: routeText.slice(0, 500),
+      };
+      await updateChatSession(sessionId, companyId, {
+        pathType: 'ADS',
+        workflowState: nextState,
+      });
+      state = nextState;
+      adsPathActive = true;
+
+      if (autoModeActive && !state.autoPipelineRunId && session.status !== 'COMPLETED') {
+        const { runAutoAdsPipeline } = await import('@/lib/chats/auto-ads-pipeline');
+        return runAutoAdsPipeline({
+          sessionId,
+          companyId,
+          userText: text,
+          state,
+          config: autoConfig,
+          userMessageRow: intentUserRow,
+        });
+      }
+    } else {
     const clarificationTurns = state.intentClarificationTurns ?? 0;
     const messageHistory = (session.messages ?? [])
       .filter((m) => m.content)
@@ -300,11 +334,8 @@ export async function handleChatMessage(
     });
     state = nextState;
     adsPathActive = true;
+    }
   }
-
-  const { getMetaAdsAutoConfig } = await import('@/lib/meta-ads-auto/config');
-  const autoConfig = await getMetaAdsAutoConfig(companyId);
-  const autoModeActive = state.autoMode ?? autoConfig.autoModeDefault;
 
   if (
     autoModeActive &&

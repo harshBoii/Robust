@@ -48,10 +48,12 @@ export async function classifyTopLevelPath(
       return 'videoGen';
     }
     if (
-      /generat|image|photo|variant|product ad|on model|shopify product|creative image|visual/.test(
+      /generat|image|photo|variant|product ad|on model|shopify product|creative image|visual|static ad|static\b/.test(
         lower,
       ) &&
-      !/post.*ad|publish|campaign|meta pixel|ad set|video/.test(lower)
+      !/post.*ad|publish|campaign|meta pixel|ad set|video/.test(lower) &&
+      !/\bads?\b/.test(lower) &&
+      !/campaign/.test(lower)
     ) {
       return 'imageGen';
     }
