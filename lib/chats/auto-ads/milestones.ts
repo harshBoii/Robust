@@ -36,8 +36,8 @@ const MILESTONE_STATUS: Record<AutoPipelineMilestone, readonly string[]> = {
   ],
   creative: [
     'Writing AI ad copy…',
-    'Uploading Meta creatives…',
-    'Pairing copy with your statics…',
+    'Analyzing your creatives…',
+    'Filling headlines and primary text…',
   ],
   finish: [
     'Preparing your launch checklist…',

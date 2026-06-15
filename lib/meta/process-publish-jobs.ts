@@ -321,7 +321,8 @@ export type DraftPublishJobInput = {
   campaignId: string;
   adSetId: string;
   assetId: string;
-  metaCreativeDbId: string;
+  /** When omitted, Meta creative is created at publish time (manual ADS path). */
+  metaCreativeDbId?: string | null;
   headline: string;
   primaryText: string;
   description?: string | null;
@@ -362,7 +363,7 @@ export async function enqueueDraftJobs(input: {
           campaignId: j.campaignId,
           adSetId: j.adSetId,
           assetId: j.assetId,
-          metaCreativeDbId: j.metaCreativeDbId,
+          metaCreativeDbId: j.metaCreativeDbId ?? null,
           status: 'DRAFT',
           headlineOverride: j.headline,
           primaryTextOverride: j.primaryText || j.headline,

@@ -3,7 +3,7 @@ import 'server-only';
 import type { AdsetPreset, CampaignPreset } from '@/app/components/manager/presets/types';
 import { normalizeAdsetPreset } from '@/app/components/manager/presets/normalize';
 import type { GroupModel } from '@/app/components/createAd/types';
-import { creativeSuggestForAsset } from '@/lib/assistant/creative-suggest-for-asset';
+import { fillGroupsWithCreativeSuggestions } from '@/lib/chats/fill-creative-suggestions';
 import {
   approveAdsetWithRecovery,
   approveCampaignWithRecovery,
@@ -22,7 +22,6 @@ import {
   enqueueDraftJobs,
   runPublishWorkerForCompany,
 } from '@/lib/meta/process-publish-jobs';
-import { storeAdCreativeForAsset } from '@/lib/meta/store-ad-creative';
 import {
   alignAdsetPresetToCampaignSiblings,
   formatConventionForLlm,
@@ -362,60 +361,18 @@ async function applyAdsetDecision(
   return { state: next, adSetDbId: approved.created.id };
 }
 
-async function fillCreativesAndUpload(
+async function fillCreativesForGroups(
   companyId: string,
   groups: GroupModel[],
   state: WorkflowState,
-): Promise<{ groups: GroupModel[]; assetMetaCreativeIds: Record<string, string> }> {
-  const adType = state.adType ?? 'OUTCOME_TRAFFIC';
-  const tone = state.tone ?? 'general';
-  const pixelId = state.pixelId ?? '';
-  const assetMetaCreativeIds: Record<string, string> = {};
-
-  const company = await prisma.company.findUnique({
-    where: { id: companyId },
-    select: { website: true },
+): Promise<GroupModel[]> {
+  return fillGroupsWithCreativeSuggestions({
+    companyId,
+    groups,
+    adType: state.adType,
+    tone: state.tone,
+    pixelId: state.pixelId,
   });
-  const fallbackUrl = company?.website?.trim() || 'https://example.com';
-
-  const nextGroups = groups.map((g) => ({ ...g, creative: { ...g.creative } }));
-
-  for (const g of nextGroups.filter((x) => x.included)) {
-    const assetId = g.assetIds[0];
-    if (!assetId) continue;
-
-    const suggestion = await creativeSuggestForAsset({
-      companyId,
-      assetId,
-      adType,
-      tone,
-      groupLabel: g.label,
-    });
-
-    g.creative = {
-      headline: suggestion.headline,
-      primaryText: suggestion.primaryText,
-      description: suggestion.description ?? '',
-      landingUrl: suggestion.landingUrl?.trim() || fallbackUrl,
-      ctaType: suggestion.ctaType,
-      pixelId,
-    };
-
-    const stored = await storeAdCreativeForAsset({
-      companyId,
-      assetId,
-      headline: g.creative.headline,
-      primaryText: g.creative.primaryText,
-      description: g.creative.description,
-      landingUrl: g.creative.landingUrl,
-      ctaType: g.creative.ctaType,
-      pixelId: pixelId || null,
-      metaCampaignId: state.campaignId ?? null,
-    });
-    assetMetaCreativeIds[assetId] = stored.id;
-  }
-
-  return { groups: nextGroups, assetMetaCreativeIds };
 }
 
 export async function runAutoAdsPipeline(
@@ -664,7 +621,7 @@ export async function runAutoAdsPipeline(
     newMessages.push(
       await assistantProgress(
         sessionId,
-        formatMilestoneProgressMessage('creative', 'Analyzing media and uploading Meta creatives…'),
+        formatMilestoneProgressMessage('creative', 'Analyzing media and writing ad copy…'),
       ),
     );
 
@@ -673,13 +630,9 @@ export async function runAutoAdsPipeline(
       adSetId: adSetDbId,
     }));
 
-    const { groups: filledGroups, assetMetaCreativeIds } = await fillCreativesAndUpload(
-      companyId,
-      groups,
-      state,
-    );
+    const filledGroups = await fillCreativesForGroups(companyId, groups, state);
     state.groups = filledGroups;
-    state.assetMetaCreativeIds = assetMetaCreativeIds;
+
     state = withMilestoneComplete(state, 'creative');
     state = await persistMilestone(sessionId, companyId, state, 'finish');
 
@@ -699,11 +652,6 @@ export async function runAutoAdsPipeline(
           landingUrl: g.creative.landingUrl,
           ctaType: g.creative.ctaType,
           pixelId: g.creative.pixelId || undefined,
-          assetCreatives: Object.fromEntries(
-            g.assetIds
-              .filter((id) => assetMetaCreativeIds[id])
-              .map((id) => [id, assetMetaCreativeIds[id]!]),
-          ),
         })),
       });
       state.publishJobIds = jobIds;
@@ -731,14 +679,11 @@ export async function runAutoAdsPipeline(
         jobs: included.flatMap((g) => {
           const assetId = g.assetIds[0];
           if (!assetId) return [];
-          const creativeId = assetMetaCreativeIds[assetId];
-          if (!creativeId) return [];
           return [
             {
               campaignId: campaignDbId,
               adSetId: adSetDbId,
               assetId,
-              metaCreativeDbId: creativeId,
               headline: g.creative.headline,
               primaryText: g.creative.primaryText,
               description: g.creative.description,
@@ -764,7 +709,7 @@ export async function runAutoAdsPipeline(
           sessionId,
           formatMilestoneProgressMessage(
             'finish',
-            `**${draftIds.length}** ad${draftIds.length === 1 ? '' : 's'} drafted with Meta creatives ready. Review and publish from [Pending Ads](/manager/pending).`,
+            `**${draftIds.length}** ad${draftIds.length === 1 ? '' : 's'} drafted with AI copy ready. Meta creatives upload when you publish from [Pending Ads](/manager/pending).`,
           ),
         ),
       );
