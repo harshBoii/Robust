@@ -91,6 +91,10 @@ export type WorkflowState = {
   autoMode?: boolean;
   /** Idempotency key for an in-flight auto pipeline run. */
   autoPipelineRunId?: string;
+  /** Current auto pipeline milestone (statics | campaign | adset | creative | finish). */
+  autoPipelineMilestone?: string;
+  /** Completed auto pipeline milestones for progress UI. */
+  autoPipelineMilestonesDone?: string[];
   /** Meta creative DB ids per asset from auto pipeline step 3. */
   assetMetaCreativeIds?: Record<string, string>;
 };

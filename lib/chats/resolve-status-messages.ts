@@ -1,6 +1,10 @@
 import type { ImageGenStep } from '@/lib/image-gen/types';
 import type { VideoGenStep } from '@/lib/video-gen/types';
 import type { ChatWorkflowStep, WorkflowState } from '@/lib/chats/types';
+import {
+  isAutoAdsBusy,
+  resolveAutoPipelineStatusMessages,
+} from '@/lib/chats/auto-ads/milestones';
 
 /** Rotating status lines while the agent auto-fixes Meta / preset errors (Path A). */
 export const CHAT_FIXING_STATUS_MESSAGES = [
@@ -230,10 +234,6 @@ function parseVideoGen(workflowState: WorkflowState) {
   return workflowState.videoGen ?? null;
 }
 
-export function isAutoAdsBusy(workflowState: WorkflowState): boolean {
-  return workflowState.autoMode === true || Boolean(workflowState.autoPipelineRunId);
-}
-
 function isVideoGenPath(ctx: ChatStatusContext): boolean {
   if (ctx.currentStep === 'videoGen') return true;
   return Boolean(parseVideoGen(ctx.workflowState));
@@ -369,7 +369,7 @@ export function resolveChatStatusMessages(ctx: ChatStatusContext): readonly stri
   }
 
   if (isAutoAdsBusy(ctx.workflowState)) {
-    return AUTO_ADS_PIPELINE;
+    return resolveAutoPipelineStatusMessages(ctx.workflowState);
   }
 
   const vg = parseVideoGen(ctx.workflowState);

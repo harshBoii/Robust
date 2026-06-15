@@ -8,8 +8,10 @@ import {
   resolveChatStatusLabel,
   resolveChatStatusMessages,
 } from '@/lib/chats/resolve-status-messages';
+import { isAutoAdsBusy } from '@/lib/chats/auto-ads/milestones';
 
 import type { ChatBusyTone } from './chat-busy-tone';
+import { AutoPipelineMilestones } from './AutoPipelineMilestones';
 import { ChatsComposer, type ChatsComposerProps } from './ChatsComposer';
 import { ChatsMessage, type ChatsMessageProps } from './ChatsMessage';
 import { useRotatingStatus } from './useRotatingStatus';
@@ -82,6 +84,7 @@ export function ChatsThread({
   const videoGenBusy = Boolean(
     workflowState.videoGen?.step && VIDEO_GEN_BUSY_STEPS.has(workflowState.videoGen.step),
   );
+  const showAutoMilestones = isAutoAdsBusy(workflowState) && !showSavedEta;
   const showThinkingPanel = Boolean(
     hasOperationError || (loading && !showSavedEta && !imageGenGenerating && !videoGenBusy),
   );
@@ -140,6 +143,11 @@ export function ChatsThread({
               </motion.div>
             ) : null}
           </AnimatePresence>
+          {showAutoMilestones ? (
+            <div className="mb-4">
+              <AutoPipelineMilestones workflowState={workflowState} />
+            </div>
+          ) : null}
           {showThinkingPanel ? (
             <ChatsMessage
               id="operation-status"

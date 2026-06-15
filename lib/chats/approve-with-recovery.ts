@@ -143,11 +143,12 @@ export async function approveCampaignWithRecovery(
   companyId: string,
   draft: CampaignPreset,
   state: WorkflowState,
+  options?: { seedPresetId?: string },
 ): Promise<ApproveCampaignResult> {
   let current = draft;
   let recovered = false;
   let lastError = '';
-  let presetId: string | undefined;
+  let presetId: string | undefined = options?.seedPresetId;
 
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
@@ -200,6 +201,7 @@ export async function approveAdsetWithRecovery(
   draft: AdsetPreset,
   state: WorkflowState,
   campaignObjective: string | null | undefined,
+  options?: { seedPresetId?: string },
 ): Promise<ApproveAdsetResult> {
   let current = draft;
   const preAligned = await alignAdsetPresetToCampaignSiblings(campaignId, current);
@@ -208,7 +210,7 @@ export async function approveAdsetWithRecovery(
   }
   let recovered = preAligned.convention != null;
   let lastError = '';
-  let presetId: string | undefined;
+  let presetId: string | undefined = options?.seedPresetId;
 
   for (let attempt = 0; attempt < 3; attempt++) {
     try {

@@ -1,6 +1,7 @@
 import 'server-only';
 
 import type { AdsetPreset, CampaignPreset } from '@/app/components/manager/presets/types';
+import { normalizeAdsetPreset } from '@/app/components/manager/presets/normalize';
 import type { GroupModel } from '@/app/components/createAd/types';
 import { creativeSuggestForAsset } from '@/lib/assistant/creative-suggest-for-asset';
 import {
@@ -37,8 +38,22 @@ import {
   decideCampaignAdset,
   validateCampaignAdsetDecision,
   type CampaignAdsetDecision,
+  type PresetComboOption,
 } from './auto-ads/decide-campaign-adset';
 import { generateAutoAdsStatics, newAutoPipelineRunId } from './auto-ads/generate-statics';
+import {
+  formatMilestoneProgressMessage,
+  withMilestoneComplete,
+  withMilestoneUpdate,
+  type AutoPipelineMilestone,
+} from './auto-ads/milestones';
+import {
+  buildPresetFirstDecision,
+  loadPresetCombos,
+  loadPresetDrafts,
+  pickPresetCombo,
+  type PresetCombo,
+} from './auto-ads/resolve-preset-combos';
 
 export type AutoAdsPipelineInput = {
   sessionId: string;
@@ -57,6 +72,30 @@ async function assistantProgress(
     { role: 'ASSISTANT', content },
   ]);
   return serializeMessage(row);
+}
+
+async function persistMilestone(
+  sessionId: string,
+  companyId: string,
+  state: WorkflowState,
+  milestone: AutoPipelineMilestone,
+  markPreviousDone = true,
+): Promise<WorkflowState> {
+  const next = withMilestoneUpdate(state, milestone, markPreviousDone);
+  await updateChatSession(sessionId, companyId, { workflowState: next });
+  return next;
+}
+
+function toPresetComboOptions(combos: PresetCombo[]): PresetComboOption[] {
+  return combos.map((c) => ({
+    id: c.id,
+    campaignPresetId: c.campaignPresetId,
+    campaignPresetName: c.campaignPresetName,
+    adsetPresetId: c.adsetPresetId,
+    adsetPresetName: c.adsetPresetName,
+    objective: c.objective,
+    source: c.source,
+  }));
 }
 
 function packageResult(
@@ -126,6 +165,43 @@ async function applyCampaignDecision(
     return { state: next, campaignDbId: decision.campaignId };
   }
 
+  if (decision.campaignAction === 'use_preset' && decision.campaignPresetId) {
+    const perm = checkAutoPermission(config, 'new_campaign');
+    if (!perm.allowed) throw new Error(perm.reason);
+
+    const adsetPresetId = decision.adsetPresetId;
+    if (!adsetPresetId) throw new Error('Missing ad set preset for campaign preset combo.');
+
+    const picks = await loadPresetDrafts(companyId, decision.campaignPresetId, adsetPresetId);
+    if (!picks) throw new Error('Saved preset combo not found.');
+
+    const pixel = await resolvePixel(companyId);
+    next.hasPixel = pixel.hasPixel;
+    next.pixelId = pixel.pixelId;
+
+    const campaignDraft: CampaignPreset = {
+      ...picks.campaignDraft,
+      name: decision.campaignName?.trim() || userText.trim().slice(0, 80) || picks.campaignDraft.name,
+    };
+    next.draftCampaign = campaignDraft;
+    next.draftAdset = picks.adsetDraft;
+    next.adType = normalizeObjective(campaignDraft.objective);
+    next.presetTarget = 'campaign';
+
+    const approved = await approveCampaignWithRecovery(
+      companyId,
+      campaignDraft,
+      next,
+      { seedPresetId: decision.campaignPresetId },
+    );
+    if (!approved.ok) throw new Error(approved.error);
+
+    next.draftCampaign = approved.draft;
+    next.campaignId = approved.created.id;
+    next.campaignPresetId = decision.campaignPresetId;
+    return { state: next, campaignDbId: approved.created.id };
+  }
+
   const perm = checkAutoPermission(config, 'new_campaign');
   if (!perm.allowed) throw new Error(perm.reason);
 
@@ -172,6 +248,63 @@ async function applyAdsetDecision(
   if (decision.adsetAction === 'use_existing' && decision.adsetId) {
     next.defaultAdSetId = decision.adsetId;
     return { state: next, adSetDbId: decision.adsetId };
+  }
+
+  if (decision.adsetAction === 'use_preset' && decision.adsetPresetId) {
+    const perm = checkAutoPermission(config, 'new_adset');
+    if (!perm.allowed) throw new Error(perm.reason);
+
+    let adsetDraft: AdsetPreset;
+    if (decision.campaignPresetId) {
+      const picks = await loadPresetDrafts(
+        companyId,
+        decision.campaignPresetId,
+        decision.adsetPresetId,
+      );
+      if (!picks) throw new Error('Saved preset combo not found.');
+      adsetDraft = { ...picks.adsetDraft };
+    } else {
+      const row = await prisma.adsetPreset.findFirst({
+        where: { id: decision.adsetPresetId, companyId },
+      });
+      if (!row) throw new Error('Ad set preset not found.');
+      adsetDraft = normalizeAdsetPreset(row);
+    }
+
+    adsetDraft = {
+      ...adsetDraft,
+      pinnedCampaignId: campaignDbId,
+      name: decision.adsetName?.trim() || adsetDraft.name,
+      dailyBudget: decision.dailyBudget
+        ? String(decision.dailyBudget)
+        : adsetDraft.dailyBudget,
+    };
+
+    const aligned = await alignAdsetPresetToCampaignSiblings(campaignDbId, adsetDraft);
+    adsetDraft = aligned.draft;
+    next.draftAdset = adsetDraft;
+    next.presetTarget = 'adset';
+    next.campaignId = campaignDbId;
+
+    const campaignRow = await prisma.metaCampaign.findUnique({
+      where: { id: campaignDbId },
+      select: { objective: true },
+    });
+
+    const approved = await approveAdsetWithRecovery(
+      companyId,
+      campaignDbId,
+      adsetDraft,
+      next,
+      campaignRow?.objective,
+      { seedPresetId: decision.adsetPresetId },
+    );
+    if (!approved.ok) throw new Error(approved.error);
+
+    next.draftAdset = approved.draft;
+    next.defaultAdSetId = approved.created.id;
+    next.adsetPresetId = decision.adsetPresetId;
+    return { state: next, adSetDbId: approved.created.id };
   }
 
   const perm = checkAutoPermission(config, 'new_adset');
@@ -337,9 +470,14 @@ export async function runAutoAdsPipeline(
   }
 
   try {
+    state = await persistMilestone(sessionId, companyId, state, 'statics');
+
     if (!state.groups?.length) {
       newMessages.push(
-        await assistantProgress(sessionId, 'Generating ad statics from your brand DNA…'),
+        await assistantProgress(
+          sessionId,
+          formatMilestoneProgressMessage('statics', 'Generating ad statics from your brand DNA…'),
+        ),
       );
       const generated = await generateAutoAdsStatics({
         companyId,
@@ -351,10 +489,17 @@ export async function runAutoAdsPipeline(
       state = generated.state;
     }
 
+    state = withMilestoneComplete(state, 'statics');
+    state = await persistMilestone(sessionId, companyId, state, 'campaign');
+
+    const staticCount = state.groups?.filter((g) => g.included).length ?? 0;
     newMessages.push(
       await assistantProgress(
         sessionId,
-        `**${state.groups?.filter((g) => g.included).length ?? 0}** statics ready. Resolving campaign and ad set…`,
+        formatMilestoneProgressMessage(
+          'campaign',
+          `**${staticCount}** statics ready. Resolving campaign and ad set…`,
+        ),
       ),
     );
 
@@ -364,7 +509,11 @@ export async function runAutoAdsPipeline(
     });
     if (!integration) throw new Error('Connect Meta in Profile → Integrations first.');
 
-    const campaigns = await syncCampaigns(integration.id);
+    const [campaigns, presetCombos] = await Promise.all([
+      syncCampaigns(integration.id),
+      loadPresetCombos(companyId),
+    ]);
+    const presetComboOptions = toPresetComboOptions(presetCombos);
     const campaignOptions = campaigns.map((c) => ({
       id: c.id,
       name: c.name ?? c.id,
@@ -375,20 +524,49 @@ export async function runAutoAdsPipeline(
     state.hasPixel = pixel.hasPixel;
     state.pixelId = pixel.pixelId;
 
-    const rawDecision = await decideCampaignAdset({
-      userText,
-      campaigns: campaignOptions,
-      adsets: [],
-      hasPixel: pixel.hasPixel,
-      pixelId: pixel.pixelId,
-      config,
-      intentNotes: state.intentNotes,
-    });
+    const pickedCombo = pickPresetCombo(presetCombos, userText, pixel.hasPixel);
+    let rawDecision: CampaignAdsetDecision;
+
+    if (
+      pickedCombo &&
+      (config.allowNewCampaign || pickedCombo.pinnedMetaCampaignId) &&
+      config.allowNewAdset
+    ) {
+      const presetDecision = buildPresetFirstDecision(
+        pickedCombo,
+        campaignOptions,
+        config.defaultDailyBudget,
+      );
+      rawDecision = {
+        ...presetDecision,
+        adsetName: `${userText.slice(0, 40)} — Ad set`,
+        rationale: presetDecision.rationale,
+      };
+      newMessages.push(
+        await assistantProgress(
+          sessionId,
+          `Using saved preset combo **${pickedCombo.campaignPresetName}** + **${pickedCombo.adsetPresetName}**.`,
+        ),
+      );
+    } else {
+      rawDecision = await decideCampaignAdset({
+        userText,
+        campaigns: campaignOptions,
+        adsets: [],
+        presetCombos: presetComboOptions,
+        hasPixel: pixel.hasPixel,
+        pixelId: pixel.pixelId,
+        config,
+        intentNotes: state.intentNotes,
+      });
+    }
+
     const decision = validateCampaignAdsetDecision(
       rawDecision,
       campaignOptions,
       [],
       pixel.hasPixel,
+      presetComboOptions,
     );
 
     const { state: afterCampaign, campaignDbId } = await applyCampaignDecision(
@@ -399,6 +577,8 @@ export async function runAutoAdsPipeline(
       config,
     );
     state = afterCampaign;
+    state = withMilestoneComplete(state, 'campaign');
+    state = await persistMilestone(sessionId, companyId, state, 'adset');
 
     const adsets = await syncAdSets({
       metaIntegrationId: integration.id,
@@ -413,27 +593,61 @@ export async function runAutoAdsPipeline(
     }));
 
     const convention = await getCampaignAdSetConvention(campaignDbId);
-    const adsetRawDecision = await decideCampaignAdset({
-      userText,
-      campaigns: campaignOptions,
-      adsets: adsetOptions,
-      hasPixel: pixel.hasPixel,
-      pixelId: pixel.pixelId,
-      config,
-      intentNotes: state.intentNotes,
-      campaignAdSetConvention: convention ? formatConventionForLlm(convention) : null,
-    });
+
+    let adsetRawDecision: CampaignAdsetDecision;
+    if (
+      decision.adsetAction === 'use_preset' &&
+      decision.adsetPresetId &&
+      decision.campaignAction !== 'create_new'
+    ) {
+      adsetRawDecision = {
+        ...decision,
+        campaignId: campaignDbId,
+        campaignAction: 'use_existing',
+        adsetAction: 'use_preset',
+      };
+    } else {
+      adsetRawDecision = await decideCampaignAdset({
+        userText,
+        campaigns: campaignOptions,
+        adsets: adsetOptions,
+        presetCombos: presetComboOptions,
+        hasPixel: pixel.hasPixel,
+        pixelId: pixel.pixelId,
+        config,
+        intentNotes: state.intentNotes,
+        campaignAdSetConvention: convention ? formatConventionForLlm(convention) : null,
+        adsetPhaseOnly: true,
+      });
+    }
 
     const adsetDecision = validateCampaignAdsetDecision(
       {
         ...adsetRawDecision,
         campaignId: campaignDbId,
         campaignAction: 'use_existing',
+        campaignPresetId: decision.campaignPresetId,
       },
       campaignOptions,
       adsetOptions,
       pixel.hasPixel,
+      presetComboOptions,
     );
+
+    if (adsetDecision.adsetAction === 'use_preset' && adsetDecision.adsetPresetId) {
+      const comboName = presetCombos.find((c) => c.adsetPresetId === adsetDecision.adsetPresetId);
+      if (comboName) {
+        newMessages.push(
+          await assistantProgress(
+            sessionId,
+            formatMilestoneProgressMessage(
+              'adset',
+              `Creating ad set from preset **${comboName.adsetPresetName}**…`,
+            ),
+          ),
+        );
+      }
+    }
 
     const { state: afterAdset, adSetDbId } = await applyAdsetDecision(
       companyId,
@@ -444,11 +658,13 @@ export async function runAutoAdsPipeline(
       config,
     );
     state = afterAdset;
+    state = withMilestoneComplete(state, 'adset');
+    state = await persistMilestone(sessionId, companyId, state, 'creative');
 
     newMessages.push(
       await assistantProgress(
         sessionId,
-        'Analyzing media and uploading Meta creatives…',
+        formatMilestoneProgressMessage('creative', 'Analyzing media and uploading Meta creatives…'),
       ),
     );
 
@@ -464,6 +680,8 @@ export async function runAutoAdsPipeline(
     );
     state.groups = filledGroups;
     state.assetMetaCreativeIds = assetMetaCreativeIds;
+    state = withMilestoneComplete(state, 'creative');
+    state = await persistMilestone(sessionId, companyId, state, 'finish');
 
     const included = filledGroups.filter((g) => g.included && g.assetIds[0]);
 
@@ -494,14 +712,17 @@ export async function runAutoAdsPipeline(
       await updateChatSession(sessionId, companyId, {
         status: 'COMPLETED',
         currentStep: 'done',
-        workflowState: state,
+        workflowState: withMilestoneComplete(state, 'finish'),
         campaignId: campaignDbId,
       });
 
       newMessages.push(
         await assistantProgress(
           sessionId,
-          `Queued **${jobIds.length}** ad${jobIds.length === 1 ? '' : 's'} for publishing on Meta. View progress in Ad History.`,
+          formatMilestoneProgressMessage(
+            'finish',
+            `Queued **${jobIds.length}** ad${jobIds.length === 1 ? '' : 's'} for publishing on Meta. View progress in Ad History.`,
+          ),
         ),
       );
     } else {
@@ -534,14 +755,17 @@ export async function runAutoAdsPipeline(
       await updateChatSession(sessionId, companyId, {
         status: 'COMPLETED',
         currentStep: 'done',
-        workflowState: state,
+        workflowState: withMilestoneComplete(state, 'finish'),
         campaignId: campaignDbId,
       });
 
       newMessages.push(
         await assistantProgress(
           sessionId,
-          `**${draftIds.length}** ad${draftIds.length === 1 ? '' : 's'} drafted with Meta creatives ready. Review and publish from [Pending Ads](/manager/pending).`,
+          formatMilestoneProgressMessage(
+            'finish',
+            `**${draftIds.length}** ad${draftIds.length === 1 ? '' : 's'} drafted with Meta creatives ready. Review and publish from [Pending Ads](/manager/pending).`,
+          ),
         ),
       );
     }
