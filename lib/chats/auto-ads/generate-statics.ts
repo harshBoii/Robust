@@ -5,6 +5,7 @@ import { randomUUID } from 'crypto';
 import { getArtistStylePrompt } from '@/lib/image-gen/artist-styles';
 import { generateImage } from '@/lib/image-gen/generate-image';
 import { buildBrandDnaPromptBlock, composeBrandTone, loadBrandDnaContext } from '@/lib/image-gen/load-brand-dna';
+import type { SeedreamPromptContext } from '@/lib/image-gen/seedream-prompt-generator';
 import { appendLogoRef, resolveCompanyLogoUrl } from '@/lib/image-gen/resolve-company-logo';
 import { storeGeneratedImage } from '@/lib/image-gen/store-generated';
 import type { MetaAdsAutoConfigData } from '@/lib/meta-ads-auto/config';
@@ -61,6 +62,14 @@ async function generateOneStatic(input: {
       referenceImageUrls,
       aspectRatio: input.aspectRatio,
       imageArtistId: input.imageArtistId,
+      seedreamContext: {
+        draftPrompt: prompt,
+        artistStyle: input.artistStyle,
+        brandDnaPromptBlock: input.brandDnaBlock,
+        brandTone: input.brandTone,
+        aspectRatio: input.aspectRatio,
+        referenceImageCount: referenceImageUrls?.length ?? 0,
+      } satisfies SeedreamPromptContext,
     });
 
     const stored = await storeGeneratedImage({

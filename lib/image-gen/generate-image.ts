@@ -15,6 +15,7 @@ import {
   findImageArtist,
   type ImageQuality,
 } from './image-artists';
+import type { SeedreamPromptContext } from './seedream-prompt-generator';
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
@@ -27,6 +28,8 @@ export type GenerateImageInput = {
   model?: string | null;
   quality?: ImageQuality | null;
   imageArtistId?: string | null;
+  /** Brand + style context for Seedream prompt refinement (Mr Adasta / Fal only). */
+  seedreamContext?: SeedreamPromptContext | null;
 };
 
 export type GenerateImageResult = {
@@ -67,6 +70,7 @@ export async function generateImage(input: GenerateImageInput): Promise<Generate
       referenceImageUrls: refUrls,
       aspectRatio: input.aspectRatio,
       quality,
+      seedreamContext: input.seedreamContext,
     });
     return { imageBase64: fal.imageBase64, revisedPrompt: undefined };
   }

@@ -3,6 +3,7 @@ import 'server-only';
 import { handleUserFacingLlmError } from '@/lib/assistant/user-facing-llm-error';
 
 import { generateImage } from './generate-image';
+import { buildSeedreamContextFromImageGen } from './seedream-prompt-generator';
 import { storeGeneratedImage } from './store-generated';
 import type { ImageGenState, ImageGenVariant } from './types';
 
@@ -17,6 +18,8 @@ export type BatchGenerateInput = {
   imageQuality?: ImageGenState['imageQuality'];
   variants: ImageGenVariant[];
   indices?: number[];
+  /** Full image-gen state for Seedream prompt refinement. */
+  imageGenState?: ImageGenState;
 };
 
 export type BatchGenerateResult = {
@@ -34,6 +37,7 @@ async function generateOneWithRetry(input: {
   imageArtistId?: string | null;
   imageQuality?: ImageGenState['imageQuality'];
   variant: ImageGenVariant;
+  imageGenState?: ImageGenState;
 }): Promise<ImageGenVariant> {
   const refUrls = [input.referenceImageUrl, ...(input.logoUrl ? [input.logoUrl] : [])];
   const run = async () => {
@@ -43,6 +47,13 @@ async function generateOneWithRetry(input: {
       aspectRatio: input.aspectRatio,
       imageArtistId: input.imageArtistId,
       quality: input.imageQuality,
+      seedreamContext: input.imageGenState
+        ? buildSeedreamContextFromImageGen(
+            input.imageGenState,
+            input.variant.prompt,
+            refUrls.length,
+          )
+        : undefined,
     });
     const stored = await storeGeneratedImage({
       companyId: input.companyId,
@@ -96,6 +107,7 @@ export async function batchGenerateVariants(
       imageArtistId: input.imageArtistId,
       imageQuality: input.imageQuality,
       variant,
+      imageGenState: input.imageGenState,
     });
     return { index, variant: updated };
   });

@@ -7,6 +7,7 @@ import type { TemplateDefinition } from '@/lib/templates/types';
 import { buildImageEditPrompt } from './base-prompts';
 import { appendLogoRef, resolveCompanyLogoUrl } from './resolve-company-logo';
 import { generateImage } from './generate-image';
+import { buildSeedreamContextFromImageGen } from './seedream-prompt-generator';
 import { resolveTemplateReferenceUrls as resolveTemplateRefs } from './resolve-asset-image-url';
 import { resolveLastGeneratedImageUrl } from './resolve-last-generated-image';
 import { storeGeneratedImage } from './store-generated';
@@ -30,6 +31,8 @@ async function generateOneWithRetry(input: {
   imageArtistId?: string | null;
   imageQuality?: ImageGenState['imageQuality'];
   label: string;
+  imageGenState?: ImageGenState;
+  isEdit?: boolean;
 }): Promise<{
   label: string;
   assetId?: string;
@@ -44,6 +47,14 @@ async function generateOneWithRetry(input: {
       aspectRatio: input.aspectRatio,
       imageArtistId: input.imageArtistId,
       quality: input.imageQuality,
+      seedreamContext: input.imageGenState
+        ? buildSeedreamContextFromImageGen(
+            input.imageGenState,
+            input.prompt,
+            input.referenceImageUrls.length,
+            input.isEdit,
+          )
+        : undefined,
     });
     const stored = await storeGeneratedImage({
       companyId: input.companyId,
@@ -125,6 +136,8 @@ export async function runTemplateGenerate(input: {
     imageArtistId: ig.imageArtistId,
     imageQuality: ig.imageQuality,
     label: def.name,
+    imageGenState: ig,
+    isEdit: Boolean(editFeedback),
   });
 
   ig.templateOutputs = [out];
@@ -184,6 +197,8 @@ export async function runTemplateRegenerateSlot(input: {
     imageArtistId: input.ig.imageArtistId,
     imageQuality: input.ig.imageQuality,
     label,
+    imageGenState: input.ig,
+    isEdit: Boolean(editFeedback),
   });
 
   const outputs = [...(input.ig.templateOutputs ?? [])];

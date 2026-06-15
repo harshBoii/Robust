@@ -52,6 +52,7 @@ import {
 } from './image-artists';
 import { generateImage } from './generate-image';
 import { importProductImageFromUrl } from './import-product-image';
+import { buildSeedreamContextFromImageGen } from './seedream-prompt-generator';
 import { appendGeneratedAsset, initialImageGenState, mergeImageGenIntoWorkflow, parseImageGenState } from './state';
 import { storeGeneratedImage } from './store-generated';
 import type {
@@ -670,6 +671,12 @@ async function runGenerateBase(
       aspectRatio: ig.aspectRatio,
       imageArtistId: ig.imageArtistId,
       quality: ig.imageQuality,
+      seedreamContext: buildSeedreamContextFromImageGen(
+        ig,
+        prompt,
+        refUrls.length,
+        Boolean(editFeedback),
+      ),
     });
     const stored = await storeGeneratedImage({
       companyId: session.companyId,
@@ -874,6 +881,7 @@ async function runGenerateVariants(
       imageArtistId: ig.imageArtistId,
       imageQuality: ig.imageQuality,
       variants: ig.variants ?? [],
+      imageGenState: ig,
     });
 
     ig = { ...ig, variants: batch.variants };
@@ -942,6 +950,7 @@ async function runRegenerateVariant(
     imageQuality: ig.imageQuality,
     variants,
     indices: [index],
+    imageGenState: ig,
   });
 
   ig = { ...ig, variants: batch.variants };
@@ -985,6 +994,7 @@ async function runProductOnModelGenerate(
         aspectRatio: ig.aspectRatio,
         imageArtistId: ig.imageArtistId,
         quality: ig.imageQuality,
+        seedreamContext: buildSeedreamContextFromImageGen(ig, prompt, 1, true),
       });
     } else {
       const refUrl = await resolveProductImageUrl(session.companyId, ig);
@@ -1015,6 +1025,7 @@ async function runProductOnModelGenerate(
         aspectRatio: ig.aspectRatio,
         imageArtistId: ig.imageArtistId,
         quality: ig.imageQuality,
+        seedreamContext: buildSeedreamContextFromImageGen(ig, prompt, refUrls.length),
       });
     }
     const stored = await storeGeneratedImage({

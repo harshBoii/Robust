@@ -5,6 +5,10 @@ import { getAppOrigin } from '@/lib/app-origin';
 
 import { resolveCatalogImageUrl } from './catalog';
 import type { ImageArtistOption, ImageQuality } from './image-artists';
+import {
+  generateSeedreamPrompt,
+  type SeedreamPromptContext,
+} from './seedream-prompt-generator';
 
 const FAL_RUN_BASE = 'https://fal.run';
 
@@ -96,6 +100,7 @@ export async function generateFalSeedreamImage(input: {
   referenceImageUrls?: string[] | null;
   aspectRatio?: string | null;
   quality?: ImageQuality | null;
+  seedreamContext?: SeedreamPromptContext | null;
 }): Promise<{ imageBase64: string }> {
   const imageSize = resolveFalImageSize(input.aspectRatio, input.quality);
   const refUrls = (input.referenceImageUrls ?? []).filter((u) => u?.trim()).map(resolveFalAccessibleUrl);
@@ -107,8 +112,15 @@ export async function generateFalSeedreamImage(input: {
 
   if (!modelId) throw new Error('Fal model is not configured for this artist');
 
+  const seedreamContext: SeedreamPromptContext = {
+    ...(input.seedreamContext ?? {}),
+    draftPrompt: input.prompt,
+    referenceImageCount: refUrls.length,
+  };
+  const refinedPrompt = await generateSeedreamPrompt(seedreamContext);
+
   const payload: Record<string, unknown> = {
-    prompt: finalizeSeedreamPrompt(input.prompt, refUrls.length),
+    prompt: finalizeSeedreamPrompt(refinedPrompt, refUrls.length),
     image_size: imageSize,
     num_images: 1,
     enable_safety_checker: true,
