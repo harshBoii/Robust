@@ -1,4 +1,5 @@
 import type { Asset, CreativeFields, GroupModel } from '@/app/components/createAd/types';
+import { isValidMetaLandingUrl } from '@/lib/assistant/landing-url-validation';
 import { defaultCreativeFields } from '@/lib/create-ad/group-model';
 
 export type CreativeCsvTarget =
@@ -209,6 +210,9 @@ export function buildCsvCreativeRowResults(input: {
     else if (!headline) errors.push('Missing headline');
     if (!mapping.landingUrl) errors.push('Landing URL column not mapped');
     else if (!landingUrl) errors.push('Missing landing URL');
+    else if (!isValidMetaLandingUrl(landingUrl)) {
+      errors.push('Landing URL must be a real https URL (not "CTA" or other placeholders)');
+    }
 
     const asset = mediaVal ? matchMediaValue(mediaVal, assets) : null;
     const mediaHint = mediaVal || undefined;

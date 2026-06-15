@@ -1,5 +1,9 @@
 import 'server-only';
 
+import {
+  isValidMetaLandingUrl,
+  normalizeMetaLandingUrl,
+} from '@/lib/assistant/landing-url-validation';
 import { toMetaPacingTypeParam } from '@/lib/meta/adset-preset-meta';
 import {
   logMetaCreativeProgress,
@@ -1032,6 +1036,13 @@ export async function createAdCreative(
     pixelIds?: string[] | null;
   } & MetaGraphAuth,
 ): Promise<{ id: string }> {
+  if (!isValidMetaLandingUrl(input.landingUrl)) {
+    throw new Error(
+      `Invalid landing URL for Meta creative: "${input.landingUrl}" — must be a real https:// destination, not a placeholder like CTA`,
+    );
+  }
+  const landingUrl = normalizeMetaLandingUrl(input.landingUrl);
+
   // For simplicity, use object_story_spec with link_data (image) or video_data (video).
   const objectStorySpec: Record<string, unknown> = {
     page_id: input.fbPageId,
@@ -1039,11 +1050,11 @@ export async function createAdCreative(
 
   if (input.imageHash) {
     objectStorySpec.link_data = {
-      link: input.landingUrl,
+      link: landingUrl,
       message: input.primaryText,
       name: input.headline,
       description: input.description ?? undefined,
-      call_to_action: { type: input.ctaType, value: { link: input.landingUrl } },
+      call_to_action: { type: input.ctaType, value: { link: landingUrl } },
       image_hash: input.imageHash,
     };
   } else if (input.videoId) {
@@ -1058,7 +1069,7 @@ export async function createAdCreative(
       image_url: imageUrl,
       message: input.primaryText,
       title: input.headline,
-      call_to_action: { type: input.ctaType, value: { link: input.landingUrl } },
+      call_to_action: { type: input.ctaType, value: { link: landingUrl } },
     };
   } else {
     throw new Error('Missing creative media (imageHash or videoId)');

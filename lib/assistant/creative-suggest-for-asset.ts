@@ -16,6 +16,10 @@ import {
   validateCreativePartial,
   validateFullOrPartial,
 } from '@/lib/assistant/validate-with-retry';
+import {
+  isValidMetaLandingUrl,
+  normalizeMetaLandingUrl,
+} from '@/lib/assistant/landing-url-validation';
 import { prisma } from '@/lib/prisma';
 
 export type CreativeSuggestForAssetInput = {
@@ -44,6 +48,11 @@ function parseJson(content: string): unknown {
   }
 }
 
+function sanitizeLandingUrl(raw: string | undefined): string | undefined {
+  if (!raw?.trim() || !isValidMetaLandingUrl(raw)) return undefined;
+  return normalizeMetaLandingUrl(raw);
+}
+
 export async function creativeSuggestForAsset(
   input: CreativeSuggestForAssetInput,
 ): Promise<CreativeSuggestResult> {
@@ -54,23 +63,42 @@ export async function creativeSuggestForAsset(
 
   await assertCreativeSuggestAllowed(companyId);
 
-  const asset = await prisma.asset.findFirst({
-    where: { id: assetId, companyId },
-    select: {
-      id: true,
-      assetType: true,
-      streamId: true,
-      duration: true,
-      thumbnailUrl: true,
-    },
-  });
+  const [asset, company, primaryOffering] = await Promise.all([
+    prisma.asset.findFirst({
+      where: { id: assetId, companyId },
+      select: {
+        id: true,
+        assetType: true,
+        streamId: true,
+        duration: true,
+        thumbnailUrl: true,
+      },
+    }),
+    prisma.company.findUnique({
+      where: { id: companyId },
+      select: { website: true },
+    }),
+    prisma.offering.findFirst({
+      where: { companyId, isActive: true },
+      orderBy: [{ isPrimary: 'desc' }, { name: 'asc' }],
+      select: { url: true },
+    }),
+  ]);
 
   if (!asset) {
     throw new Error('Asset not found');
   }
 
+  const brandLandingUrl =
+    [primaryOffering?.url, company?.website].find((u) => isValidMetaLandingUrl(u)) ?? undefined;
+
   const system = buildCreativeSuggestSystemPrompt();
-  const userText = buildCreativeSuggestUserText({ adType, tone, groupLabel });
+  const userText = buildCreativeSuggestUserText({
+    adType,
+    tone,
+    groupLabel,
+    brandLandingUrl,
+  });
 
   let imageUrls: string[] = [];
   if (asset.assetType === AssetType.VIDEO) {
@@ -109,7 +137,7 @@ export async function creativeSuggestForAsset(
         primaryText: result.data.primaryText,
         description: result.data.description,
         ctaType: result.data.ctaType,
-        landingUrl: result.data.landingUrl,
+        landingUrl: sanitizeLandingUrl(result.data.landingUrl) ?? sanitizeLandingUrl(brandLandingUrl),
         rationale: result.data.rationale,
         partial: false,
       };
@@ -123,7 +151,7 @@ export async function creativeSuggestForAsset(
           primaryText: part.data.primaryText ?? '',
           description: part.data.description,
           ctaType: part.data.ctaType ?? 'LEARN_MORE',
-          landingUrl: part.data.landingUrl,
+          landingUrl: sanitizeLandingUrl(part.data.landingUrl) ?? sanitizeLandingUrl(brandLandingUrl),
           rationale:
             typeof (raw as Record<string, unknown>)?.rationale === 'string'
               ? ((raw as Record<string, unknown>).rationale as string)

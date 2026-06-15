@@ -3,6 +3,7 @@ import 'server-only';
 import { prisma } from '@/lib/prisma';
 import { createAd } from '@/lib/meta/client';
 import { requireMetaAdAccountId } from '@/lib/meta/integration-token';
+import { resolveCreativeLandingUrl } from '@/lib/meta/resolve-creative-landing-url';
 import { storeAdCreativeForAsset } from '@/lib/meta/store-ad-creative';
 
 export type ProcessedPublishJob = {
@@ -117,10 +118,29 @@ export async function processPublishJobs(input: {
       if (!adSet) throw new Error('Ad set missing');
       if (!asset) throw new Error('Asset missing');
 
+      const [company, primaryOffering] = await Promise.all([
+        prisma.company.findUnique({
+          where: { id: job.companyId },
+          select: { website: true },
+        }),
+        prisma.offering.findFirst({
+          where: { companyId: job.companyId, isActive: true },
+          orderBy: [{ isPrimary: 'desc' }, { name: 'asc' }],
+          select: { url: true },
+        }),
+      ]);
+
       const headline =
         job.headlineOverride ?? adPreset?.headline ?? asset.title ?? 'Robust Ad';
-      const landingUrl =
-        job.landingUrlOverride ?? adPreset?.landingPageUrl ?? 'https://example.com';
+      const landingUrl = resolveCreativeLandingUrl(
+        [
+          job.landingUrlOverride,
+          adPreset?.landingPageUrl,
+          primaryOffering?.url,
+          company?.website,
+        ],
+        { fallback: 'https://example.com' },
+      );
       const primaryText = job.primaryTextOverride ?? asset.title ?? '—';
       const description = job.descriptionOverride ?? null;
       const ctaType = job.ctaTypeOverride ?? 'LEARN_MORE';

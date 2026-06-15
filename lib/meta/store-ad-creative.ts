@@ -3,6 +3,7 @@ import 'server-only';
 import { GetObjectCommand } from '@aws-sdk/client-s3';
 
 import { requireMetaAdAccountId, requireMetaFbPageId } from '@/lib/meta/integration-token';
+import { resolveCreativeLandingUrl } from '@/lib/meta/resolve-creative-landing-url';
 import { prisma } from '@/lib/prisma';
 import { getR2PublicObjectUrl, r2 } from '@/lib/cloudfare/r2';
 import { createAdCreative, uploadAdImage, uploadAdVideo } from '@/lib/meta/client';
@@ -167,6 +168,23 @@ export async function storeAdCreativeForAsset(
 
   const pixelIds = input.pixelId?.trim() ? [input.pixelId.trim()] : [];
 
+  const [company, primaryOffering] = await Promise.all([
+    prisma.company.findUnique({
+      where: { id: input.companyId },
+      select: { website: true },
+    }),
+    prisma.offering.findFirst({
+      where: { companyId: input.companyId, isActive: true },
+      orderBy: [{ isPrimary: 'desc' }, { name: 'asc' }],
+      select: { url: true },
+    }),
+  ]);
+
+  const landingUrl = resolveCreativeLandingUrl(
+    [input.landingUrl, primaryOffering?.url, company?.website],
+    { fallback: 'https://example.com' },
+  );
+
   const creative = await createAdCreative({
     companyId: input.companyId,
     adAccountId,
@@ -175,7 +193,7 @@ export async function storeAdCreativeForAsset(
     primaryText: input.primaryText,
     description: input.description,
     ctaType: input.ctaType,
-    landingUrl: input.landingUrl,
+    landingUrl,
     imageHash,
     videoId,
     videoThumbnailUrl: metaVideoThumbnailUrl,
@@ -194,7 +212,7 @@ export async function storeAdCreativeForAsset(
       primaryText: input.primaryText,
       description: input.description ?? null,
       ctaType: input.ctaType,
-      landingUrl: input.landingUrl,
+      landingUrl,
       thumbnailUrl: metaVideoThumbnailUrl ?? asset.thumbnailUrl,
       aiGenerated: false,
       compliancePassed: false,

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { BILLING_EVENT_OPTIONS, OPTIMIZATION_GOAL_OPTIONS } from '@/lib/meta/adset-preset-meta';
+import { isValidMetaLandingUrl } from '@/lib/assistant/landing-url-validation';
 
 import {
   BID_STRATEGY_OPTIONS,
@@ -20,6 +21,11 @@ const budgetString = z
   .union([z.string(), z.number()])
   .transform((v) => (typeof v === 'number' ? String(Math.floor(v)) : v.trim()))
   .refine((s) => /^\d+$/.test(s), 'budget must be numeric string');
+
+const metaLandingUrl = z
+  .string()
+  .trim()
+  .refine((v) => isValidMetaLandingUrl(v), 'landingUrl must be a real https URL, not a placeholder like CTA');
 
 export const campaignPresetPatchSchema = z.object({
   name: z.string().max(120).optional(),
@@ -66,7 +72,7 @@ export const creativeSuggestResponseSchema = z.object({
   primaryText: z.string().min(1).max(2000),
   description: z.string().max(500).optional(),
   ctaType: z.enum(CTA_OPTIONS),
-  landingUrl: z.string().url().optional(),
+  landingUrl: metaLandingUrl.optional(),
   rationale: z.string(),
 });
 
@@ -76,7 +82,7 @@ export const creativeRefinePatchSchema = z.object({
   primaryText: z.string().min(1).max(2000).optional(),
   description: z.string().max(500).optional(),
   ctaType: z.enum(CTA_OPTIONS).optional(),
-  landingUrl: z.string().url().optional(),
+  landingUrl: metaLandingUrl.optional(),
   rationale: z.string().optional(),
 });
 

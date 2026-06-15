@@ -3,6 +3,11 @@ import 'server-only';
 import type { GroupModel } from '@/app/components/createAd/types';
 import { buildCreativeApplyPatch } from '@/lib/assistant/merge-preset-patch';
 import { creativeSuggestForAsset } from '@/lib/assistant/creative-suggest-for-asset';
+import {
+  isValidMetaLandingUrl,
+  normalizeMetaLandingUrl,
+  resolveCreativeLandingUrl,
+} from '@/lib/assistant/landing-url-validation';
 import { prisma } from '@/lib/prisma';
 
 /**
@@ -22,14 +27,22 @@ export async function fillGroupsWithCreativeSuggestions(input: {
   const tone = input.tone?.trim() || 'general';
   const pixelId = input.pixelId?.trim() || '';
 
-  let fallbackUrl = input.fallbackLandingUrl?.trim() || '';
-  if (!fallbackUrl) {
-    const company = await prisma.company.findUnique({
+  const [company, primaryOffering] = await Promise.all([
+    prisma.company.findUnique({
       where: { id: input.companyId },
       select: { website: true },
-    });
-    fallbackUrl = company?.website?.trim() || 'https://example.com';
-  }
+    }),
+    prisma.offering.findFirst({
+      where: { companyId: input.companyId, isActive: true },
+      orderBy: [{ isPrimary: 'desc' }, { name: 'asc' }],
+      select: { url: true },
+    }),
+  ]);
+
+  const fallbackUrl = resolveCreativeLandingUrl(
+    [input.fallbackLandingUrl, primaryOffering?.url, company?.website],
+    { fallback: 'https://example.com' },
+  );
 
   const nextGroups = input.groups.map((g) => ({ ...g, creative: { ...g.creative } }));
 
@@ -45,13 +58,19 @@ export async function fillGroupsWithCreativeSuggestions(input: {
       groupLabel: g.label,
     });
 
+    const suggestedUrl = suggestion.landingUrl?.trim();
+    const landingUrl =
+      suggestedUrl && isValidMetaLandingUrl(suggestedUrl)
+        ? normalizeMetaLandingUrl(suggestedUrl)
+        : fallbackUrl;
+
     const patch = buildCreativeApplyPatch(
       {
         headline: suggestion.headline,
         primaryText: suggestion.primaryText,
         description: suggestion.description,
         ctaType: suggestion.ctaType,
-        landingUrl: suggestion.landingUrl?.trim() || fallbackUrl,
+        landingUrl,
       },
       [],
     );

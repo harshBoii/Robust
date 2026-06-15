@@ -8,8 +8,8 @@ Return ONLY valid JSON:
   "headline": "optional - only if changing",
   "primaryText": "optional - only if changing",
   "description": "optional",
-  "ctaType": "optional - one of ${CTA_OPTIONS.join(', ')}",
-  "landingUrl": "optional https URL",
+  "ctaType": "optional - one of ${CTA_OPTIONS.join(', ')} — button type, NOT a URL",
+  "landingUrl": "optional https destination URL — never use CTA or button labels as the URL",
   "rationale": "brief note on changes"
 }
 
