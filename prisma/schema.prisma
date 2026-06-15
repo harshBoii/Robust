@@ -84,8 +84,7 @@ model Company {
   rivals                  CompanyRival[] @relation("CompanyRivals")
   rivalOf                 CompanyRival[] @relation("CompanyRivalTargets")
   shopifyBlogChannels     ShopifyBlogChannel[]
-
-
+  metaAdsAutoConfig       MetaAdsAutoConfig?
 
   @@index([slug])
   @@map("companies")
@@ -1329,6 +1328,31 @@ model CampaignPreset {
 }
 
 // ================================================================
+// META ADS AUTO MODE
+// ================================================================
+
+model MetaAdsAutoConfig {
+  id                    String   @id @default(cuid())
+  companyId             String   @unique @map("company_id")
+  autoModeDefault       Boolean  @default(false) @map("auto_mode_default")
+  allowNewCampaign      Boolean  @default(true) @map("allow_new_campaign")
+  allowNewAdset         Boolean  @default(true) @map("allow_new_adset")
+  allowStaticGeneration Boolean  @default(true) @map("allow_static_generation")
+  /// auto_generate | manual_selection
+  mediaMode             String   @default("auto_generate") @map("media_mode") @db.VarChar(32)
+  defaultArtistId       String?  @map("default_artist_id") @db.VarChar(32)
+  autoPost              Boolean  @default(false) @map("auto_post")
+  defaultDailyBudget    Int?     @map("default_daily_budget")
+  defaultObjective      String?  @map("default_objective") @db.VarChar(64)
+  createdAt             DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt             DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@map("meta_ads_auto_configs")
+}
+
+// ================================================================
 // SCHEDULING & AUTOMATION
 // ================================================================
 
@@ -2173,6 +2197,7 @@ enum AutoActionType {
 }
 
 enum PublishJobStatus {
+  DRAFT
   QUEUED
   PROCESSING
   PUBLISHED

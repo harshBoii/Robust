@@ -453,6 +453,7 @@ const SecondarySidebarContent = ({
           <SecondaryNavItem icon={Megaphone}         label="Post to Meta"     href="/manager/post" />
           <SecondaryNavItem icon={Search}            label="Post to Google"   href="/manager/post-google" />
           <SecondaryNavItem icon={History}           label="Ad History"       href="/manager/history" />
+          <SecondaryNavItem icon={CalendarClock}     label="Pending Ads"      href="/manager/pending" />
           <SecondaryNavItem icon={PauseCircle}       label="Auto-Pause Rules" href="/manager/rules" />
           <SecondaryNavItem icon={SlidersHorizontal} label="Presets"          href="/manager/presets" />
 

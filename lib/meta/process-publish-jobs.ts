@@ -316,3 +316,108 @@ export async function enqueueBulkPublish(input: {
 
   return jobs.map((j) => j.id);
 }
+
+export type DraftPublishJobInput = {
+  campaignId: string;
+  adSetId: string;
+  assetId: string;
+  metaCreativeDbId: string;
+  headline: string;
+  primaryText: string;
+  description?: string | null;
+  landingUrl: string;
+  ctaType: string;
+  pixelId?: string | null;
+  groupKey?: string | null;
+};
+
+export async function enqueueDraftJobs(input: {
+  companyId: string;
+  jobs: DraftPublishJobInput[];
+}): Promise<string[]> {
+  if (!input.jobs.length) return [];
+
+  const integration = await prisma.metaIntegration.findUnique({
+    where: { companyId: input.companyId },
+    select: { id: true },
+  });
+  if (!integration) throw new Error('Meta not connected');
+
+  const campaignIds = new Set(input.jobs.map((j) => j.campaignId));
+  if (campaignIds.size !== 1) throw new Error('All draft jobs must share one campaign');
+
+  const campaignId = input.jobs[0]!.campaignId;
+  const campaign = await prisma.metaCampaign.findFirst({
+    where: { id: campaignId, metaIntegrationId: integration.id },
+    select: { id: true },
+  });
+  if (!campaign) throw new Error('Campaign not found');
+
+  const jobs = await prisma.$transaction(
+    input.jobs.map((j) =>
+      prisma.adPublishJob.create({
+        data: {
+          companyId: input.companyId,
+          metaIntegrationId: integration.id,
+          campaignId: j.campaignId,
+          adSetId: j.adSetId,
+          assetId: j.assetId,
+          metaCreativeDbId: j.metaCreativeDbId,
+          status: 'DRAFT',
+          headlineOverride: j.headline,
+          primaryTextOverride: j.primaryText || j.headline,
+          descriptionOverride: j.description ?? null,
+          landingUrlOverride: j.landingUrl,
+          ctaTypeOverride: j.ctaType,
+          pixelIdOverride: j.pixelId ?? null,
+          groupKey: j.groupKey ?? null,
+        },
+        select: { id: true },
+      }),
+    ),
+  );
+
+  return jobs.map((j) => j.id);
+}
+
+export async function promoteDraftJobToQueued(input: {
+  companyId: string;
+  jobId: string;
+  scheduledAt?: string | null;
+}): Promise<void> {
+  const scheduledAt = input.scheduledAt ? new Date(input.scheduledAt) : null;
+  if (scheduledAt && !Number.isFinite(scheduledAt.getTime())) {
+    throw new Error('Invalid scheduledAt');
+  }
+
+  const job = await prisma.adPublishJob.findFirst({
+    where: { id: input.jobId, companyId: input.companyId, status: 'DRAFT' },
+    select: { id: true },
+  });
+  if (!job) throw new Error('Draft job not found');
+
+  const schedule =
+    scheduledAt != null
+      ? await prisma.adSchedule.create({
+          data: {
+            companyId: input.companyId,
+            scheduledAt,
+            status: 'PENDING',
+          },
+          select: { id: true },
+        })
+      : null;
+
+  await prisma.adPublishJob.update({
+    where: { id: job.id },
+    data: {
+      status: 'QUEUED',
+      scheduledAt,
+      scheduleId: schedule?.id ?? null,
+    },
+  });
+}
+
+export async function runPublishWorkerForCompany(companyId: string, limit = 10) {
+  return processPublishJobs({ limit, companyId });
+}

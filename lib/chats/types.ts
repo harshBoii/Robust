@@ -87,6 +87,12 @@ export type WorkflowState = {
   agentMemory?: string;
   /** Shown in UI thinking panel only — not inline in messages. */
   lastOperationError?: string | null;
+  /** When true, ADS path runs the automated pipeline instead of widget gates. */
+  autoMode?: boolean;
+  /** Idempotency key for an in-flight auto pipeline run. */
+  autoPipelineRunId?: string;
+  /** Meta creative DB ids per asset from auto pipeline step 3. */
+  assetMetaCreativeIds?: Record<string, string>;
 };
 
 export type AdWidgetType =

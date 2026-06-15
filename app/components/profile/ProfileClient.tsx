@@ -501,12 +501,20 @@ export default function ProfileClient({ profile }: ProfileClientProps) {
           icon={SiMeta}
           iconClassName="text-[#0081FB]"
           action={
-            <Link
-              href="/profile/integration"
-              className="font-ui text-[10px] font-medium text-muted-foreground hover:text-primary"
-            >
-              Manage
-            </Link>
+            <div className="flex items-center gap-3">
+              <Link
+                href="/profile/ads-automation"
+                className="font-ui text-[10px] font-medium text-muted-foreground hover:text-primary"
+              >
+                Ads Automation
+              </Link>
+              <Link
+                href="/profile/integration"
+                className="font-ui text-[10px] font-medium text-muted-foreground hover:text-primary"
+              >
+                Manage
+              </Link>
+            </div>
           }
         >
           {profile.meta ? (

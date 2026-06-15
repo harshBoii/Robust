@@ -205,6 +205,7 @@ export async function handleChatMessage(
   const step = session.currentStep as ChatWorkflowStep;
   const priorMessages = (session.messages ?? []).map(serializeMessage);
   const pathType = sessionPathType(session);
+  let adsPathActive = pathType === 'ADS';
 
   if (!session.title || session.title === 'New chat') {
     const title = text.trim().slice(0, 80) || 'Ad chat';
@@ -298,6 +299,30 @@ export async function handleChatMessage(
       workflowState: nextState,
     });
     state = nextState;
+    adsPathActive = true;
+  }
+
+  const { getMetaAdsAutoConfig } = await import('@/lib/meta-ads-auto/config');
+  const autoConfig = await getMetaAdsAutoConfig(companyId);
+  const autoModeActive = state.autoMode ?? autoConfig.autoModeDefault;
+
+  if (
+    autoModeActive &&
+    !state.autoPipelineRunId &&
+    adsPathActive &&
+    session.status !== 'COMPLETED' &&
+    step !== 'done'
+  ) {
+    const userRow = intentUserRow ?? (await userMsg(sessionId, text));
+    const { runAutoAdsPipeline } = await import('@/lib/chats/auto-ads-pipeline');
+    return runAutoAdsPipeline({
+      sessionId,
+      companyId,
+      userText: text,
+      state: { ...state, autoMode: true },
+      config: autoConfig,
+      userMessageRow: userRow,
+    });
   }
 
   const emptyPickerResult = await tryHandleAdsEmptyPickerTurn(sessionId, companyId, text);
