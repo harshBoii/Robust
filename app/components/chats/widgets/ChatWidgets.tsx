@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import MetaAdPreviewCard from '@/app/components/createAd/MetaAdPreviewCard';
+import MetaAdPreviewGallery from '@/app/components/createAd/MetaAdPreviewGallery';
 import type { GroupModel } from '@/app/components/createAd/types';
 import { PresetFieldPreviewCard } from '@/app/components/assistant/FieldPreviewCard';
 import type { AdsetPreset, CampaignPreset } from '@/app/components/manager/presets/types';
@@ -729,42 +729,41 @@ export function CreativeAiWidget({
 export function AdPreviewWidget({
   groups,
   onAction,
+  readOnly = false,
 }: {
   groups?: GroupModel[];
   onAction: ChatWidgetDispatch;
+  readOnly?: boolean;
 }) {
-  const included = useMemo(() => (groups ?? []).filter((g) => g.included), [groups]);
+  const included = useMemo(() => (groups ?? []).filter((x) => x.included), [groups]);
+
+  if (!included.length) {
+    return (
+      <p className="text-[13px] text-muted-foreground">No ad groups to preview yet.</p>
+    );
+  }
 
   return (
     <div className="mt-2 space-y-3">
-      <div className="grid gap-3 lg:grid-cols-2">
-        {included.map((g) => {
-          const asset = g.assets[0];
-          if (!asset) return null;
-          return (
-            <div key={g.bucketId} className="space-y-1">
-              <p className="text-xs font-semibold text-foreground">{g.label}</p>
-              <MetaAdPreviewCard creative={g.creative} asset={asset} />
-            </div>
-          );
-        })}
-      </div>
-      <div className="flex gap-2">
-        <button
-          type="button"
-          onClick={() => void onAction('preview.approved', {}, 'Approve ads')}
-          className="rounded-full bg-primary px-4 py-1.5 text-[13px] font-medium text-primary-foreground"
-        >
-          Approve preview
-        </button>
-        <button
-          type="button"
-          onClick={() => void onAction('preview.changes', {}, 'Request changes')}
-          className="rounded-lg border border-border/50 px-3 py-1.5 text-xs"
-        >
-          Request changes
-        </button>
-      </div>
+      <MetaAdPreviewGallery groups={included} />
+      {!readOnly ? (
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => void onAction('preview.approved', {}, 'Approve ads')}
+            className="rounded-full bg-primary px-4 py-1.5 text-[13px] font-medium text-primary-foreground"
+          >
+            Approve preview
+          </button>
+          <button
+            type="button"
+            onClick={() => void onAction('preview.changes', {}, 'Request changes')}
+            className="rounded-lg border border-border/50 px-3 py-1.5 text-xs"
+          >
+            Request changes
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }

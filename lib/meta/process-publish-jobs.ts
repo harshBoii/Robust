@@ -79,7 +79,7 @@ export async function processPublishJobs(input: {
         }),
         prisma.metaCampaign.findUnique({
           where: { id: job.campaignId },
-          select: { id: true, metaCampaignId: true, name: true },
+          select: { id: true, metaCampaignId: true, name: true, objective: true },
         }),
         prisma.metaAdSet.findUnique({
           where: { id: job.adSetId },
@@ -175,6 +175,7 @@ export async function processPublishJobs(input: {
           ctaType,
           pixelId: pixelIds[0] ?? null,
           metaCampaignId: campaign.id,
+          adType: campaign.objective ?? undefined,
         });
         creativeDbId = stored.id;
         metaCreativeId = stored.metaCreativeId;

@@ -971,14 +971,6 @@ export default function PostToMetaClient({ companyId }: { companyId: string }) {
       if (!group) return;
 
       const { headline, primaryText, description, landingUrl, ctaType, pixelId } = group.creative;
-      if (!headline.trim() || !landingUrl.trim()) {
-        toast.push({
-          kind: 'error',
-          title: 'Missing copy',
-          message: 'Headline and landing URL are required before creating an ad creative.',
-        });
-        return;
-      }
 
       setGroups((prev) =>
         prev.map((g) =>
@@ -1066,14 +1058,6 @@ export default function PostToMetaClient({ companyId }: { companyId: string }) {
       if (!group) return;
 
       const { headline, primaryText, description, landingUrl, ctaType, pixelId } = group.creative;
-      if (!headline.trim() || !landingUrl.trim()) {
-        toast.push({
-          kind: 'error',
-          title: 'Missing copy',
-          message: 'Fill in headline and landing URL before creating ad creatives.',
-        });
-        return;
-      }
 
       if (group.selectedAssetIds.length === 0) {
         toast.push({

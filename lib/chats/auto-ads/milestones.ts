@@ -71,7 +71,8 @@ export function currentAutoPipelineMilestone(
 }
 
 export function isAutoAdsBusy(workflowState: WorkflowState): boolean {
-  return workflowState.autoMode === true || Boolean(workflowState.autoPipelineRunId);
+  if (workflowState.autoMode !== true && !workflowState.autoPipelineRunId) return false;
+  return !isMilestoneDone(workflowState, 'finish');
 }
 
 export function resolveAutoPipelineStatusMessages(

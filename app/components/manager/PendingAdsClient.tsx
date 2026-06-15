@@ -2,17 +2,21 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { Calendar, Loader2, Send } from 'lucide-react';
+
+import { MetaAdPreviewSingle } from '@/app/components/createAd/MetaAdPreviewGallery';
+import type { Asset, CreativeFields } from '@/app/components/createAd/types';
 import { useToast } from '@/app/components/UI/ToastProvider';
 
 type PendingRow = {
   id: string;
   status: string;
   createdAt: string;
-  thumbnailUrl: string | null;
   headline: string | null;
   campaignName: string | null;
   adSetName: string | null;
   assetId: string;
+  creative: CreativeFields;
+  asset: Asset;
 };
 
 async function json<T>(res: Response): Promise<T> {
@@ -77,11 +81,11 @@ export default function PendingAdsClient() {
   };
 
   return (
-    <div className="mx-auto max-w-4xl px-4 py-8">
+    <div className="mx-auto max-w-5xl px-4 py-8">
       <div className="mb-6">
         <h1 className="font-display text-2xl font-semibold text-foreground">Pending Ads</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Drafted ads from auto mode — Meta creatives are uploaded. Publish now or schedule.
+          Drafted ads from auto mode — review the preview, then publish or schedule.
         </p>
       </div>
 
@@ -96,37 +100,25 @@ export default function PendingAdsClient() {
           No drafted ads. Turn on auto mode in chat with auto-post off to draft ads here.
         </p>
       ) : (
-        <ul className="space-y-3">
+        <div className="grid gap-6 lg:grid-cols-2">
           {rows.map((row) => (
-            <li
+            <article
               key={row.id}
-              className="flex flex-col gap-3 rounded-xl border border-border/50 bg-card/40 p-4 sm:flex-row sm:items-center"
+              className="flex flex-col gap-4 rounded-xl border border-border/50 bg-card/40 p-4"
             >
-              <div className="flex min-w-0 flex-1 items-center gap-3">
-                {row.thumbnailUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={row.thumbnailUrl}
-                    alt=""
-                    className="h-16 w-16 shrink-0 rounded-lg object-cover"
-                  />
-                ) : (
-                  <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-lg bg-muted text-xs text-muted-foreground">
-                    Ad
-                  </div>
-                )}
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-medium text-foreground">
-                    {row.headline || 'Untitled ad'}
-                  </p>
-                  <p className="truncate text-xs text-muted-foreground">
-                    {[row.campaignName, row.adSetName].filter(Boolean).join(' · ') ||
-                      'Meta campaign'}
-                  </p>
-                  <p className="text-[11px] text-muted-foreground/80">
-                    {new Date(row.createdAt).toLocaleString()}
-                  </p>
-                </div>
+              <MetaAdPreviewSingle
+                creative={row.creative}
+                asset={row.asset}
+                label={row.headline || row.creative.headline || 'Untitled ad'}
+              />
+
+              <div className="space-y-1 border-t border-border/40 pt-3">
+                <p className="text-xs text-muted-foreground">
+                  {[row.campaignName, row.adSetName].filter(Boolean).join(' · ') || 'Meta campaign'}
+                </p>
+                <p className="text-[11px] text-muted-foreground/80">
+                  Drafted {new Date(row.createdAt).toLocaleString()}
+                </p>
               </div>
 
               {scheduleFor === row.id ? (
@@ -154,12 +146,12 @@ export default function PendingAdsClient() {
                   </button>
                 </div>
               ) : (
-                <div className="flex shrink-0 gap-2">
+                <div className="flex gap-2">
                   <button
                     type="button"
                     disabled={busyId === row.id}
                     onClick={() => void act(row.id, 'publish')}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-border/50 px-3 py-2 text-xs font-medium hover:border-primary/40"
+                    className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-border/50 px-3 py-2 text-xs font-medium hover:border-primary/40"
                   >
                     {busyId === row.id ? (
                       <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -175,16 +167,16 @@ export default function PendingAdsClient() {
                       setScheduleFor(row.id);
                       setScheduleAt('');
                     }}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-border/50 px-3 py-2 text-xs font-medium hover:border-primary/40"
+                    className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-border/50 px-3 py-2 text-xs font-medium hover:border-primary/40"
                   >
                     <Calendar className="h-3.5 w-3.5" />
                     Schedule
                   </button>
                 </div>
               )}
-            </li>
+            </article>
           ))}
-        </ul>
+        </div>
       )}
     </div>
   );

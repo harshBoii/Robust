@@ -95,7 +95,11 @@ export function ChatWidgetRenderer({
   if (!widgetType) return null;
 
   const payload = (widgetPayload ?? {}) as Record<string, unknown>;
-  const groups = (workflowState.groups ?? payload.groups) as GroupModel[] | undefined;
+  const groups = (
+    widgetType === 'adPreview'
+      ? (payload.groups as GroupModel[] | undefined) ?? workflowState.groups
+      : workflowState.groups ?? payload.groups
+  ) as GroupModel[] | undefined;
   const active = isWidgetActive(widgetType, currentStep, workflowState);
 
   if (widgetType === 'mediaAnalyzing') {
@@ -240,7 +244,13 @@ export function ChatWidgetRenderer({
         />
       );
     case 'adPreview':
-      return <AdPreviewWidget groups={groups} onAction={onAction} />;
+      return (
+        <AdPreviewWidget
+          groups={groups}
+          onAction={onAction}
+          readOnly={Boolean(payload.readOnly)}
+        />
+      );
     case 'publishSchedule':
       return <PublishScheduleWidget onAction={onAction} />;
     case 'done':

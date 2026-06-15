@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 
+import type { Asset, CreativeFields } from '@/app/components/createAd/types';
 import { getSession } from '@/lib/auth/session';
 import { prisma } from '@/lib/prisma';
 import {
@@ -13,12 +14,32 @@ export type PendingRow = {
   id: string;
   status: string;
   createdAt: string;
-  thumbnailUrl: string | null;
   headline: string | null;
   campaignName: string | null;
   adSetName: string | null;
   assetId: string;
+  creative: CreativeFields;
+  asset: Asset;
 };
+
+function buildCreativeFields(input: {
+  headlineOverride: string | null;
+  primaryTextOverride: string | null;
+  descriptionOverride: string | null;
+  landingUrlOverride: string | null;
+  ctaTypeOverride: string | null;
+  pixelIdOverride: string | null;
+  assetTitle: string;
+}): CreativeFields {
+  return {
+    headline: input.headlineOverride?.trim() || input.assetTitle || 'Untitled ad',
+    primaryText: input.primaryTextOverride?.trim() || input.assetTitle || '—',
+    description: input.descriptionOverride?.trim() || '',
+    landingUrl: input.landingUrlOverride?.trim() || '',
+    ctaType: input.ctaTypeOverride?.trim() || 'LEARN_MORE',
+    pixelId: input.pixelIdOverride?.trim() || '',
+  };
+}
 
 export async function GET() {
   const session = await getSession();
@@ -44,44 +65,55 @@ export async function GET() {
       createdAt: true,
       assetId: true,
       headlineOverride: true,
-      metaCreativeDbId: true,
+      primaryTextOverride: true,
+      descriptionOverride: true,
+      landingUrlOverride: true,
+      ctaTypeOverride: true,
+      pixelIdOverride: true,
       campaign: { select: { name: true } },
       adSet: { select: { name: true } },
+      asset: {
+        select: {
+          id: true,
+          title: true,
+          filename: true,
+          assetType: true,
+          bulkUploadId: true,
+          assetBucketId: true,
+          thumbnailUrl: true,
+          playbackUrl: true,
+        },
+      },
     },
   });
-
-  const assetIds = jobs.map((j) => j.assetId);
-  const assets = assetIds.length
-    ? await prisma.asset.findMany({
-        where: { id: { in: assetIds } },
-        select: { id: true, thumbnailUrl: true },
-      })
-    : [];
-  const thumbByAsset = new Map(assets.map((a) => [a.id, a.thumbnailUrl]));
-
-  const creativeIds = jobs
-    .map((j) => j.metaCreativeDbId)
-    .filter((id): id is string => Boolean(id));
-  const creatives = creativeIds.length
-    ? await prisma.metaCreative.findMany({
-        where: { id: { in: creativeIds } },
-        select: { id: true, thumbnailUrl: true },
-      })
-    : [];
-  const thumbByCreative = new Map(creatives.map((c) => [c.id, c.thumbnailUrl]));
 
   const rows: PendingRow[] = jobs.map((j) => ({
     id: j.id,
     status: j.status,
     createdAt: j.createdAt.toISOString(),
-    thumbnailUrl:
-      (j.metaCreativeDbId ? thumbByCreative.get(j.metaCreativeDbId) : null) ??
-      thumbByAsset.get(j.assetId) ??
-      null,
     headline: j.headlineOverride,
     campaignName: j.campaign?.name ?? null,
     adSetName: j.adSet?.name ?? null,
     assetId: j.assetId,
+    creative: buildCreativeFields({
+      headlineOverride: j.headlineOverride,
+      primaryTextOverride: j.primaryTextOverride,
+      descriptionOverride: j.descriptionOverride,
+      landingUrlOverride: j.landingUrlOverride,
+      ctaTypeOverride: j.ctaTypeOverride,
+      pixelIdOverride: j.pixelIdOverride,
+      assetTitle: j.asset.title,
+    }),
+    asset: {
+      id: j.asset.id,
+      title: j.asset.title,
+      filename: j.asset.filename,
+      thumbnailUrl: j.asset.thumbnailUrl,
+      playbackUrl: j.asset.playbackUrl,
+      assetType: j.asset.assetType,
+      bulkUploadId: j.asset.bulkUploadId,
+      assetBucketId: j.asset.assetBucketId,
+    },
   }));
 
   return NextResponse.json({ rows });

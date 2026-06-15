@@ -3,7 +3,7 @@ import 'server-only';
 import { GetObjectCommand } from '@aws-sdk/client-s3';
 
 import { requireMetaAdAccountId, requireMetaFbPageId } from '@/lib/meta/integration-token';
-import { resolveCreativeLandingUrl } from '@/lib/meta/resolve-creative-landing-url';
+import { resolveCreativeCopyForAsset } from '@/lib/assistant/resolve-creative-copy-for-asset';
 import { prisma } from '@/lib/prisma';
 import { getR2PublicObjectUrl, r2 } from '@/lib/cloudfare/r2';
 import { createAdCreative, uploadAdImage, uploadAdVideo } from '@/lib/meta/client';
@@ -19,6 +19,9 @@ export type StoreAdCreativeInput = {
   ctaType: string;
   pixelId?: string | null;
   metaCampaignId?: string | null;
+  adType?: string | null;
+  tone?: string | null;
+  groupLabel?: string | null;
 };
 
 export type StoredAdCreative = {
@@ -168,32 +171,28 @@ export async function storeAdCreativeForAsset(
 
   const pixelIds = input.pixelId?.trim() ? [input.pixelId.trim()] : [];
 
-  const [company, primaryOffering] = await Promise.all([
-    prisma.company.findUnique({
-      where: { id: input.companyId },
-      select: { website: true },
-    }),
-    prisma.offering.findFirst({
-      where: { companyId: input.companyId, isActive: true },
-      orderBy: [{ isPrimary: 'desc' }, { name: 'asc' }],
-      select: { url: true },
-    }),
-  ]);
-
-  const landingUrl = resolveCreativeLandingUrl(
-    [input.landingUrl, primaryOffering?.url, company?.website],
-    { fallback: 'https://example.com' },
-  );
+  const copy = await resolveCreativeCopyForAsset({
+    companyId: input.companyId,
+    assetId: input.assetId,
+    adType: input.adType,
+    tone: input.tone,
+    groupLabel: input.groupLabel,
+    headline: input.headline,
+    primaryText: input.primaryText,
+    description: input.description,
+    landingUrl: input.landingUrl,
+    ctaType: input.ctaType,
+  });
 
   const creative = await createAdCreative({
     companyId: input.companyId,
     adAccountId,
     fbPageId,
-    headline: input.headline,
-    primaryText: input.primaryText,
-    description: input.description,
-    ctaType: input.ctaType,
-    landingUrl,
+    headline: copy.headline,
+    primaryText: copy.primaryText,
+    description: copy.description,
+    ctaType: copy.ctaType,
+    landingUrl: copy.landingUrl,
     imageHash,
     videoId,
     videoThumbnailUrl: metaVideoThumbnailUrl,
@@ -208,13 +207,13 @@ export async function storeAdCreativeForAsset(
       metaCreativeId: creative.id,
       imageHash,
       videoId,
-      headline: input.headline,
-      primaryText: input.primaryText,
-      description: input.description ?? null,
-      ctaType: input.ctaType,
-      landingUrl,
+      headline: copy.headline,
+      primaryText: copy.primaryText,
+      description: copy.description,
+      ctaType: copy.ctaType,
+      landingUrl: copy.landingUrl,
       thumbnailUrl: metaVideoThumbnailUrl ?? asset.thumbnailUrl,
-      aiGenerated: false,
+      aiGenerated: copy.aiGenerated,
       compliancePassed: false,
       approvedByUser: true,
       approvedAt: new Date(),

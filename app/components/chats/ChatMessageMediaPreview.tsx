@@ -2,7 +2,10 @@
 
 import { useEffect, useState } from 'react';
 
-import { DownloadImageButton } from './widgets/ImageGenWidgets';
+import MetaAdPreviewGallery, {
+  adPreviewGroupsHaveMedia,
+  parseAdPreviewGroups,
+} from '@/app/components/createAd/MetaAdPreviewGallery';
 import {
   GeoBountyPreviewWidget,
   parseGeoBountyPreviewPayload,
@@ -11,6 +14,7 @@ import {
   GeoRedditTargetPickerWidget,
   parseGeoRedditTargetPickerPayload,
 } from './widgets/GeoRedditTargetPickerWidget';
+import { DownloadImageButton } from './widgets/ImageGenWidgets';
 
 function SingleResultImagePreview({
   imageUrl,
@@ -66,6 +70,16 @@ export function ChatMessageMediaPreview({
   if (!widgetType) return null;
 
   const payload = (widgetPayload ?? {}) as Record<string, unknown>;
+
+  if (widgetType === 'adPreview') {
+    const groups = parseAdPreviewGroups(widgetPayload);
+    if (!adPreviewGroupsHaveMedia(groups)) return null;
+    return (
+      <div className="mb-2">
+        <MetaAdPreviewGallery groups={groups} />
+      </div>
+    );
+  }
 
   if (widgetType === 'imageGenSingleResult') {
     const imageUrl = payload.imageUrl as string | undefined;
@@ -160,6 +174,9 @@ export function messageHasMediaPreview(
 ): boolean {
   if (!widgetType) return false;
   const payload = (widgetPayload ?? {}) as Record<string, unknown>;
+  if (widgetType === 'adPreview') {
+    return adPreviewGroupsHaveMedia(parseAdPreviewGroups(widgetPayload));
+  }
   if (widgetType === 'imageGenSingleResult') {
     return Boolean(payload.imageUrl || payload.assetId);
   }

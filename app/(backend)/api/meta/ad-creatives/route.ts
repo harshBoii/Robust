@@ -58,6 +58,9 @@ type PostBody = {
   ctaType?: unknown;
   pixelId?: unknown;
   campaignId?: unknown;
+  adType?: unknown;
+  tone?: unknown;
+  groupLabel?: unknown;
 };
 
 export async function POST(req: NextRequest) {
@@ -75,27 +78,31 @@ export async function POST(req: NextRequest) {
   const headline = typeof body.headline === 'string' ? body.headline.trim() : '';
   const primaryText = typeof body.primaryText === 'string' ? body.primaryText.trim() : '';
   const landingUrl = typeof body.landingUrl === 'string' ? body.landingUrl.trim() : '';
-  const ctaType = typeof body.ctaType === 'string' ? body.ctaType.trim() : 'LEARN_MORE';
+  const ctaType = typeof body.ctaType === 'string' ? body.ctaType.trim() : '';
   const description =
     typeof body.description === 'string' ? body.description.trim() || null : null;
   const pixelId = typeof body.pixelId === 'string' ? body.pixelId.trim() || null : null;
   const campaignId = typeof body.campaignId === 'string' ? body.campaignId.trim() || null : null;
+  const adType = typeof body.adType === 'string' ? body.adType.trim() || null : null;
+  const tone = typeof body.tone === 'string' ? body.tone.trim() || null : null;
+  const groupLabel = typeof body.groupLabel === 'string' ? body.groupLabel.trim() || null : null;
 
   if (!assetId) return NextResponse.json({ error: 'Missing assetId' }, { status: 400 });
-  if (!headline) return NextResponse.json({ error: 'Missing headline' }, { status: 400 });
-  if (!landingUrl) return NextResponse.json({ error: 'Missing landingUrl' }, { status: 400 });
 
   try {
     const creative = await storeAdCreativeForAsset({
       companyId: session.companyId,
       assetId,
       headline,
-      primaryText: primaryText || headline,
+      primaryText,
       description,
       landingUrl,
-      ctaType,
+      ctaType: ctaType || 'LEARN_MORE',
       pixelId,
       metaCampaignId: campaignId,
+      adType,
+      tone,
+      groupLabel,
     });
 
     return NextResponse.json({ creative });

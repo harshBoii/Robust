@@ -15,7 +15,7 @@ import {
 import { runPresetChatTurn } from '@/lib/chats/preset-chat-turn';
 import { appendChatMessages, getChatSession, updateChatSession } from '@/lib/chats/repository';
 import { serializeMessage, serializeSession } from '@/lib/chats/serialize';
-import type { OrchestratorResult, SerializedMessage, WorkflowState } from '@/lib/chats/types';
+import type { OrchestratorResult, SerializedMessage, WidgetType, WorkflowState } from '@/lib/chats/types';
 import { getAdAccountPixels } from '@/lib/meta/client';
 import {
   enqueueBulkPublish,
@@ -69,6 +69,23 @@ async function assistantProgress(
 ): Promise<SerializedMessage> {
   const [row] = await appendChatMessages(sessionId, [
     { role: 'ASSISTANT', content },
+  ]);
+  return serializeMessage(row);
+}
+
+async function assistantWidget(
+  sessionId: string,
+  content: string,
+  widgetType: WidgetType,
+  widgetPayload: Record<string, unknown>,
+): Promise<SerializedMessage> {
+  const [row] = await appendChatMessages(sessionId, [
+    {
+      role: 'ASSISTANT',
+      content,
+      widgetType,
+      widgetPayload,
+    },
   ]);
   return serializeMessage(row);
 }
@@ -673,6 +690,12 @@ export async function runAutoAdsPipeline(
           ),
         ),
       );
+      newMessages.push(
+        await assistantWidget(sessionId, 'Here are your ads.', 'adPreview', {
+          groups: filledGroups,
+          readOnly: true,
+        }),
+      );
     } else {
       const draftIds = await enqueueDraftJobs({
         companyId,
@@ -712,6 +735,12 @@ export async function runAutoAdsPipeline(
             `**${draftIds.length}** ad${draftIds.length === 1 ? '' : 's'} drafted with AI copy ready. Meta creatives upload when you publish from [Pending Ads](/manager/pending).`,
           ),
         ),
+      );
+      newMessages.push(
+        await assistantWidget(sessionId, 'Review your drafted ads below.', 'adPreview', {
+          groups: filledGroups,
+          readOnly: true,
+        }),
       );
     }
 

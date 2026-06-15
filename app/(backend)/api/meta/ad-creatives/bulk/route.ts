@@ -74,7 +74,7 @@ export async function POST(req: NextRequest) {
     const headline = typeof raw.headline === 'string' ? raw.headline.trim() : '';
     const primaryText = typeof raw.primaryText === 'string' ? raw.primaryText.trim() : '';
     const landingUrl = typeof raw.landingUrl === 'string' ? raw.landingUrl.trim() : '';
-    const ctaType = typeof raw.ctaType === 'string' ? raw.ctaType.trim() : 'LEARN_MORE';
+    const ctaType = typeof raw.ctaType === 'string' ? raw.ctaType.trim() : '';
     const description =
       typeof raw.description === 'string' ? raw.description.trim() || null : null;
     const pixelId = typeof raw.pixelId === 'string' ? raw.pixelId.trim() || null : null;
@@ -83,24 +83,16 @@ export async function POST(req: NextRequest) {
       results.push({ assetId: '', ok: false, error: 'Missing assetId' });
       continue;
     }
-    if (!headline) {
-      results.push({ assetId, ok: false, error: 'Missing headline' });
-      continue;
-    }
-    if (!landingUrl) {
-      results.push({ assetId, ok: false, error: 'Missing landingUrl' });
-      continue;
-    }
 
     try {
       const creative = await storeAdCreativeForAsset({
         companyId: session.companyId,
         assetId,
         headline,
-        primaryText: primaryText || headline,
+        primaryText,
         description,
         landingUrl,
-        ctaType,
+        ctaType: ctaType || 'LEARN_MORE',
         pixelId,
         metaCampaignId: campaignId,
       });
