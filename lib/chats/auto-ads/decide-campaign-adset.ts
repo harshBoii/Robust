@@ -10,7 +10,7 @@ import type { MetaAdsAutoConfigData } from '@/lib/meta-ads-auto/config';
 
 const staticBriefSchema = z.object({
   prompt: z.string().min(10),
-  variantCount: z.number().int().min(1).max(4).default(2),
+  variantCount: z.number().int().min(1).max(5).default(2),
   aspectRatio: z.enum(['1:1', '16:9', '9:16']).default('1:1'),
   campaignTheme: z.string().optional(),
 });
@@ -22,7 +22,7 @@ export async function decideStaticBrief(input: {
   brandDnaBlock?: string | null;
   brandName?: string | null;
 }): Promise<StaticBrief> {
-  const system = `You plan Meta ad static image generation. Return JSON only with keys: prompt, variantCount (1-4), aspectRatio (1:1|16:9|9:16), campaignTheme (optional short label).`;
+  const system = `You plan Meta ad static image generation. Return JSON only with keys: prompt, variantCount (1-5), aspectRatio (1:1|16:9|9:16), campaignTheme (optional short label). Pick variantCount from the user request (e.g. "3 ads" → 3); default 2 when unclear.`;
 
   const user = [
     `User request: ${input.userText}`,

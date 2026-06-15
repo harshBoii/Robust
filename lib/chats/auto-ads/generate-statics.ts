@@ -8,7 +8,7 @@ import { buildBrandDnaPromptBlock, composeBrandTone, loadBrandDnaContext } from 
 import { storeGeneratedImage } from '@/lib/image-gen/store-generated';
 import type { MetaAdsAutoConfigData } from '@/lib/meta-ads-auto/config';
 import { prisma } from '@/lib/prisma';
-import { loadGroupsForBulk } from '@/lib/chats/load-groups';
+import { buildAutoStaticGroups } from '@/lib/chats/expand-groups-one-ad-per-asset';
 import type { WorkflowState } from '@/lib/chats/types';
 
 import { decideStaticBrief } from './decide-campaign-adset';
@@ -17,6 +17,47 @@ export type GenerateStaticsResult = {
   state: WorkflowState;
   assetIds: string[];
 };
+
+async function generateOneStatic(input: {
+  companyId: string;
+  sessionId: string;
+  prompt: string;
+  aspectRatio: string;
+  imageArtistId: string;
+  index: number;
+  count: number;
+  title: string;
+  label: string;
+}): Promise<string | null> {
+  try {
+    const variantPrompt =
+      input.count > 1
+        ? `${input.prompt}\n\nVariation ${input.index + 1} of ${input.count}.`
+        : input.prompt;
+
+    const { imageBase64 } = await generateImage({
+      prompt: variantPrompt,
+      aspectRatio: input.aspectRatio,
+      imageArtistId: input.imageArtistId,
+    });
+
+    const stored = await storeGeneratedImage({
+      companyId: input.companyId,
+      sessionId: input.sessionId,
+      imageBase64,
+      title: input.count > 1 ? `${input.title} ${input.index + 1}` : input.title,
+      label: input.label,
+    });
+
+    return stored.assetId;
+  } catch (err) {
+    console.error('[auto-ads:generate-statics] variant failed', {
+      index: input.index,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return null;
+  }
+}
 
 export async function generateAutoAdsStatics(input: {
   companyId: string;
@@ -43,24 +84,30 @@ export async function generateAutoAdsStatics(input: {
   ].filter(Boolean);
 
   const prompt = promptParts.join('\n\n');
-  const count = Math.min(4, Math.max(1, brief.variantCount));
-  const assetIds: string[] = [];
+  const count = Math.min(5, Math.max(1, brief.variantCount));
+  const title = brief.campaignTheme ?? 'Auto ad';
+  const label = brief.campaignTheme ?? input.userText.slice(0, 60);
 
-  for (let i = 0; i < count; i++) {
-    const { imageBase64 } = await generateImage({
-      prompt: count > 1 ? `${prompt}\n\nVariation ${i + 1} of ${count}.` : prompt,
-      aspectRatio: brief.aspectRatio,
-      imageArtistId: input.config.defaultArtistId,
-    });
+  const results = await Promise.all(
+    Array.from({ length: count }, (_, i) =>
+      generateOneStatic({
+        companyId: input.companyId,
+        sessionId: input.sessionId,
+        prompt,
+        aspectRatio: brief.aspectRatio,
+        imageArtistId: input.config.defaultArtistId,
+        index: i,
+        count,
+        title,
+        label,
+      }),
+    ),
+  );
 
-    const stored = await storeGeneratedImage({
-      companyId: input.companyId,
-      sessionId: input.sessionId,
-      imageBase64,
-      title: brief.campaignTheme ?? `Auto ad ${i + 1}`,
-      label: brief.campaignTheme ?? input.userText.slice(0, 60),
-    });
-    assetIds.push(stored.assetId);
+  const assetIds = results.filter((id): id is string => Boolean(id));
+
+  if (assetIds.length === 0) {
+    throw new Error('Failed to generate any ad statics. Try again or check image generation settings.');
   }
 
   const bulk = await prisma.bulkUpload.create({
@@ -76,9 +123,22 @@ export async function generateAutoAdsStatics(input: {
     data: { bulkUploadId: bulk.id },
   });
 
-  const { groups } = await loadGroupsForBulk(bulk.id, input.companyId, {
-    runContentAnalyze: true,
+  const assets = await prisma.asset.findMany({
+    where: { id: { in: assetIds }, companyId: input.companyId },
+    select: {
+      id: true,
+      title: true,
+      filename: true,
+      assetType: true,
+      bulkUploadId: true,
+      assetBucketId: true,
+      thumbnailUrl: true,
+      playbackUrl: true,
+    },
+    orderBy: { createdAt: 'asc' },
   });
+
+  const groups = buildAutoStaticGroups(assets, brief.campaignTheme);
 
   const nextState: WorkflowState = {
     ...input.state,

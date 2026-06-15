@@ -4,6 +4,7 @@ import type { AdsetPreset, CampaignPreset } from '@/app/components/manager/prese
 import { normalizeAdsetPreset } from '@/app/components/manager/presets/normalize';
 import type { GroupModel } from '@/app/components/createAd/types';
 import { fillGroupsWithCreativeSuggestions } from '@/lib/chats/fill-creative-suggestions';
+import { expandGroupsToOneAdPerAsset } from '@/lib/chats/expand-groups-one-ad-per-asset';
 import {
   approveAdsetWithRecovery,
   approveCampaignWithRecovery,
@@ -642,10 +643,17 @@ export async function runAutoAdsPipeline(
       ),
     );
 
-    const groups = (state.groups ?? []).map((g) => ({
+    const groupsWithAdSet = (state.groups ?? []).map((g) => ({
       ...g,
       adSetId: adSetDbId,
     }));
+
+    const shouldExpand =
+      config.mediaMode === 'auto_generate' ||
+      groupsWithAdSet.some((g) => g.included && g.assetIds.length > 1);
+    const groups = shouldExpand
+      ? expandGroupsToOneAdPerAsset(groupsWithAdSet)
+      : groupsWithAdSet;
 
     const filledGroups = await fillCreativesForGroups(companyId, groups, state);
     state.groups = filledGroups;
@@ -672,7 +680,9 @@ export async function runAutoAdsPipeline(
         })),
       });
       state.publishJobIds = jobIds;
-      await runPublishWorkerForCompany(companyId);
+      await runPublishWorkerForCompany(companyId, jobIds.length, {
+        concurrency: Math.min(5, jobIds.length),
+      });
 
       await updateChatSession(sessionId, companyId, {
         status: 'COMPLETED',
@@ -699,24 +709,20 @@ export async function runAutoAdsPipeline(
     } else {
       const draftIds = await enqueueDraftJobs({
         companyId,
-        jobs: included.flatMap((g) => {
-          const assetId = g.assetIds[0];
-          if (!assetId) return [];
-          return [
-            {
-              campaignId: campaignDbId,
-              adSetId: adSetDbId,
-              assetId,
-              headline: g.creative.headline,
-              primaryText: g.creative.primaryText,
-              description: g.creative.description,
-              landingUrl: g.creative.landingUrl,
-              ctaType: g.creative.ctaType,
-              pixelId: g.creative.pixelId || null,
-              groupKey: g.bucketId,
-            },
-          ];
-        }),
+        jobs: included.flatMap((g) =>
+          g.assetIds.map((assetId) => ({
+            campaignId: campaignDbId,
+            adSetId: adSetDbId,
+            assetId,
+            headline: g.creative.headline,
+            primaryText: g.creative.primaryText,
+            description: g.creative.description,
+            landingUrl: g.creative.landingUrl,
+            ctaType: g.creative.ctaType,
+            pixelId: g.creative.pixelId || null,
+            groupKey: g.bucketId,
+          })),
+        ),
       });
       state.publishJobIds = draftIds;
 

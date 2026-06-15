@@ -21,34 +21,37 @@ export async function fillGroupsWithCreativeSuggestions(input: {
   const pixelId = input.pixelId?.trim() || '';
 
   const nextGroups = input.groups.map((g) => ({ ...g, creative: { ...g.creative } }));
+  const included = nextGroups.filter((x) => x.included);
 
-  for (const g of nextGroups.filter((x) => x.included)) {
-    const assetId = g.assetIds[0];
-    if (!assetId) continue;
+  await Promise.all(
+    included.map(async (g) => {
+      const assetId = g.assetIds[0];
+      if (!assetId) return;
 
-    const resolved = await resolveCreativeCopyForAsset({
-      companyId: input.companyId,
-      assetId,
-      adType,
-      tone,
-      groupLabel: g.label,
-      headline: g.creative.headline,
-      primaryText: g.creative.primaryText,
-      description: g.creative.description,
-      landingUrl: g.creative.landingUrl || input.fallbackLandingUrl,
-      ctaType: g.creative.ctaType,
-    });
+      const resolved = await resolveCreativeCopyForAsset({
+        companyId: input.companyId,
+        assetId,
+        adType,
+        tone,
+        groupLabel: g.label,
+        headline: g.creative.headline,
+        primaryText: g.creative.primaryText,
+        description: g.creative.description,
+        landingUrl: g.creative.landingUrl || input.fallbackLandingUrl,
+        ctaType: g.creative.ctaType,
+      });
 
-    g.creative = {
-      ...g.creative,
-      headline: resolved.headline,
-      primaryText: resolved.primaryText,
-      description: resolved.description ?? '',
-      landingUrl: resolved.landingUrl,
-      ctaType: resolved.ctaType,
-      pixelId,
-    };
-  }
+      g.creative = {
+        ...g.creative,
+        headline: resolved.headline,
+        primaryText: resolved.primaryText,
+        description: resolved.description ?? '',
+        landingUrl: resolved.landingUrl,
+        ctaType: resolved.ctaType,
+        pixelId,
+      };
+    }),
+  );
 
   return nextGroups;
 }
