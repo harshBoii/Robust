@@ -68,6 +68,8 @@ async function callFalModel(modelId: string, input: Record<string, unknown>): Pr
 const SEEDREAM_INDIAN_MODELS_HINT =
   'When using models, make sure that they are Indian.';
 
+const SEEDREAM_NO_SPEC_TEXT_HINT = `Do not render any design-spec or metadata as visible text in the image. Never show color names (e.g. red, blue), hex codes (e.g. #0066cc), labels like Primary/Secondary/Accent, aspect-ratio notes, or prompt instructions. Apply brand colors visually only — the final image must contain no spec overlays, swatches, or technical captions unless the user explicitly requested on-image marketing copy.`;
+
 function buildFalEditPrompt(prompt: string, refCount: number): string {
   if (refCount <= 1) return prompt;
   const figureHint =
@@ -79,7 +81,7 @@ function buildFalEditPrompt(prompt: string, refCount: number): string {
 
 function finalizeSeedreamPrompt(prompt: string, refCount: number): string {
   const withRefs = refCount > 0 ? buildFalEditPrompt(prompt, refCount) : prompt;
-  return `${withRefs}\n\n${SEEDREAM_INDIAN_MODELS_HINT}`;
+  return `${withRefs}\n\n${SEEDREAM_INDIAN_MODELS_HINT}\n${SEEDREAM_NO_SPEC_TEXT_HINT}`;
 }
 
 async function downloadImageAsBase64(url: string): Promise<string> {
