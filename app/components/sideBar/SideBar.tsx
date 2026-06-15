@@ -519,6 +519,11 @@ const SecondarySidebarContent = ({
             label="Analyze Latest Ads"
             href="/profile/analyze-ads"
           />
+          <SecondaryNavItem
+            icon={Megaphone}
+            label="Ads Automation"
+            href="/profile/ads-automation"
+          />
         </>
       );
 

@@ -60,6 +60,7 @@ export async function createChatSession(input: {
   companyId: string;
   createdByUserId?: string | null;
   title?: string;
+  workflowState?: Record<string, unknown>;
 }) {
   const welcome = await db.adChatSession.create({
     data: {
@@ -67,7 +68,7 @@ export async function createChatSession(input: {
       createdByUserId: input.createdByUserId ?? null,
       title: input.title ?? 'New chat',
       currentStep: 'intent',
-      workflowState: {},
+      workflowState: input.workflowState ?? {},
       messages: {
         create: {
           role: 'ASSISTANT',

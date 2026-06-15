@@ -7,31 +7,14 @@ import {
 } from '@/lib/image-gen/image-artists';
 import { prisma } from '@/lib/prisma';
 
-export type MetaAdsMediaMode = 'auto_generate' | 'manual_selection';
+import {
+  DEFAULT_META_ADS_AUTO_CONFIG,
+  type MetaAdsAutoConfigData,
+  type MetaAdsMediaMode,
+} from './defaults';
 
-export type MetaAdsAutoConfigData = {
-  autoModeDefault: boolean;
-  allowNewCampaign: boolean;
-  allowNewAdset: boolean;
-  allowStaticGeneration: boolean;
-  mediaMode: MetaAdsMediaMode;
-  defaultArtistId: ImageArtistId;
-  autoPost: boolean;
-  defaultDailyBudget: number | null;
-  defaultObjective: string | null;
-};
-
-export const DEFAULT_META_ADS_AUTO_CONFIG: MetaAdsAutoConfigData = {
-  autoModeDefault: false,
-  allowNewCampaign: true,
-  allowNewAdset: true,
-  allowStaticGeneration: true,
-  mediaMode: 'auto_generate',
-  defaultArtistId: DEFAULT_IMAGE_ARTIST_ID,
-  autoPost: false,
-  defaultDailyBudget: null,
-  defaultObjective: null,
-};
+export type { MetaAdsAutoConfigData, MetaAdsMediaMode } from './defaults';
+export { DEFAULT_META_ADS_AUTO_CONFIG } from './defaults';
 
 function isValidArtistId(id: string | null | undefined): id is ImageArtistId {
   return Boolean(id && IMAGE_ARTISTS.some((a) => a.id === id));
@@ -68,11 +51,16 @@ export function serializeMetaAdsAutoConfig(row: {
 }
 
 export async function getMetaAdsAutoConfig(companyId: string): Promise<MetaAdsAutoConfigData> {
-  const row = await prisma.metaAdsAutoConfig.findUnique({
-    where: { companyId },
-  });
-  if (!row) return { ...DEFAULT_META_ADS_AUTO_CONFIG };
-  return serializeMetaAdsAutoConfig(row);
+  try {
+    const row = await prisma.metaAdsAutoConfig.findUnique({
+      where: { companyId },
+    });
+    if (!row) return { ...DEFAULT_META_ADS_AUTO_CONFIG };
+    return serializeMetaAdsAutoConfig(row);
+  } catch (e) {
+    console.warn('[meta-ads-auto] config read failed — using defaults', e);
+    return { ...DEFAULT_META_ADS_AUTO_CONFIG };
+  }
 }
 
 export type MetaAdsAutoConfigPatch = Partial<MetaAdsAutoConfigData>;
@@ -147,15 +135,22 @@ export async function upsertMetaAdsAutoConfig(
   const validated = validateMetaAdsAutoConfigPatch(patch);
   if (!validated.ok) throw new Error(validated.error);
 
-  const row = await prisma.metaAdsAutoConfig.upsert({
-    where: { companyId },
-    create: {
-      companyId,
-      ...DEFAULT_META_ADS_AUTO_CONFIG,
-      ...validated.data,
-    },
-    update: validated.data,
-  });
+  try {
+    const row = await prisma.metaAdsAutoConfig.upsert({
+      where: { companyId },
+      create: {
+        companyId,
+        ...DEFAULT_META_ADS_AUTO_CONFIG,
+        ...validated.data,
+      },
+      update: validated.data,
+    });
 
-  return serializeMetaAdsAutoConfig(row);
+    return serializeMetaAdsAutoConfig(row);
+  } catch (e) {
+    console.error('[meta-ads-auto] config upsert failed', e);
+    throw new Error(
+      'Could not save Ads Automation settings. Run the database migration for meta_ads_auto_configs.',
+    );
+  }
 }

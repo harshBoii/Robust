@@ -28,9 +28,11 @@ export async function POST(req: NextRequest) {
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   let title: string | undefined;
+  let autoMode: boolean | undefined;
   try {
-    const body = (await req.json()) as { title?: unknown };
+    const body = (await req.json()) as { title?: unknown; autoMode?: unknown };
     if (typeof body.title === 'string' && body.title.trim()) title = body.title.trim();
+    if (typeof body.autoMode === 'boolean') autoMode = body.autoMode;
   } catch {
     // empty body ok
   }
@@ -39,6 +41,7 @@ export async function POST(req: NextRequest) {
     companyId: session.companyId,
     createdByUserId: session.userName,
     title,
+    workflowState: autoMode === true ? { autoMode: true } : undefined,
   });
 
   return NextResponse.json({

@@ -3,7 +3,6 @@
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Sparkles } from 'lucide-react';
 
 import type { SerializedMessage } from '@/lib/chats/types';
 
@@ -16,6 +15,7 @@ import { getBackStepOptions } from '@/lib/chats/workflow-navigation';
 import type { ChatWorkflowStep, WorkflowState } from '@/lib/chats/types';
 
 import { ImageGenArtistSettingsBar } from './ImageGenArtistSettingsBar';
+import { ChatAutoModeToggle } from './ChatAutoModeToggle';
 import { useChatSession } from './useChatSession';
 import {
   DEFAULT_IMAGE_ARTIST_ID,
@@ -103,9 +103,6 @@ export default function ChatsClient({
 
   const [composerArtistId, setComposerArtistId] = useState<ImageArtistId>(DEFAULT_IMAGE_ARTIST_ID);
   const [composerQuality, setComposerQuality] = useState<ImageQuality>(DEFAULT_IMAGE_QUALITY);
-  const [profileAutoDefault, setProfileAutoDefault] = useState(false);
-  const [autoMode, setAutoMode] = useState(false);
-  const [autoModeSaving, setAutoModeSaving] = useState(false);
 
   const showAdsAutoToggle =
     session?.currentStep !== 'imageGen' &&
@@ -113,46 +110,6 @@ export default function ChatsClient({
     session?.currentStep !== 'geo' &&
     !session?.workflowState?.imageGen &&
     !session?.workflowState?.videoGen;
-
-  useEffect(() => {
-    void (async () => {
-      try {
-        const res = await fetch('/api/meta-ads-auto/config', { credentials: 'include' });
-        if (!res.ok) return;
-        const data = (await res.json()) as { config?: { autoModeDefault?: boolean } };
-        setProfileAutoDefault(Boolean(data.config?.autoModeDefault));
-      } catch {
-        /* ignore */
-      }
-    })();
-  }, []);
-
-  useEffect(() => {
-    const fromSession = session?.workflowState?.autoMode;
-    setAutoMode(fromSession ?? profileAutoDefault);
-  }, [session?.workflowState?.autoMode, profileAutoDefault]);
-
-  const toggleAutoMode = useCallback(async () => {
-    const next = !autoMode;
-    setAutoMode(next);
-    setAutoModeSaving(true);
-    try {
-      const res = await fetch(`/api/chats/${sessionId}`, {
-        method: 'PATCH',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ autoMode: next }),
-      });
-      const data = (await res.json()) as { session?: { workflowState?: WorkflowState } };
-      if (res.ok && data.session) {
-        setAutoMode(Boolean(data.session.workflowState?.autoMode));
-      }
-    } catch {
-      setAutoMode(!next);
-    } finally {
-      setAutoModeSaving(false);
-    }
-  }, [autoMode, sessionId]);
 
   useEffect(() => {
     if (!showImageGenArtistInComposer) return;
@@ -343,20 +300,11 @@ export default function ChatsClient({
           </div>
           <div className="flex shrink-0 items-center gap-2">
             {showAdsAutoToggle ? (
-              <button
-                type="button"
-                disabled={autoModeSaving || session?.status === 'COMPLETED'}
-                onClick={() => void toggleAutoMode()}
-                title="Auto mode — generate statics, pick campaign/ad set, and draft or publish without manual steps"
-                className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium transition ${
-                  autoMode
-                    ? 'border-primary/50 bg-primary/10 text-primary'
-                    : 'border-border/50 text-muted-foreground hover:border-primary/30'
-                }`}
-              >
-                <Sparkles className="h-3 w-3" />
-                Auto
-              </button>
+              <ChatAutoModeToggle
+                sessionId={sessionId}
+                sessionAutoMode={session?.workflowState?.autoMode}
+                disabled={session?.status === 'COMPLETED'}
+              />
             ) : null}
             <Link
               href="/chats"
@@ -428,6 +376,13 @@ export default function ChatsClient({
                 onQualityChange={setComposerQuality}
                 onContinue={submitArtistSettings}
                 continueLabel={isTemplateFlow && ig?.step !== 'artistSettings' ? 'Apply' : 'Continue'}
+              />
+            ) : showAdsAutoToggle ? (
+              <ChatAutoModeToggle
+                compact
+                sessionId={sessionId}
+                sessionAutoMode={session?.workflowState?.autoMode}
+                disabled={busy || session?.status === 'COMPLETED'}
               />
             ) : undefined,
             sticky: true,

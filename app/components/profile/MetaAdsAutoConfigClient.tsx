@@ -14,7 +14,11 @@ import {
   IMAGE_ARTISTS,
   type ImageArtistId,
 } from '@/lib/image-gen/image-artists';
-import type { MetaAdsAutoConfigData, MetaAdsMediaMode } from '@/lib/meta-ads-auto/config';
+import {
+  DEFAULT_META_ADS_AUTO_CONFIG,
+  type MetaAdsAutoConfigData,
+  type MetaAdsMediaMode,
+} from '@/lib/meta-ads-auto/defaults';
 
 async function json<T>(res: Response): Promise<T> {
   const data = (await res.json()) as T;
@@ -70,7 +74,12 @@ export default function MetaAdsAutoConfigClient() {
       );
       setConfig(data.config);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load settings');
+      setConfig({ ...DEFAULT_META_ADS_AUTO_CONFIG });
+      setError(
+        e instanceof Error
+          ? `${e.message} Showing defaults until settings can be saved.`
+          : 'Could not load settings — showing defaults.',
+      );
     } finally {
       setLoading(false);
     }
@@ -119,7 +128,7 @@ export default function MetaAdsAutoConfigClient() {
   if (!config) {
     return (
       <div className={profilePageShell}>
-        <p className="text-sm text-destructive">{error ?? 'Could not load settings'}</p>
+        <p className="text-sm text-muted-foreground">Loading Ads Automation…</p>
       </div>
     );
   }

@@ -5,7 +5,9 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
 import { CHATS_INTENT_SUGGESTIONS } from '@/lib/chats/chat-path-suggestions';
+import { readChatAutoModePreference } from '@/lib/chats/chat-auto-mode-preference';
 
+import { ChatAutoModeToggle } from './ChatAutoModeToggle';
 import { setPendingChatStart } from './chat-pending-storage';
 import { ChatsComposer } from './ChatsComposer';
 
@@ -14,6 +16,7 @@ const ease = [0.22, 1, 0.36, 1] as const;
 export default function ChatsLanding({ userName }: { userName: string; companyId: string }) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
+  const [autoMode, setAutoMode] = useState(() => readChatAutoModePreference() ?? false);
 
   async function startChat(text: string) {
     const trimmed = text.trim();
@@ -24,7 +27,10 @@ export default function ChatsLanding({ userName }: { userName: string; companyId
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: trimmed.slice(0, 80) }),
+        body: JSON.stringify({
+          title: trimmed.slice(0, 80),
+          autoMode,
+        }),
       });
       const created = (await createRes.json()) as {
         session?: { id: string; title?: string };
@@ -68,6 +74,13 @@ export default function ChatsLanding({ userName }: { userName: string; companyId
           disabled={loading}
           placeholder="Write a message…"
           suggestions={[...CHATS_INTENT_SUGGESTIONS]}
+          leadingSlot={
+            <ChatAutoModeToggle
+              compact
+              disabled={loading}
+              onChange={setAutoMode}
+            />
+          }
         />
       </motion.div>
     </div>
