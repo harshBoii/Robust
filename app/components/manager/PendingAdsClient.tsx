@@ -81,14 +81,15 @@ export default function PendingAdsClient() {
   };
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-8">
-      <div className="mb-6">
+    <div className="mx-auto flex h-full min-h-0 max-w-5xl flex-col px-4 py-8">
+      <div className="mb-6 shrink-0">
         <h1 className="font-display text-2xl font-semibold text-foreground">Pending Ads</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Drafted ads from auto mode — review the preview, then publish or schedule.
         </p>
       </div>
 
+      <div className="min-h-0 flex-1 overflow-y-auto">
       {loading ? (
         <div className="flex justify-center py-16">
           <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -100,7 +101,7 @@ export default function PendingAdsClient() {
           No drafted ads. Turn on auto mode in chat with auto-post off to draft ads here.
         </p>
       ) : (
-        <div className="grid gap-6 lg:grid-cols-2">
+        <div className="grid gap-6 pb-4 lg:grid-cols-2">
           {rows.map((row) => (
             <article
               key={row.id}
@@ -178,6 +179,7 @@ export default function PendingAdsClient() {
           ))}
         </div>
       )}
+      </div>
     </div>
   );
 }

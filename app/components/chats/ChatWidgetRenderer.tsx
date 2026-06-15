@@ -134,6 +134,17 @@ export function ChatWidgetRenderer({
     );
   }
 
+  /** Auto mode finishes on `done` with read-only previews — keep them visible. */
+  if (widgetType === 'adPreview') {
+    return (
+      <AdPreviewWidget
+        groups={groups}
+        onAction={onAction}
+        readOnly={Boolean(payload.readOnly) || !active}
+      />
+    );
+  }
+
   if (!active) return null;
 
   switch (widgetType) {
@@ -241,14 +252,6 @@ export function ChatWidgetRenderer({
           groups={groups}
           workflowState={workflowState}
           onAction={onAction}
-        />
-      );
-    case 'adPreview':
-      return (
-        <AdPreviewWidget
-          groups={groups}
-          onAction={onAction}
-          readOnly={Boolean(payload.readOnly)}
         />
       );
     case 'publishSchedule':

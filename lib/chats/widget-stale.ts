@@ -20,7 +20,7 @@ const WIDGET_STEP: Record<string, ChatWorkflowStep[]> = {
   creativeMode: ['creativeMode'],
   creativeCsv: ['creativeCsv'],
   creativeBuilding: ['creativeBuild'],
-  adPreview: ['preview'],
+  adPreview: ['preview', 'done'],
   publishSchedule: ['publishChoice'],
   done: ['done'],
   imageGenSourceChoice: ['imageGen'],
