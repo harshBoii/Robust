@@ -85,6 +85,7 @@ model Company {
   rivalOf                 CompanyRival[] @relation("CompanyRivalTargets")
   shopifyBlogChannels     ShopifyBlogChannel[]
   metaAdsAutoConfig       MetaAdsAutoConfig?
+  metaApiLogs             MetaApiLog[]
 
   @@index([slug])
   @@map("companies")
@@ -1350,6 +1351,37 @@ model MetaAdsAutoConfig {
   company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   @@map("meta_ads_auto_configs")
+}
+
+// ================================================================
+// META API AUDIT LOG (superadmin)
+// ================================================================
+
+model MetaApiLog {
+  id             String   @id @default(cuid())
+  companyId      String?  @map("company_id")
+  method         String   @db.VarChar(16)
+  /// Graph path e.g. /act_123/campaigns
+  path           String   @db.VarChar(500)
+  /// Full URL with access_token redacted
+  requestUrl     String   @map("request_url") @db.Text
+  /// Query/body params sent to Meta (token excluded)
+  requestPayload Json?    @map("request_payload")
+  responseStatus Int      @map("response_status")
+  responseBody   Json?    @map("response_body")
+  success        Boolean
+  errorMessage   String?  @map("error_message") @db.Text
+  durationMs     Int?     @map("duration_ms")
+  /// campaigns | adsets | adcreatives | ads | …
+  operation      String?  @db.VarChar(120)
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  company Company? @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, createdAt])
+  @@index([companyId, success])
+  @@index([createdAt])
+  @@map("meta_api_logs")
 }
 
 // ================================================================

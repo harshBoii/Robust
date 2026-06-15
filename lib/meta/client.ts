@@ -8,6 +8,7 @@ import {
   redactMetaGraphUrl,
 } from '@/lib/meta/creative-log';
 import { metaErrorFromGraph } from '@/lib/meta/errors';
+import { persistMetaApiLog } from '@/lib/meta/api-log';
 import { resolveMetaGraphAccessToken } from '@/lib/meta/integration-token';
 
 type MetaGraphResponse<T> = {
@@ -207,6 +208,19 @@ async function metaFetch<T>(path: string, init?: MetaFetchInit): Promise<T> {
   });
 
   const json = (await res.json()) as MetaGraphResponse<T>;
+
+  void persistMetaApiLog({
+    companyId,
+    method,
+    path,
+    requestUrl: url,
+    searchParams,
+    responseStatus: res.status,
+    responseBody: json,
+    success: res.ok && !json.error,
+    errorMessage: json.error?.message ?? null,
+    durationMs: Date.now() - started,
+  });
 
   if (creativeLog) {
     logMetaCreativeResponse(creativeLog.operation, {
