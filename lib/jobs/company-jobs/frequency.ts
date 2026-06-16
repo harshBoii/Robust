@@ -63,3 +63,41 @@ export function frequencyLabel(frequency: JobFrequency): string {
       return frequency;
   }
 }
+
+/** Human-readable schedule in IST (cron fires at 09:00 UTC = 2:30 PM IST). */
+export function scheduleDescriptionIST(
+  frequency: JobFrequency,
+  enabled: boolean,
+): string | null {
+  if (!enabled) return null;
+  const time = '2:30 PM IST';
+  switch (frequency) {
+    case 'DAILY':
+      return `Scheduled daily at ${time}`;
+    case 'WEEKLY':
+      return `Scheduled every Monday at ${time}`;
+    case 'BIWEEKLY':
+      return `Scheduled every other Monday at ${time}`;
+    case 'MONTHLY':
+      return `Scheduled on the 1st of each month at ${time}`;
+    case 'CUSTOM':
+      return null;
+    default:
+      return null;
+  }
+}
+
+export function jobUseCaseDescription(jobType: CompanyJobType): string {
+  switch (jobType) {
+    case 'META_AUTO_ADS':
+      return 'Starts new ad chats in auto mode with random ideas from your brand entity, then generates creatives and saves drafts or publishes to Meta.';
+    case 'BOUNTY_PAGE_GENERATION':
+      return 'Creates 2–5 bounty pages per run from random active prompts on the platforms you select.';
+    case 'BOUNTY_TOPIC_SCAN':
+      return 'Discovers new bounty topics and niches for your brand by scanning LLM radar opportunities.';
+    case 'RADAR_PROMPT_REFRESH':
+      return 'Refreshes home radar data and generates new search prompts for your existing topics.';
+    default:
+      return '';
+  }
+}

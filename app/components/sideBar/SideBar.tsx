@@ -524,6 +524,11 @@ const SecondarySidebarContent = ({
             label="Ads Automation"
             href="/profile/ads-automation"
           />
+          <SecondaryNavItem
+            icon={CalendarClock}
+            label="Jobs"
+            href="/profile/jobs"
+          />
         </>
       );
 
