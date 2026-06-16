@@ -5,6 +5,7 @@ import { Client, Receiver } from '@upstash/qstash';
 import type { CompanyJobType } from '@/app/generated/prisma/client';
 
 import { cronForFrequency } from './frequency';
+import { cronFromSchedule, type CompanyJobSchedule } from './schedule';
 
 function getQstashToken(): string | null {
   return process.env.QSTASH_TOKEN?.trim() || null;
@@ -44,6 +45,7 @@ export async function upsertJobSchedule(input: {
   companyId: string;
   jobType: CompanyJobType;
   frequency: import('@/app/generated/prisma/client').JobFrequency;
+  schedule: CompanyJobSchedule;
   enabled: boolean;
   existingScheduleId?: string | null;
 }): Promise<string | null> {
@@ -60,7 +62,7 @@ export async function upsertJobSchedule(input: {
 
   if (!input.enabled) return null;
 
-  const cron = cronForFrequency(input.frequency);
+  const cron = cronFromSchedule(input.frequency, input.schedule) ?? cronForFrequency(input.frequency);
   if (!cron) return null;
 
   const body: SchedulePayload = {

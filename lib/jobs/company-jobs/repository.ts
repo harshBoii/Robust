@@ -3,7 +3,8 @@ import 'server-only';
 import type { CompanyJobType, Prisma } from '@/app/generated/prisma/client';
 import { prisma } from '@/lib/prisma';
 
-import { DEFAULT_FREQUENCY_BY_JOB, defaultSettingsForJob } from './defaults';
+import { DEFAULT_FREQUENCY_BY_JOB, DEFAULT_JOB_SCHEDULE, defaultSettingsForJob } from './defaults';
+import { parseSchedule } from './schedule';
 import { parseJobSettings } from './validate-settings';
 import type { CompanyJobConfigRow, CompanyJobRunRow } from './types';
 import { ALL_JOB_TYPES } from './types';
@@ -23,6 +24,7 @@ export async function ensureCompanyJobConfigs(companyId: string): Promise<Compan
         jobType,
         enabled: false,
         frequency: DEFAULT_FREQUENCY_BY_JOB[jobType],
+        schedule: DEFAULT_JOB_SCHEDULE,
         settings: defaultSettingsForJob(jobType),
       })),
       skipDuplicates: true,
@@ -62,6 +64,7 @@ export async function listCompanyJobsWithRuns(companyId: string) {
 
   return configs.map((config) => ({
     ...config,
+    schedule: parseSchedule(config.schedule),
     settings: parseJobSettings(config.jobType, config.settings),
     recentRuns: runsByType.get(config.jobType) ?? [],
   }));
@@ -73,6 +76,7 @@ export async function updateCompanyJobConfig(
   data: {
     enabled?: boolean;
     frequency?: import('@/app/generated/prisma/client').JobFrequency;
+    schedule?: import('./schedule').CompanyJobSchedule;
     settings?: unknown;
     qstashScheduleId?: string | null;
     lastRunAt?: Date | null;
@@ -85,6 +89,7 @@ export async function updateCompanyJobConfig(
     data: {
       ...data,
       settings: data.settings as Prisma.InputJsonValue | undefined,
+      schedule: data.schedule as Prisma.InputJsonValue | undefined,
     },
   });
 }

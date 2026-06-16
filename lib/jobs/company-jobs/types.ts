@@ -35,6 +35,7 @@ export type CompanyJobConfigRow = {
   jobType: CompanyJobType;
   enabled: boolean;
   frequency: JobFrequency;
+  schedule: import('./schedule').CompanyJobSchedule;
   settings: unknown;
   qstashScheduleId: string | null;
   lastRunAt: Date | null;
@@ -60,6 +61,8 @@ export type JobRunResult = {
   summary?: Record<string, unknown>;
   error?: string;
 };
+
+export type { CompanyJobSchedule } from './schedule';
 
 export const ALL_JOB_TYPES: CompanyJobType[] = [
   'META_AUTO_ADS',

@@ -1,4 +1,5 @@
 import type { CompanyJobType, JobFrequency } from './types';
+import { formatScheduleLabel } from './schedule';
 
 /** UTC cron expressions (09:00 UTC). */
 export function cronForFrequency(frequency: JobFrequency): string | null {
@@ -64,11 +65,13 @@ export function frequencyLabel(frequency: JobFrequency): string {
   }
 }
 
-/** Human-readable schedule in IST (cron fires at 09:00 UTC = 2:30 PM IST). */
+/** Human-readable schedule in the job's configured timezone. */
 export function scheduleDescriptionIST(
   frequency: JobFrequency,
   enabled: boolean,
+  schedule?: import('./schedule').CompanyJobSchedule,
 ): string | null {
+  if (schedule) return formatScheduleLabel(frequency, schedule, enabled);
   if (!enabled) return null;
   const time = '2:30 PM IST';
   switch (frequency) {

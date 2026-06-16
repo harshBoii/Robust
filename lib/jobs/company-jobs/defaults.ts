@@ -7,6 +7,9 @@ import type {
   JobFrequency,
   MetaAutoAdsJobSettings,
 } from './types';
+import { DEFAULT_JOB_SCHEDULE } from './schedule';
+
+export { DEFAULT_JOB_SCHEDULE };
 
 export const DEFAULT_FREQUENCY_BY_JOB: Record<CompanyJobType, JobFrequency> = {
   META_AUTO_ADS: 'WEEKLY',

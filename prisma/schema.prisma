@@ -1365,6 +1365,7 @@ model CompanyJobConfig {
   jobType          CompanyJobType @map("job_type")
   enabled          Boolean        @default(false)
   frequency        JobFrequency   @default(WEEKLY)
+  schedule         Json           @default("{\"hour\":14,\"minute\":30,\"dayOfWeek\":1,\"dayOfMonth\":1,\"timezone\":\"Asia/Kolkata\"}")
   settings         Json           @default("{}")
   qstashScheduleId String?        @map("qstash_schedule_id") @db.VarChar(255)
   lastRunAt        DateTime?      @map("last_run_at") @db.Timestamptz(3)

@@ -8,10 +8,17 @@ import {
   profileCard,
   profileCardHeaderCompact,
   profileGhostButton,
+  profilePageShell,
   profileStatusBadge,
   formatProfileDate,
 } from '@/app/components/profile/profile-utils';
+import { ProfileSecondaryNav } from '@/app/components/profile/ProfileSecondaryNav';
+import { JobSchedulePicker } from '@/app/components/profile/JobSchedulePicker';
 import { SPREAD_PLATFORM_OPTIONS } from '@/lib/geo/bounty/spread-platforms';
+import {
+  DEFAULT_JOB_SCHEDULE,
+  type CompanyJobSchedule,
+} from '@/lib/jobs/company-jobs/schedule';
 import {
   frequencyLabel,
   jobUseCaseDescription,
@@ -41,14 +48,12 @@ type JobRow = {
   enabled: boolean;
   frequency: JobFrequency;
   frequencyLabel: string;
+  schedule: CompanyJobSchedule;
   settings: Record<string, unknown>;
   lastRunAt: string | null;
   nextRunAt: string | null;
   recentRuns: JobRun[];
 };
-
-const jobsPageShell =
-  '-m-3 flex h-full min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden custom-scrollbar bg-muted/30 p-2 pb-6 sm:-m-4 sm:p-3 md:-m-5 md:p-3';
 
 const JOB_ORDER: CompanyJobType[] = [
   'META_AUTO_ADS',
@@ -115,7 +120,8 @@ function JobCard({
 }) {
   const lastRun = job.recentRuns[0];
   const settings = job.settings;
-  const scheduleIst = scheduleDescriptionIST(job.frequency, job.enabled);
+  const schedule = job.schedule ?? DEFAULT_JOB_SCHEDULE;
+  const scheduleLabel = scheduleDescriptionIST(job.frequency, job.enabled, schedule);
   const useCase = jobUseCaseDescription(job.jobType);
 
   return (
@@ -160,13 +166,25 @@ function JobCard({
           </select>
         </div>
 
-        {scheduleIst ? (
+        <JobSchedulePicker
+          frequency={job.frequency}
+          schedule={schedule}
+          disabled={disabled}
+          onChange={(nextSchedule) => onPatch({ schedule: nextSchedule })}
+        />
+
+        {scheduleLabel ? (
           <div className="rounded-lg border border-primary/20 bg-primary/5 px-3 py-2 text-[11px] text-foreground">
-            <span className="font-medium text-primary">Next runs:</span> {scheduleIst}
+            <span className="font-medium text-primary">Schedule:</span> {scheduleLabel}
+            {job.nextRunAt ? (
+              <div className="mt-1 text-muted-foreground">
+                Next run: {formatProfileDate(job.nextRunAt)}
+              </div>
+            ) : null}
           </div>
         ) : (
           <div className="rounded-lg border border-border/40 bg-muted/10 px-3 py-2 text-[11px] text-muted-foreground">
-            Enable this job to see scheduled run times (IST).
+            Enable this job to see scheduled run times.
           </div>
         )}
 
@@ -379,6 +397,7 @@ export default function ProfileJobsPageClient() {
               jobType: job.jobType,
               enabled: job.enabled,
               frequency: job.frequency,
+              schedule: job.schedule ?? DEFAULT_JOB_SCHEDULE,
               settings: job.settings,
             }),
           });
@@ -424,16 +443,16 @@ export default function ProfileJobsPageClient() {
 
   if (loading) {
     return (
-      <div className={`${jobsPageShell} flex items-center justify-center py-20`}>
+      <div className={`${profilePageShell} flex items-center justify-center py-20`}>
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
       </div>
     );
   }
 
   return (
-    <div className={jobsPageShell}>
-      <div className={`${profileCard} mb-4`}>
-        <div className="flex flex-wrap items-center justify-between gap-3 px-3 py-2.5">
+    <div className={profilePageShell}>
+      <div className={`${profileCard} mb-4 shrink-0`}>
+        <div className="px-3 py-2.5">
           <div className="flex min-w-0 items-center gap-2">
             <Settings2 className="h-4 w-4 shrink-0 text-primary" />
             <div>
@@ -445,36 +464,50 @@ export default function ProfileJobsPageClient() {
               </p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={() => void saveAll()}
-            disabled={saving || jobs.length === 0}
-            className={`${profileGhostButton} shrink-0 font-semibold disabled:opacity-60`}
-          >
-            {saving ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : saved ? (
-              'Saved'
-            ) : (
-              'Save all settings'
-            )}
-          </button>
+        </div>
+        <div className="border-t border-border px-3 py-2">
+          <ProfileSecondaryNav />
         </div>
       </div>
 
-      {error ? <p className="mb-4 text-sm text-destructive">{error}</p> : null}
+      {error ? <p className="mb-4 shrink-0 text-sm text-destructive">{error}</p> : null}
 
-      <div className="grid auto-rows-fr gap-4 lg:grid-cols-2">
-        {jobs.map((job) => (
-          <JobCard
-            key={job.jobType}
-            job={job}
-            running={runningType === job.jobType}
-            disabled={saving}
-            onPatch={(partial) => patchLocal(job.jobType, partial)}
-            onRunNow={() => void runNow(job.jobType)}
-          />
-        ))}
+      <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar pb-4">
+        <div className="grid auto-rows-fr gap-4 lg:grid-cols-2">
+          {jobs.map((job) => (
+            <JobCard
+              key={job.jobType}
+              job={job}
+              running={runningType === job.jobType}
+              disabled={saving}
+              onPatch={(partial) => patchLocal(job.jobType, partial)}
+              onRunNow={() => void runNow(job.jobType)}
+            />
+          ))}
+        </div>
+      </div>
+
+      <div className="sticky bottom-0 shrink-0 border-t border-border bg-card/95 pt-3 backdrop-blur-sm">
+        <p className="mb-2 text-center text-[11px] text-muted-foreground">
+          Changes are not saved until you click Save.
+        </p>
+        <button
+          type="button"
+          onClick={() => void saveAll()}
+          disabled={saving || jobs.length === 0}
+          className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-2.5 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+        >
+          {saving ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Saving…
+            </>
+          ) : saved ? (
+            'Saved'
+          ) : (
+            'Save all settings'
+          )}
+        </button>
       </div>
     </div>
   );

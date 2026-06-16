@@ -2,10 +2,12 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { getSession } from '@/lib/auth/session';
 import {
+  computeNextRunAt,
   frequencyLabel,
   jobTypeLabel,
   listCompanyJobsWithRuns,
   parseJobSettings,
+  parseSchedule,
   updateCompanyJobConfig,
   upsertJobSchedule,
 } from '@/lib/jobs/company-jobs';
@@ -28,6 +30,7 @@ export async function GET() {
       enabled: job.enabled,
       frequency: job.frequency,
       frequencyLabel: frequencyLabel(job.frequency),
+      schedule: job.schedule,
       settings: job.settings,
       lastRunAt: job.lastRunAt?.toISOString() ?? null,
       nextRunAt: job.nextRunAt?.toISOString() ?? null,
@@ -53,6 +56,7 @@ export async function PATCH(req: NextRequest) {
     jobType?: string;
     enabled?: boolean;
     frequency?: string;
+    schedule?: unknown;
     settings?: unknown;
   };
   try {
@@ -77,6 +81,8 @@ export async function PATCH(req: NextRequest) {
 
   const enabled = typeof body.enabled === 'boolean' ? body.enabled : current.enabled;
   const frequency = body.frequency ?? current.frequency;
+  const schedule =
+    body.schedule !== undefined ? parseSchedule(body.schedule) : current.schedule;
   const settings =
     body.settings !== undefined
       ? parseJobSettings(body.jobType, body.settings)
@@ -88,6 +94,7 @@ export async function PATCH(req: NextRequest) {
       companyId: session.companyId,
       jobType: body.jobType,
       frequency,
+      schedule,
       enabled,
       existingScheduleId: current.qstashScheduleId,
     });
@@ -95,11 +102,15 @@ export async function PATCH(req: NextRequest) {
     console.warn('[company/jobs] QStash schedule sync failed', err);
   }
 
+  const nextRunAt = enabled ? computeNextRunAt(frequency, schedule, new Date(), current.lastRunAt) : null;
+
   const updated = await updateCompanyJobConfig(session.companyId, body.jobType, {
     enabled,
     frequency,
+    schedule,
     settings,
     qstashScheduleId,
+    nextRunAt,
   });
 
   return NextResponse.json({
@@ -110,6 +121,7 @@ export async function PATCH(req: NextRequest) {
       enabled: updated.enabled,
       frequency: updated.frequency,
       frequencyLabel: frequencyLabel(updated.frequency),
+      schedule: parseSchedule(updated.schedule),
       settings: parseJobSettings(updated.jobType, updated.settings),
       lastRunAt: updated.lastRunAt?.toISOString() ?? null,
       nextRunAt: updated.nextRunAt?.toISOString() ?? null,
