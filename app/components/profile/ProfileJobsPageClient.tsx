@@ -13,6 +13,7 @@ import {
 } from '@/app/components/profile/profile-utils';
 import { SPREAD_PLATFORM_OPTIONS } from '@/lib/geo/bounty/spread-platforms';
 import {
+  frequencyLabel,
   jobUseCaseDescription,
   scheduleDescriptionIST,
 } from '@/lib/jobs/company-jobs/frequency';
@@ -55,6 +56,8 @@ const JOB_ORDER: CompanyJobType[] = [
   'BOUNTY_TOPIC_SCAN',
   'RADAR_PROMPT_REFRESH',
 ];
+
+const FREQUENCIES: JobFrequency[] = ['DAILY', 'WEEKLY', 'BIWEEKLY', 'MONTHLY'];
 
 async function json<T>(res: Response): Promise<T> {
   const data = (await res.json()) as T & { error?: string };
@@ -151,13 +154,7 @@ function JobCard({
           >
             {FREQUENCIES.map((f) => (
               <option key={f} value={f}>
-                {f === 'DAILY'
-                  ? 'Daily'
-                  : f === 'WEEKLY'
-                    ? 'Weekly'
-                    : f === 'BIWEEKLY'
-                      ? 'Every 2 weeks'
-                      : 'Monthly'}
+                {frequencyLabel(f)}
               </option>
             ))}
           </select>
