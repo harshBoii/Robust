@@ -29,6 +29,7 @@ export type DashboardRow = {
   ctr: number;
   hookRate: number | null;
   daysRunning?: number | null;
+  publishedAt?: string | null;
   statusSignal?: 'WINNER' | 'FATIGUE' | 'UNDERPERFORMER' | null;
 };
 

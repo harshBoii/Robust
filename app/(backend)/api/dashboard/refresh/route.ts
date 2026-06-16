@@ -217,6 +217,7 @@ export async function POST() {
       statusSignal,
       actions: maxRow?.actions ?? tRow?.actions ?? [],
       createdTimeIso,
+      publishedAt: createdTimeIso,
       recordedAt: new Date().toISOString(),
     };
   });

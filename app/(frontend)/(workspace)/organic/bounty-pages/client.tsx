@@ -3,7 +3,7 @@
 // import LoadingAnimation from "@/app/components/animations/loading";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { platformLabel } from "@/lib/geo/bounty/spread-platforms";
+import { platformLabel, SPREAD_PLATFORM_OPTIONS } from "@/lib/geo/bounty/spread-platforms";
 import { extractPostText } from "@/app/components/geo/bounty/content-metadata";
 import type { BountySpreadPlatform } from "@/app/generated/prisma/client";
 
@@ -89,6 +89,16 @@ type QueryGroup = {
   query: string;
   bounties: BountyRow[];
 };
+
+function getBountyPlatforms(b: BountyRow): BountySpreadPlatform[] {
+  const platforms = new Set<BountySpreadPlatform>();
+  if (b.aeoPage) platforms.add("WEBSITE_BLOG");
+  for (const content of b.contents ?? []) {
+    const p = content.platform as BountySpreadPlatform;
+    if (SPREAD_PLATFORM_OPTIONS.some((o) => o.value === p)) platforms.add(p);
+  }
+  return Array.from(platforms);
+}
 
 function groupBountiesByQuery(rows: BountyRow[]): QueryGroup[] {
   const map = new Map<string, QueryGroup>();
@@ -293,6 +303,7 @@ export function BountyPagesClient() {
   const [bounties, setBounties] = useState<BountyRow[]>([]);
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState<string>("ALL");
+  const [filterPlatform, setFilterPlatform] = useState<string>("ALL");
 
   useEffect(() => {
     let cancelled = false;
@@ -320,19 +331,34 @@ export function BountyPagesClient() {
   // ── Derived filtered list
   const displayed = bounties.filter((b) => {
     const matchStatus = filterStatus === "ALL" || b.status?.toUpperCase() === filterStatus;
+    const matchPlatform =
+      filterPlatform === "ALL" || getBountyPlatforms(b).includes(filterPlatform as BountySpreadPlatform);
     const q = search.trim().toLowerCase();
     const matchSearch =
       !q ||
       b.query.toLowerCase().includes(q) ||
       getBountyDisplayTitle(b).toLowerCase().includes(q) ||
       b.id.toLowerCase().includes(q);
-    return matchStatus && matchSearch;
+    return matchStatus && matchPlatform && matchSearch;
   });
 
   const queryGroups = groupBountiesByQuery(displayed);
   const allQueryGroups = groupBountiesByQuery(bounties);
 
-  const statuses = Array.from(new Set(bounties.map((b) => b.status?.toUpperCase()).filter(Boolean)));
+  const statuses = Array.from(
+    new Set(
+      bounties
+        .map((b) => b.status?.toUpperCase())
+        .filter((s): s is string => Boolean(s) && s !== "HUNTED"),
+    ),
+  );
+  const platforms = Array.from(
+    new Set(bounties.flatMap((b) => getBountyPlatforms(b))),
+  ).sort(
+    (a, b) =>
+      SPREAD_PLATFORM_OPTIONS.findIndex((o) => o.value === a) -
+      SPREAD_PLATFORM_OPTIONS.findIndex((o) => o.value === b),
+  );
 
   // ── Loading
   if (loading) {
@@ -445,22 +471,55 @@ export function BountyPagesClient() {
           </div>
 
           {/* Status filter pills */}
-          <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-            {["ALL", ...statuses].map((s) => (
+          {statuses.length > 0 ? (
+            <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+              {statuses.map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => setFilterStatus(filterStatus === s ? "ALL" : s)}
+                  className={`text-[11px] font-semibold rounded-full px-3 py-1.5 border transition-all ${
+                    filterStatus === s
+                      ? "border-[var(--sibling-primary)] bg-[var(--sibling-primary)]/15 text-[var(--sibling-primary)]"
+                      : "border-[var(--glass-border)] bg-[var(--glass)]/60 text-muted-foreground hover:text-foreground hover:border-[var(--sibling-primary)]/40"
+                  }`}
+                >
+                  {s.charAt(0) + s.slice(1).toLowerCase()}
+                </button>
+              ))}
+            </div>
+          ) : null}
+
+          {/* Platform filter pills */}
+          {platforms.length > 0 ? (
+            <div className="flex min-w-0 flex-wrap items-center gap-1.5">
               <button
-                key={s}
                 type="button"
-                onClick={() => setFilterStatus(s)}
+                onClick={() => setFilterPlatform("ALL")}
                 className={`text-[11px] font-semibold rounded-full px-3 py-1.5 border transition-all ${
-                  filterStatus === s
+                  filterPlatform === "ALL"
                     ? "border-[var(--sibling-primary)] bg-[var(--sibling-primary)]/15 text-[var(--sibling-primary)]"
                     : "border-[var(--glass-border)] bg-[var(--glass)]/60 text-muted-foreground hover:text-foreground hover:border-[var(--sibling-primary)]/40"
                 }`}
               >
-                {s === "ALL" ? "All" : s.charAt(0) + s.slice(1).toLowerCase()}
+                All platforms
               </button>
-            ))}
-          </div>
+              {platforms.map((p) => (
+                <button
+                  key={p}
+                  type="button"
+                  onClick={() => setFilterPlatform(p)}
+                  className={`text-[11px] font-semibold rounded-full px-3 py-1.5 border transition-all ${
+                    filterPlatform === p
+                      ? "border-[var(--sibling-primary)] bg-[var(--sibling-primary)]/15 text-[var(--sibling-primary)]"
+                      : "border-[var(--glass-border)] bg-[var(--glass)]/60 text-muted-foreground hover:text-foreground hover:border-[var(--sibling-primary)]/40"
+                  }`}
+                >
+                  {platformLabel(p)}
+                </button>
+              ))}
+            </div>
+          ) : null}
 
           {/* Count */}
           <span className="w-full text-[11px] text-muted-foreground tabular-nums sm:ml-auto sm:w-auto">
@@ -486,7 +545,7 @@ export function BountyPagesClient() {
       ) : queryGroups.length === 0 ? (
         <div className="mt-8 flex flex-col items-center gap-3 text-center py-12">
           <p className="text-sm text-muted-foreground">No pages match your filters.</p>
-          <button type="button" onClick={() => { setSearch(""); setFilterStatus("ALL"); }} className="text-[11px] text-[var(--sibling-primary)] hover:underline">Clear filters</button>
+          <button type="button" onClick={() => { setSearch(""); setFilterStatus("ALL"); setFilterPlatform("ALL"); }} className="text-[11px] text-[var(--sibling-primary)] hover:underline">Clear filters</button>
         </div>
       ) : (
 

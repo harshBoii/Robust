@@ -103,6 +103,7 @@ export async function loadDashboardSnapshot(
       ctr,
       hookRate,
       daysRunning,
+      publishedAt: ad.publishedAt?.toISOString() ?? null,
       statusSignal: statusSignal ?? null,
     };
   });

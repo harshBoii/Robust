@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, type ReactNode } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import {
   Line,
   LineChart,
@@ -15,15 +15,22 @@ import {
   Legend,
 } from 'recharts';
 import Link from 'next/link';
-import { Calendar, ChevronDown, RefreshCw, TriangleAlert } from 'lucide-react';
+import { ChevronDown, RefreshCw, TriangleAlert } from 'lucide-react';
 import { AiOutlineLoading } from 'react-icons/ai';
 
 import AdPerformanceTable, { type DashboardRow } from '@/app/components/dashboard/AdPerformanceTable';
 import AiInsightPanel from '@/app/components/home/AiInsightPanel';
+import { DateRangePicker } from '@/app/components/common/DateRangePicker';
 import { CURRENCIES, convertFromInr } from '@/lib/currency';
 import { useDashboardData } from '@/lib/dashboard/client';
 import { bucketMetricsByDay, formatChartDayLabel } from '@/lib/dashboard/metrics';
 import { computeHomeKpis, computeSignalMix, spendSeriesFromRows } from '@/lib/dashboard/stats';
+import {
+  defaultDateRange,
+  filterMetricsByDateRange,
+  filterRowsByDateRange,
+  type DateRangeValue,
+} from '@/lib/date-range';
 
 type HomeOverviewClientProps = {
   displayName: string;
@@ -120,6 +127,7 @@ function RightRail({
 
 export default function HomeOverviewClient({ displayName }: HomeOverviewClientProps) {
   const firstName = displayName?.trim()?.split(/\s+/)[0] ?? 'there';
+  const [dateRange, setDateRange] = useState<DateRangeValue>(() => defaultDateRange(7));
   const {
     rows,
     metrics,
@@ -138,17 +146,27 @@ export default function HomeOverviewClient({ displayName }: HomeOverviewClientPr
   const showPlaceholder = bootstrapping && !rows.length;
   const isBackgroundSync = loading && rows.length > 0;
 
-  const kpis = useMemo(() => computeHomeKpis(rows, currency), [rows, currency]);
-  const signalMix = useMemo(() => computeSignalMix(rows), [rows]);
-  const spendSpark = useMemo(() => spendSeriesFromRows(rows, currency), [rows, currency]);
+  const filteredRows = useMemo(
+    () => filterRowsByDateRange(rows, metrics, dateRange),
+    [rows, metrics, dateRange],
+  );
+
+  const filteredMetrics = useMemo(
+    () => filterMetricsByDateRange(metrics, dateRange),
+    [metrics, dateRange],
+  );
+
+  const kpis = useMemo(() => computeHomeKpis(filteredRows, currency), [filteredRows, currency]);
+  const signalMix = useMemo(() => computeSignalMix(filteredRows), [filteredRows]);
+  const spendSpark = useMemo(() => spendSeriesFromRows(filteredRows, currency), [filteredRows, currency]);
 
   const performanceChartData = useMemo(() => {
-    return bucketMetricsByDay(metrics).map((b) => ({
+    return bucketMetricsByDay(filteredMetrics).map((b) => ({
       day: formatChartDayLabel(b.date),
       spend: convertFromInr(b.spendInr, currency),
       ctr: Number((b.avgCtr * 100).toFixed(2)),
     }));
-  }, [metrics, currency]);
+  }, [filteredMetrics, currency]);
 
   const activeCurrency = CURRENCIES.find((c) => c.value === currency);
 
@@ -163,14 +181,7 @@ export default function HomeOverviewClient({ displayName }: HomeOverviewClientPr
           <p className="mt-0.5 text-sm text-muted-foreground">Live snapshot of your Meta Ads performance.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            className="glass-button inline-flex items-center gap-2 rounded-xl border border-[var(--glass-border-subtle)] px-3 py-2 text-sm font-medium"
-          >
-            <Calendar className="h-4 w-4 text-muted-foreground" />
-            May 16 – May 22, 2026
-            <ChevronDown className="h-4 w-4 text-muted-foreground" />
-          </button>
+          <DateRangePicker value={dateRange} onChange={setDateRange} />
           <div className="flex items-center rounded-xl border border-[var(--glass-border-subtle)] bg-background/40 p-0.5">
             {CURRENCIES.map((c) => (
               <button
@@ -228,7 +239,7 @@ export default function HomeOverviewClient({ displayName }: HomeOverviewClientPr
         <StatCard
           label="Spend Today"
           value={showPlaceholder ? '—' : kpis.spendToday}
-          hint={rows.length ? `${rows.length} ads tracked` : 'Hit Refresh to sync from Meta'}
+          hint={filteredRows.length ? `${filteredRows.length} ads in range` : 'No ads in selected range'}
           hintClass="text-muted-foreground"
           sparkColor="oklch(0.65 0.18 25)"
           sparkData={spendSpark}
@@ -236,7 +247,7 @@ export default function HomeOverviewClient({ displayName }: HomeOverviewClientPr
         <StatCard
           label="Active Ads"
           value={showPlaceholder ? '—' : String(kpis.activeAds)}
-          hint={`${rows.length} total ads`}
+          hint={`${filteredRows.length} in range`}
           hintClass="text-muted-foreground"
           sparkColor="#22c55e"
           sparkData={spendSpark}
@@ -285,7 +296,7 @@ export default function HomeOverviewClient({ displayName }: HomeOverviewClientPr
       <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 lg:grid-cols-12">
         <div className="flex min-h-0 flex-col overflow-hidden lg:col-span-9">
           <AdPerformanceTable
-            rows={rows}
+            rows={filteredRows}
             onToggleStatus={toggleStatus}
             onAutoPause={autoPause}
             busyAdIds={busyAdIds}
@@ -293,7 +304,7 @@ export default function HomeOverviewClient({ displayName }: HomeOverviewClientPr
           />
         </div>
         <div className="min-h-0 max-h-[220px] lg:col-span-3 lg:max-h-full">
-          <RightRail rows={rows} dashboardLoading={bootstrapping || loading} />
+          <RightRail rows={filteredRows} dashboardLoading={bootstrapping || loading} />
         </div>
       </div>
 
@@ -388,7 +399,7 @@ export default function HomeOverviewClient({ displayName }: HomeOverviewClientPr
             <div className="rounded-xl border border-[var(--glass-border-subtle)] bg-muted/20 p-2">
               <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Active Ads</p>
               <p className="font-display text-base font-semibold">{kpis.activeAds}</p>
-              <p className="text-[10px] font-medium text-muted-foreground">{rows.length} loaded</p>
+              <p className="text-[10px] font-medium text-muted-foreground">{filteredRows.length} in range</p>
             </div>
             <div className="rounded-xl border border-[var(--glass-border-subtle)] bg-muted/20 p-2">
               <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Winning Rate</p>
