@@ -1,8 +1,9 @@
 'use client';
 
-import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
-import { ChevronLeft, Database } from 'lucide-react';
+import { Database } from 'lucide-react';
+
+import { ProfileSecondaryNav } from '@/app/components/profile/ProfileSecondaryNav';
 import { AiOutlineLoading } from 'react-icons/ai';
 
 import DataMineSection from '@/app/components/profile/DataMineSection';
@@ -14,7 +15,6 @@ import { VisualDnaTab } from '@/app/components/profile/dna/VisualDnaTab';
 import {
   profileCard,
   profileCardHeader,
-  profileGhostButton,
 } from '@/app/components/profile/profile-utils';
 import type { DataMineSnapshot } from '@/lib/data-mine/types';
 import type { DnaTabId } from '@/lib/brand-dna/types';
@@ -82,10 +82,9 @@ export default function DataMinePageClient() {
               </p>
             </div>
           </div>
-          <Link href="/profile" className={`${profileGhostButton} shrink-0`}>
-            <ChevronLeft className="h-3 w-3" />
-            Profile
-          </Link>
+        </div>
+        <div className="border-t border-border px-3 py-2">
+          <ProfileSecondaryNav />
         </div>
         <div className="border-t border-border px-3 py-2">
           <DnaChipNav active={activeTab} onChange={setActiveTab} />

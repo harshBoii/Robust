@@ -86,6 +86,8 @@ model Company {
   shopifyBlogChannels     ShopifyBlogChannel[]
   metaAdsAutoConfig       MetaAdsAutoConfig?
   metaApiLogs             MetaApiLog[]
+  companyJobConfigs       CompanyJobConfig[]
+  lastMicroserviceJobAt   DateTime? @map("last_microservice_job_at") @db.Timestamptz(3)
 
   @@index([slug])
   @@map("companies")
@@ -1354,6 +1356,50 @@ model MetaAdsAutoConfig {
 }
 
 // ================================================================
+// COMPANY BACKGROUND JOBS (Upstash QStash)
+// ================================================================
+
+model CompanyJobConfig {
+  id               String         @id @default(cuid())
+  companyId        String         @map("company_id")
+  jobType          CompanyJobType @map("job_type")
+  enabled          Boolean        @default(false)
+  frequency        JobFrequency   @default(WEEKLY)
+  settings         Json           @default("{}")
+  qstashScheduleId String?        @map("qstash_schedule_id") @db.VarChar(255)
+  lastRunAt        DateTime?      @map("last_run_at") @db.Timestamptz(3)
+  nextRunAt        DateTime?      @map("next_run_at") @db.Timestamptz(3)
+  createdAt        DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt        DateTime       @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  company Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  runs    CompanyJobRun[]
+
+  @@unique([companyId, jobType])
+  @@index([companyId])
+  @@index([enabled, nextRunAt])
+  @@map("company_job_configs")
+}
+
+model CompanyJobRun {
+  id         String              @id @default(cuid())
+  configId   String              @map("config_id")
+  companyId  String              @map("company_id")
+  jobType    CompanyJobType      @map("job_type")
+  status     CompanyJobRunStatus @default(SUCCESS)
+  startedAt  DateTime            @default(now()) @map("started_at") @db.Timestamptz(3)
+  finishedAt DateTime?           @map("finished_at") @db.Timestamptz(3)
+  summary    Json?
+  error      String?             @db.Text
+
+  config CompanyJobConfig @relation(fields: [configId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, jobType, startedAt(sort: Desc)])
+  @@index([configId])
+  @@map("company_job_runs")
+}
+
+// ================================================================
 // META API AUDIT LOG (superadmin)
 // ================================================================
 
@@ -2284,4 +2330,25 @@ enum RivalScrapeStatus {
   PROCESSING
   DONE
   FAILED
+}
+
+enum CompanyJobType {
+  META_AUTO_ADS
+  BOUNTY_PAGE_GENERATION
+  BOUNTY_TOPIC_SCAN
+  RADAR_PROMPT_REFRESH
+}
+
+enum JobFrequency {
+  DAILY
+  WEEKLY
+  BIWEEKLY
+  MONTHLY
+  CUSTOM
+}
+
+enum CompanyJobRunStatus {
+  SUCCESS
+  FAILED
+  SKIPPED
 }

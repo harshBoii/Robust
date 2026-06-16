@@ -1,13 +1,13 @@
 'use client';
 
-import Link from 'next/link';
-import { ChevronLeft, Sparkles } from 'lucide-react';
+import { Sparkles } from 'lucide-react';
+
+import { ProfileSecondaryNav } from '@/app/components/profile/ProfileSecondaryNav';
 
 import AnalyzeLatestAdsSection from '@/app/components/profile/AnalyzeLatestAdsSection';
 import {
   profileCard,
   profileCardHeader,
-  profileGhostButton,
 } from '@/app/components/profile/profile-utils';
 
 export default function AnalyzeAdsPageClient() {
@@ -26,10 +26,9 @@ export default function AnalyzeAdsPageClient() {
               </p>
             </div>
           </div>
-          <Link href="/profile" className={`${profileGhostButton} shrink-0`}>
-            <ChevronLeft className="h-3 w-3" />
-            Profile
-          </Link>
+        </div>
+        <div className="border-t border-border px-3 py-2">
+          <ProfileSecondaryNav />
         </div>
       </div>
 

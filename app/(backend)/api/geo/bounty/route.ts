@@ -1,8 +1,11 @@
 import { NextResponse } from "next/server"
 import { getSession }   from "@/lib/auth/session"
 import { runBountyJob } from "@/lib/microservice/jobs/bounty-jobs"
+import { MicroserviceGapError } from "@/lib/jobs/company-jobs/types"
 import { SubscriptionLimitError } from "@/lib/subscription/check-limit"
 import { prisma } from "@/lib/prisma"
+
+export const maxDuration = 600;
 
 export async function POST() {
   const session = await getSession()
@@ -13,6 +16,19 @@ export async function POST() {
     const result = await runBountyJob(session.companyId)
     return NextResponse.json({ success: true, ...result })
   } catch (err) {
+    if (err instanceof MicroserviceGapError) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: err.message,
+          retryAfterSeconds: err.retryAfterSeconds,
+        },
+        {
+          status: 429,
+          headers: { 'Retry-After': String(err.retryAfterSeconds) },
+        },
+      )
+    }
     if (err instanceof SubscriptionLimitError) {
       return NextResponse.json(
         { success: false, error: err.message, usage: err.usage },

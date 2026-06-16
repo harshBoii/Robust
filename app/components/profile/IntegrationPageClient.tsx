@@ -2,7 +2,9 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
-import { ChevronLeft, Plug, Share2 } from 'lucide-react';
+import { Plug, Share2 } from 'lucide-react';
+
+import { ProfileSecondaryNav } from '@/app/components/profile/ProfileSecondaryNav';
 import { SiMeta, SiShopify, SiReddit, SiX, SiGoogle } from 'react-icons/si';
 import { FaLinkedin } from 'react-icons/fa';
 
@@ -309,10 +311,9 @@ export default function IntegrationPageClient() {
               </p>
             </div>
           </div>
-          <Link href="/profile" className={`${profileGhostButton} shrink-0`}>
-            <ChevronLeft className="h-3 w-3" />
-            Profile
-          </Link>
+        </div>
+        <div className="border-t border-border px-3 py-2">
+          <ProfileSecondaryNav />
         </div>
       </div>
 

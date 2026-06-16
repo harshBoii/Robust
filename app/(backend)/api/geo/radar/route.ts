@@ -2,10 +2,12 @@ import { NextResponse } from 'next/server';
 
 import { getSession } from '@/lib/auth/session';
 import { buildRadarGetPayload } from '@/lib/geo/radar/buildRadarGetPayload';
-import { runRadarJob } from '@/lib/jobs/run-radar';
+import { runRadarPromptRefreshJob } from '@/lib/jobs/company-jobs/run-radar-prompt-refresh';
+import { MicroserviceGapError } from '@/lib/jobs/company-jobs/types';
 import { prisma } from '@/lib/prisma';
 
 export const dynamic = 'force-dynamic';
+export const maxDuration = 600;
 
 export async function POST() {
   const session = await getSession();
@@ -14,9 +16,28 @@ export async function POST() {
   }
 
   try {
-    const result = await runRadarJob(session.companyId);
-    return NextResponse.json({ success: true, ...result });
+    const result = await runRadarPromptRefreshJob(session.companyId);
+    if (result.status === 'FAILED') {
+      return NextResponse.json(
+        { success: false, error: result.error ?? 'Failed to refresh radar data' },
+        { status: 502 },
+      );
+    }
+    return NextResponse.json({ success: true, ...result.summary });
   } catch (err) {
+    if (err instanceof MicroserviceGapError) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: err.message,
+          retryAfterSeconds: err.retryAfterSeconds,
+        },
+        {
+          status: 429,
+          headers: { 'Retry-After': String(err.retryAfterSeconds) },
+        },
+      );
+    }
     console.error('Radar error:', err);
     return NextResponse.json({ success: false, error: String(err) }, { status: 502 });
   }

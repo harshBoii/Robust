@@ -4,6 +4,8 @@ import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 import { Loader2, Megaphone, Sparkles } from 'lucide-react';
 
+import { ProfileSecondaryNav } from '@/app/components/profile/ProfileSecondaryNav';
+
 import {
   profileCard,
   profileCardHeaderCompact,
@@ -135,30 +137,27 @@ export default function MetaAdsAutoConfigClient() {
 
   return (
     <div className={profilePageShell}>
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <Link
-            href="/profile"
-            className="text-[12px] text-muted-foreground hover:text-foreground"
+      <div className={`${profileCard} mb-4`}>
+        <div className="flex flex-wrap items-center justify-between gap-3 px-3 py-2.5">
+          <div>
+            <h1 className="font-display text-xl font-semibold text-foreground">Ads Automation</h1>
+            <p className="mt-1 max-w-xl text-[13px] text-muted-foreground">
+              Configure auto mode for Miss Robusta — generate statics, pick campaigns, and draft or
+              publish ads without manual widget steps.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => void save()}
+            disabled={saving}
+            className={`${profileGhostButton} font-semibold disabled:opacity-60`}
           >
-            ← Profile
-          </Link>
-          <h1 className="font-display mt-1 text-xl font-semibold text-foreground">
-            Ads Automation
-          </h1>
-          <p className="mt-1 max-w-xl text-[13px] text-muted-foreground">
-            Configure auto mode for Miss Robusta — generate statics, pick campaigns, and draft or
-            publish ads without manual widget steps.
-          </p>
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : saved ? 'Saved' : 'Save changes'}
+          </button>
         </div>
-        <button
-          type="button"
-          onClick={() => void save()}
-          disabled={saving}
-          className={`${profileGhostButton} font-semibold disabled:opacity-60`}
-        >
-          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : saved ? 'Saved' : 'Save changes'}
-        </button>
+        <div className="border-t border-border px-3 py-2">
+          <ProfileSecondaryNav />
+        </div>
       </div>
 
       {error ? <p className="mb-4 text-sm text-destructive">{error}</p> : null}

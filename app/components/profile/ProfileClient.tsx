@@ -337,6 +337,9 @@ export default function ProfileClient({ profile }: ProfileClientProps) {
             <Link href="/profile/analyze-ads" className={profileGhostButton}>
               Analyze Ads
             </Link>
+            <Link href="/profile/jobs" className={profileGhostButton}>
+              Jobs
+            </Link>
             <button type="button" onClick={() => setModal('edit')} className={profileGhostButton}>
               <Pencil className="h-3 w-3" />
               Edit
