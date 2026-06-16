@@ -8,7 +8,7 @@ import { getQstashReceiver } from '@/lib/jobs/company-jobs/qstash';
 import { isCompanyJobType } from '@/lib/jobs/company-jobs/validate-settings';
 
 export const dynamic = 'force-dynamic';
-export const maxDuration = 600;
+export const maxDuration = 300;
 
 export async function POST(req: NextRequest) {
   const receiver = getQstashReceiver();

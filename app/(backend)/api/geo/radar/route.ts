@@ -7,7 +7,7 @@ import { MicroserviceGapError } from '@/lib/jobs/company-jobs/types';
 import { prisma } from '@/lib/prisma';
 
 export const dynamic = 'force-dynamic';
-export const maxDuration = 600;
+export const maxDuration = 300;
 
 export async function POST() {
   const session = await getSession();

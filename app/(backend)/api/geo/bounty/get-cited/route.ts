@@ -4,7 +4,7 @@ import { parseSpreadPlatforms } from "@/lib/geo/bounty/spread-platforms";
 import { runSingleBountyPageJob } from "@/lib/jobs/company-jobs/run-bounty-pages-batch";
 import { MicroserviceGapError } from "@/lib/jobs/company-jobs/types";
 
-export const maxDuration = 600;
+export const maxDuration = 300;
 
 export async function POST(request: NextRequest) {
   const session = await getSession();

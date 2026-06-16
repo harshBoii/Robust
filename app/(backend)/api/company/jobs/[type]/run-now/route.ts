@@ -6,7 +6,7 @@ import { MicroserviceGapError } from '@/lib/jobs/company-jobs/types';
 import { isCompanyJobType } from '@/lib/jobs/company-jobs/validate-settings';
 
 export const dynamic = 'force-dynamic';
-export const maxDuration = 600;
+export const maxDuration = 300;
 
 export async function POST(
   _req: NextRequest,

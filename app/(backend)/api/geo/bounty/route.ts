@@ -5,7 +5,7 @@ import { MicroserviceGapError } from "@/lib/jobs/company-jobs/types"
 import { SubscriptionLimitError } from "@/lib/subscription/check-limit"
 import { prisma } from "@/lib/prisma"
 
-export const maxDuration = 600;
+export const maxDuration = 300;
 
 export async function POST() {
   const session = await getSession()
