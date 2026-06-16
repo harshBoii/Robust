@@ -61,22 +61,6 @@ export type JobRunResult = {
   error?: string;
 };
 
-export class MicroserviceGapError extends Error {
-  readonly retryAfterSeconds: number;
-
-  constructor(retryAfterSeconds: number) {
-    super(`Microservice jobs must be spaced at least 5 minutes apart. Retry in ${retryAfterSeconds}s.`);
-    this.name = 'MicroserviceGapError';
-    this.retryAfterSeconds = retryAfterSeconds;
-  }
-}
-
-export const MICROSERVICE_JOB_TYPES: CompanyJobType[] = [
-  'RADAR_PROMPT_REFRESH',
-  'BOUNTY_TOPIC_SCAN',
-  'BOUNTY_PAGE_GENERATION',
-];
-
 export const ALL_JOB_TYPES: CompanyJobType[] = [
   'META_AUTO_ADS',
   'BOUNTY_PAGE_GENERATION',

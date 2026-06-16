@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@/app/generated/prisma/client";
+import { logMicroserviceResponse } from "@/lib/microservice/log-response";
 import { syncBountyRevenueForCompany } from "@/lib/geo/radar/bountySync";
 import { buildBountyGenerationPayload } from "@/lib/geo/bounty/buildBountyPayload";
 import {
@@ -75,10 +76,13 @@ export async function huntBountyForCompany(opts: {
     });
 
     if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      console.error("[microservice:bounty-page] error", { status: res.status, body: text });
       throw new Error(`Generator responded with ${res.status}`);
     }
 
     const result = (await res.json()) as SocialGeneratorResponse;
+    logMicroserviceResponse("bounty-page", result);
     const page = getGeneratorPageObject(result);
     if (!page) {
       throw new Error("Generator response missing page field");

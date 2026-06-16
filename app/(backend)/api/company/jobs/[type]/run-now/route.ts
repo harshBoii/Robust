@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { getSession } from '@/lib/auth/session';
 import { dispatchCompanyJob } from '@/lib/jobs/company-jobs';
-import { MicroserviceGapError } from '@/lib/jobs/company-jobs/types';
 import { isCompanyJobType } from '@/lib/jobs/company-jobs/validate-settings';
 
 export const dynamic = 'force-dynamic';
@@ -30,19 +29,6 @@ export async function POST(
     });
     return NextResponse.json({ ok: true, ...result });
   } catch (err) {
-    if (err instanceof MicroserviceGapError) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: err.message,
-          retryAfterSeconds: err.retryAfterSeconds,
-        },
-        {
-          status: 429,
-          headers: { 'Retry-After': String(err.retryAfterSeconds) },
-        },
-      );
-    }
     console.error('[company/jobs/run-now]', err);
     return NextResponse.json(
       { ok: false, error: err instanceof Error ? err.message : 'Job failed' },

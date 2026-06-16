@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/session";
 import { parseSpreadPlatforms } from "@/lib/geo/bounty/spread-platforms";
 import { runSingleBountyPageJob } from "@/lib/jobs/company-jobs/run-bounty-pages-batch";
-import { MicroserviceGapError } from "@/lib/jobs/company-jobs/types";
 
 export const maxDuration = 300;
 
@@ -66,19 +65,6 @@ export async function POST(request: NextRequest) {
       { status: allSuccess ? 200 : 207 },
     );
   } catch (err) {
-    if (err instanceof MicroserviceGapError) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: err.message,
-          retryAfterSeconds: err.retryAfterSeconds,
-        },
-        {
-          status: 429,
-          headers: { 'Retry-After': String(err.retryAfterSeconds) },
-        },
-      );
-    }
     return NextResponse.json(
       {
         success: false,

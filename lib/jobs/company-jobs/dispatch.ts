@@ -3,9 +3,7 @@ import 'server-only';
 import type { CompanyJobType } from '@/app/generated/prisma/client';
 
 import { shouldSkipForFrequency } from './frequency';
-import { MicroserviceGapError } from './types';
 import { executeCompanyJob } from './execute-job';
-import { enqueueDelayedJob } from './qstash';
 import {
   createCompanyJobRun,
   getCompanyJobConfig,
@@ -42,33 +40,11 @@ export async function dispatchCompanyJob(input: {
     return { status: 'SKIPPED', summary: { runId: run.id, reason: 'biweekly_skip' } };
   }
 
-  let result: JobRunResult;
-  try {
-    result = await executeCompanyJob(
-      input.companyId,
-      input.jobType,
-      parseJobSettings(input.jobType, config.settings),
-    );
-  } catch (err) {
-    if (err instanceof MicroserviceGapError && input.source === 'schedule') {
-      await enqueueDelayedJob(
-        { companyId: input.companyId, jobType: input.jobType },
-        err.retryAfterSeconds,
-      );
-      const run = await createCompanyJobRun({
-        configId: config.id,
-        companyId: input.companyId,
-        jobType: input.jobType,
-        status: 'SKIPPED',
-        summary: { reason: 'microservice_gap', retryAfterSeconds: err.retryAfterSeconds },
-      });
-      return {
-        status: 'SKIPPED',
-        summary: { runId: run.id, retryAfterSeconds: err.retryAfterSeconds },
-      };
-    }
-    throw err;
-  }
+  const result = await executeCompanyJob(
+    input.companyId,
+    input.jobType,
+    parseJobSettings(input.jobType, config.settings),
+  );
 
   await createCompanyJobRun({
     configId: config.id,

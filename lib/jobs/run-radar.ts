@@ -3,6 +3,7 @@ import 'server-only';
 import { Agent, fetch as undiciFetch } from 'undici';
 
 import { prisma } from '@/lib/prisma';
+import { logMicroserviceResponse } from '@/lib/microservice/log-response';
 import { applyRadarOutput, parseRadarMicroservicePayload } from '@/lib/geo/radar/applyRadarOutput';
 import { requireLimit } from '@/lib/subscription/check-limit';
 import { incrementUsage } from '@/lib/subscription/increment-usage';
@@ -157,10 +158,13 @@ export async function runRadarJob(companyId: string) {
 
   if (!res.ok) {
     const text = await res.text().catch(() => '');
+    console.error('[microservice:radar] error', { status: res.status, body: text });
     throw new Error(`Radar microservice failed (${res.status}): ${text}`);
   }
 
-  const radarOutput = parseRadarMicroservicePayload(await res.json());
+  const raw = await res.json();
+  logMicroserviceResponse('radar', raw);
+  const radarOutput = parseRadarMicroservicePayload(raw);
   if (!radarOutput) throw new Error('Invalid radar response');
 
   await incrementUsage(companyId, 'radarScans');

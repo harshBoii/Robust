@@ -4,11 +4,6 @@ import type { BountySpreadPlatform } from '@/app/generated/prisma/client';
 import { runGetCitedForCompany } from '@/lib/geo/bounty/runGetCitedForCompany';
 import { prisma } from '@/lib/prisma';
 
-import {
-  assertMicroserviceGap,
-  recordMicroserviceRun,
-  sleepMicroserviceGap,
-} from './microservice-gap';
 import type { BountyPageGenerationSettings, JobRunResult } from './types';
 import { parseBountyPageSettings } from './validate-settings';
 
@@ -25,7 +20,6 @@ export async function runSingleBountyPageJob(
   companyId: string,
   opts: { query: string; platforms: BountySpreadPlatform[]; promptId?: string | null },
 ): Promise<JobRunResult> {
-  await assertMicroserviceGap(companyId);
   try {
     const result = await runGetCitedForCompany({
       companyId,
@@ -33,7 +27,6 @@ export async function runSingleBountyPageJob(
       platforms: opts.platforms,
       promptId: opts.promptId ?? null,
     });
-    await recordMicroserviceRun(companyId);
     return {
       status: result.success ? 'SUCCESS' : 'FAILED',
       summary: {
@@ -97,10 +90,6 @@ export async function runBountyPagesBatchJob(
 
     if (single.status === 'FAILED' && results.length === 1 && count === 1) {
       return single;
-    }
-
-    if (i < count - 1) {
-      await sleepMicroserviceGap();
     }
   }
 

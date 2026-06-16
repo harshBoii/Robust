@@ -8,8 +8,6 @@ import type {
   MetaAutoAdsJobSettings,
 } from './types';
 
-export const MICROSERVICE_GAP_MS = 5 * 60 * 1000;
-
 export const DEFAULT_FREQUENCY_BY_JOB: Record<CompanyJobType, JobFrequency> = {
   META_AUTO_ADS: 'WEEKLY',
   BOUNTY_PAGE_GENERATION: 'WEEKLY',

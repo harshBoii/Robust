@@ -14,4 +14,3 @@ export {
   updateCompanyJobConfig,
 } from './repository';
 export { upsertJobSchedule, deleteJobSchedule, type SchedulePayload } from './qstash';
-export { MicroserviceGapError } from './types';

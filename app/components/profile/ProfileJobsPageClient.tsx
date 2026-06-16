@@ -8,7 +8,6 @@ import {
   profileCard,
   profileCardHeaderCompact,
   profileGhostButton,
-  profilePageShell,
   profileStatusBadge,
   formatProfileDate,
 } from '@/app/components/profile/profile-utils';
@@ -47,7 +46,8 @@ type JobRow = {
   recentRuns: JobRun[];
 };
 
-const FREQUENCIES: JobFrequency[] = ['DAILY', 'WEEKLY', 'BIWEEKLY', 'MONTHLY'];
+const jobsPageShell =
+  '-m-3 flex h-full min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden custom-scrollbar bg-muted/30 p-2 pb-6 sm:-m-4 sm:p-3 md:-m-5 md:p-3';
 
 const JOB_ORDER: CompanyJobType[] = [
   'META_AUTO_ADS',
@@ -229,7 +229,7 @@ function JobCard({
           {job.jobType === 'BOUNTY_PAGE_GENERATION' ? (
             <>
               <p className="text-[11px] text-muted-foreground">
-                Batches run sequentially with ≥ 5 min between pages (max 5 per run).
+                Generates up to 5 bounty pages per run from random active prompts.
               </p>
               <div className="grid gap-3 sm:grid-cols-2">
                 <div>
@@ -427,14 +427,14 @@ export default function ProfileJobsPageClient() {
 
   if (loading) {
     return (
-      <div className={`${profilePageShell} flex items-center justify-center py-20`}>
+      <div className={`${jobsPageShell} flex items-center justify-center py-20`}>
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
       </div>
     );
   }
 
   return (
-    <div className={profilePageShell}>
+    <div className={jobsPageShell}>
       <div className={`${profileCard} mb-4`}>
         <div className="flex flex-wrap items-center justify-between gap-3 px-3 py-2.5">
           <div className="flex min-w-0 items-center gap-2">

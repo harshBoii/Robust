@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import type { BountySpreadPlatform, Prisma } from "@/app/generated/prisma/client";
+import { logMicroserviceResponse } from "@/lib/microservice/log-response";
 import { buildBountyGenerationPayload } from "@/lib/geo/bounty/buildBountyPayload";
 import {
   AEO_PAGE_MICROSERVICE_PATH,
@@ -65,10 +66,17 @@ export async function huntSocialForCompany(opts: {
   });
 
   if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    console.error("[microservice:bounty-social] error", {
+      status: res.status,
+      platform: opts.platform,
+      body: text,
+    });
     throw new Error(`Social generator responded with ${res.status}`);
   }
 
   const result = (await res.json()) as SocialGeneratorResponse;
+  logMicroserviceResponse(`bounty-social:${opts.platform}`, result);
   const { title, body, metadata } = parseSocialGeneratorResponse(result, bounty.query);
 
   const record = await prisma.bountyContent.upsert({

@@ -2,14 +2,11 @@ import 'server-only';
 
 import { runRadarJob } from '@/lib/jobs/run-radar';
 
-import { assertMicroserviceGap, recordMicroserviceRun } from './microservice-gap';
 import type { JobRunResult } from './types';
 
 export async function runRadarPromptRefreshJob(companyId: string): Promise<JobRunResult> {
-  await assertMicroserviceGap(companyId);
   try {
     const result = await runRadarJob(companyId);
-    await recordMicroserviceRun(companyId);
     return {
       status: 'SUCCESS',
       summary: {
