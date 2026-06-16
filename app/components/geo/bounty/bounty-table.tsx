@@ -55,10 +55,10 @@ export function BountyTable({
 
   return (
     <div className="overflow-hidden rounded-xl border border-[var(--glass-border)] bg-[var(--glass)]">
-      <div className="overflow-x-auto glass-scrollbar">
+      <div className="max-h-[min(560px,60vh)] overflow-auto glass-scrollbar">
         <table className="w-full text-left text-sm">
-          <thead>
-            <tr className="border-b border-[var(--glass-border)] bg-[var(--glass)]/80">
+          <thead className="sticky top-0 z-10">
+            <tr className="border-b border-[var(--glass-border)] bg-[var(--glass)]/95 backdrop-blur-sm">
               <th className="px-4 py-3 font-medium uppercase tracking-wider text-muted-foreground">
                 Topic
               </th>

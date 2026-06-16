@@ -1475,7 +1475,8 @@ export default function PostToMetaClient({ companyId }: { companyId: string }) {
   );
 
   return (
-    <div className="mx-auto max-w-7xl space-y-6 px-4 py-6 sm:px-6">
+    <div className="mx-auto flex h-full min-h-0 w-full max-w-7xl flex-col px-4 py-6 sm:px-6">
+      <div className="shrink-0 space-y-6">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="space-y-2">
           <div className="inline-flex items-center gap-2 rounded-full border border-border bg-muted/40 px-3 py-1 text-xs font-medium text-muted-foreground">
@@ -1546,9 +1547,11 @@ export default function PostToMetaClient({ companyId }: { companyId: string }) {
           {error}
         </div>
       )}
+      </div>
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
-        <div className="space-y-6">
+      <div className="min-h-0 flex-1 overflow-y-auto glass-scrollbar">
+        <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
+          <div className="space-y-6">
           <Card
             title={step}
             description={STEP_META[step].description}
@@ -1577,16 +1580,18 @@ export default function PostToMetaClient({ companyId }: { companyId: string }) {
                     description="Create your first campaign from a preset below."
                   />
                 ) : (
-                  <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                    {campaigns.map((campaign) => (
-                      <OptionCard
-                        key={campaign.id}
-                        selected={selectedCampaignId === campaign.id}
-                        onClick={() => setSelectedCampaignId(campaign.id)}
-                        title={campaign.name}
-                        subtitle={[campaign.objective, campaign.status].filter(Boolean).join(' · ') || undefined}
-                      />
-                    ))}
+                  <div className="max-h-[min(420px,45vh)] overflow-y-auto glass-scrollbar pr-1">
+                    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                      {campaigns.map((campaign) => (
+                        <OptionCard
+                          key={campaign.id}
+                          selected={selectedCampaignId === campaign.id}
+                          onClick={() => setSelectedCampaignId(campaign.id)}
+                          title={campaign.name}
+                          subtitle={[campaign.objective, campaign.status].filter(Boolean).join(' · ') || undefined}
+                        />
+                      ))}
+                    </div>
                   </div>
                 )}
 
@@ -1640,16 +1645,18 @@ export default function PostToMetaClient({ companyId }: { companyId: string }) {
                         description="Create an ad set from a preset below."
                       />
                     ) : (
-                      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                        {adSets.map((adSet) => (
-                          <OptionCard
-                            key={adSet.id}
-                            selected={selectedAdSetId === adSet.id}
-                            onClick={() => setSelectedAdSetId(adSet.id)}
-                            title={adSet.name}
-                            subtitle={adSet.status ?? undefined}
-                          />
-                        ))}
+                      <div className="max-h-[min(420px,45vh)] overflow-y-auto glass-scrollbar pr-1">
+                        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                          {adSets.map((adSet) => (
+                            <OptionCard
+                              key={adSet.id}
+                              selected={selectedAdSetId === adSet.id}
+                              onClick={() => setSelectedAdSetId(adSet.id)}
+                              title={adSet.name}
+                              subtitle={adSet.status ?? undefined}
+                            />
+                          ))}
+                        </div>
                       </div>
                     )}
 
@@ -2314,6 +2321,7 @@ export default function PostToMetaClient({ companyId }: { companyId: string }) {
             </div>
           </Card>
         </aside>
+        </div>
       </div>
 
       <CreativeGroupAnalyzeDialog

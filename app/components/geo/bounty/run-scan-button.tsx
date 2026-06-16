@@ -41,12 +41,12 @@ export function RunScanButton({ onSuccess, scanInProgress: externalProgress }: R
   };
 
   return (
-    <div className="flex flex-col items-end gap-1">
+    <div className="flex flex-col items-end gap-3 px-2">
       <button
         type="button"
         onClick={handleRunScan}
         disabled={loadingState}
-        className="glass-button-primary inline-flex items-center gap-2"
+        className="glass-button-primary inline-flex items-center gap-3 px-2"
       >
         {loadingState ? (
           <>
@@ -74,7 +74,7 @@ export function RunScanButton({ onSuccess, scanInProgress: externalProgress }: R
         ) : (
           <>
             <ScanIcon />
-            Run Scan
+            Scan
           </>
         )}
       </button>
