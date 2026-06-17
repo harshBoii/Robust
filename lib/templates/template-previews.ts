@@ -1,53 +1,45 @@
 import type { TemplateCategory } from './types';
 
-/** Preview images served from /public/templates */
-export const TEMPLATE_PREVIEW_ASSETS = {
-  cleanBg: '/templates/clean bg .png',
-  goodLighting: '/templates/good lighting.jpeg',
-  studioLighting: '/templates/studio lighting.jpg',
-  flatLay: '/templates/flat lay.png',
-  reflectionShadows: '/templates/reflection and shadows.png',
-  seasonalHoliday: '/templates/seasonal holiday.webp',
-} as const;
+const TEMPLATE_DIR = '/templates';
 
-const CATEGORY_PREVIEW: Record<TemplateCategory, string> = {
-  product: TEMPLATE_PREVIEW_ASSETS.cleanBg,
-  model: TEMPLATE_PREVIEW_ASSETS.goodLighting,
-  style: TEMPLATE_PREVIEW_ASSETS.studioLighting,
-  adFormat: TEMPLATE_PREVIEW_ASSETS.flatLay,
-  platform: TEMPLATE_PREVIEW_ASSETS.seasonalHoliday,
+/** Per-template card art — filenames in public/templates matched to catalog names */
+const TEMPLATE_PREVIEW: Record<string, string> = {
+  'product-clean-background': `${TEMPLATE_DIR}/clean bg.png`,
+  'lifestyle-context': `${TEMPLATE_DIR}/lifestyle context.png`,
+  'dramatic-studio': `${TEMPLATE_DIR}/dramatic studio lighting.png`,
+  'flat-lay': `${TEMPLATE_DIR}/flatlay.png`,
+  'shadow-reflection': `${TEMPLATE_DIR}/shadow & reflection.png`,
+  'seasonal-holiday': `${TEMPLATE_DIR}/seasonal holidays.png`,
+
+  'extract-model': `${TEMPLATE_DIR}/female 2.avif`,
+  'age-demographic': `${TEMPLATE_DIR}/demographic:age-shift.png`,
+  'close-up-crops': `${TEMPLATE_DIR}/close-up crop.png`,
+  'background-replacement': `${TEMPLATE_DIR}/background replacement.png`,
+
+  'anime-illustrated': `${TEMPLATE_DIR}/anime illustrated.png`,
+  'luxury-editorial': `${TEMPLATE_DIR}/luxury editorial.png`,
+  'minimalist-scandinavian': `${TEMPLATE_DIR}/minimalist scandinavian.png`,
+  'dark-cinematic': `${TEMPLATE_DIR}/Dark Cinematic.png`,
+  'neon-cyberpunk': `${TEMPLATE_DIR}/neon cyberpunk.png`,
+  'vintage-retro': `${TEMPLATE_DIR}/vintage retro.png`,
+  'watercolor-sketch': `${TEMPLATE_DIR}/watercolor:sketch.png`,
+
+  'story-vertical-safe': `${TEMPLATE_DIR}/story vertical.png`,
+  'ugc-style': `${TEMPLATE_DIR}/UGC style.png`,
+  'testimonial-overlay': `${TEMPLATE_DIR}/testimonial overlay zome.png`,
+  'urgency-sale-banner': `${TEMPLATE_DIR}/urgency:sale banner.png`,
+
+  'meta-feed-square': `${TEMPLATE_DIR}/meta-feed square.png`,
+  'meta-story-reel': `${TEMPLATE_DIR}/meta story:reel.png`,
+  'google-display-banner': `${TEMPLATE_DIR}/google display banner.png`,
 };
 
-/** Per-template card art — product templates map 1:1 to files in public/templates */
-const TEMPLATE_PREVIEW: Record<string, string> = {
-  'product-clean-background': TEMPLATE_PREVIEW_ASSETS.cleanBg,
-  'lifestyle-context': TEMPLATE_PREVIEW_ASSETS.goodLighting,
-  'dramatic-studio': TEMPLATE_PREVIEW_ASSETS.studioLighting,
-  'flat-lay': TEMPLATE_PREVIEW_ASSETS.flatLay,
-  'shadow-reflection': TEMPLATE_PREVIEW_ASSETS.reflectionShadows,
-  'seasonal-holiday': TEMPLATE_PREVIEW_ASSETS.seasonalHoliday,
-
-  'extract-model': TEMPLATE_PREVIEW_ASSETS.goodLighting,
-  'age-demographic': TEMPLATE_PREVIEW_ASSETS.goodLighting,
-  'close-up-crops': TEMPLATE_PREVIEW_ASSETS.goodLighting,
-  'background-replacement': TEMPLATE_PREVIEW_ASSETS.cleanBg,
-
-  'anime-illustrated': TEMPLATE_PREVIEW_ASSETS.studioLighting,
-  'luxury-editorial': TEMPLATE_PREVIEW_ASSETS.studioLighting,
-  'minimalist-scandinavian': TEMPLATE_PREVIEW_ASSETS.cleanBg,
-  'dark-cinematic': TEMPLATE_PREVIEW_ASSETS.studioLighting,
-  'neon-cyberpunk': TEMPLATE_PREVIEW_ASSETS.reflectionShadows,
-  'vintage-retro': TEMPLATE_PREVIEW_ASSETS.seasonalHoliday,
-  'watercolor-sketch': TEMPLATE_PREVIEW_ASSETS.flatLay,
-
-  'story-vertical-safe': TEMPLATE_PREVIEW_ASSETS.seasonalHoliday,
-  'ugc-style': TEMPLATE_PREVIEW_ASSETS.goodLighting,
-  'testimonial-overlay': TEMPLATE_PREVIEW_ASSETS.cleanBg,
-  'urgency-sale-banner': TEMPLATE_PREVIEW_ASSETS.seasonalHoliday,
-
-  'meta-feed-square': TEMPLATE_PREVIEW_ASSETS.flatLay,
-  'meta-story-reel': TEMPLATE_PREVIEW_ASSETS.seasonalHoliday,
-  'google-display-banner': TEMPLATE_PREVIEW_ASSETS.cleanBg,
+const CATEGORY_PREVIEW: Record<TemplateCategory, string> = {
+  product: TEMPLATE_PREVIEW['product-clean-background'],
+  model: TEMPLATE_PREVIEW['extract-model'],
+  style: TEMPLATE_PREVIEW['anime-illustrated'],
+  adFormat: TEMPLATE_PREVIEW['story-vertical-safe'],
+  platform: TEMPLATE_PREVIEW['meta-feed-square'],
 };
 
 /** Encode path segments so filenames with spaces load reliably in the browser */
