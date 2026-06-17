@@ -9,6 +9,17 @@ import { parseJobSettings } from './validate-settings';
 import type { CompanyJobConfigRow, CompanyJobRunRow } from './types';
 import { ALL_JOB_TYPES } from './types';
 
+type PrismaCompanyJobConfig = NonNullable<
+  Awaited<ReturnType<typeof prisma.companyJobConfig.findUnique>>
+>;
+
+function toConfigRow(row: PrismaCompanyJobConfig): CompanyJobConfigRow {
+  return {
+    ...row,
+    schedule: parseSchedule(row.schedule),
+  };
+}
+
 export async function ensureCompanyJobConfigs(companyId: string): Promise<CompanyJobConfigRow[]> {
   const existing = await prisma.companyJobConfig.findMany({
     where: { companyId },
@@ -31,10 +42,11 @@ export async function ensureCompanyJobConfigs(companyId: string): Promise<Compan
     });
   }
 
-  return prisma.companyJobConfig.findMany({
+  const rows = await prisma.companyJobConfig.findMany({
     where: { companyId },
     orderBy: { jobType: 'asc' },
   });
+  return rows.map(toConfigRow);
 }
 
 export async function getCompanyJobConfig(
@@ -42,9 +54,10 @@ export async function getCompanyJobConfig(
   jobType: CompanyJobType,
 ): Promise<CompanyJobConfigRow | null> {
   await ensureCompanyJobConfigs(companyId);
-  return prisma.companyJobConfig.findUnique({
+  const row = await prisma.companyJobConfig.findUnique({
     where: { companyId_jobType: { companyId, jobType } },
   });
+  return row ? toConfigRow(row) : null;
 }
 
 export async function listCompanyJobsWithRuns(companyId: string) {
