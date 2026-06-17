@@ -775,21 +775,21 @@ export default function AppSidebar({
 
           {/* Robust logo with hover menu */}
           <div className="mb-1 flex w-full flex-col items-center select-none relative group/logo">
-            <div className="relative h-9 w-[52px] cursor-pointer overflow-hidden rounded-lg transition-colors hover:bg-[var(--glass-hover)]">
+            <div className="relative h-10 w-10 cursor-pointer overflow-hidden rounded-xl transition-colors hover:bg-[var(--glass-hover)]">
               <Image
-                src={ROBUST_DNA.logoHorizontalLight}
+                src={ROBUST_DNA.markDark}
                 alt="Robust"
                 fill
                 className="object-contain object-center dark:hidden"
-                sizes="52px"
+                sizes="40px"
                 priority
               />
               <Image
-                src={ROBUST_DNA.logoHorizontalDark}
+                src={ROBUST_DNA.markLight}
                 alt="Robust"
                 fill
                 className="hidden object-contain object-center dark:block"
-                sizes="52px"
+                sizes="40px"
                 priority
               />
             </div>
