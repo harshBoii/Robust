@@ -775,19 +775,24 @@ export default function AppSidebar({
 
           {/* Robust logo with hover menu */}
           <div className="mb-1 flex w-full flex-col items-center select-none relative group/logo">
-            <div className="relative h-10 w-10 overflow-hidden rounded-xl cursor-pointer transition-colors hover:bg-[var(--glass-hover)]">
+            <div className="relative h-9 w-[52px] cursor-pointer overflow-hidden rounded-lg transition-colors hover:bg-[var(--glass-hover)]">
               <Image
-                src={ROBUST_DNA.appIcon}
+                src={ROBUST_DNA.logoHorizontalLight}
                 alt="Robust"
                 fill
-                className="object-contain object-center"
-                sizes="40px"
+                className="object-contain object-center dark:hidden"
+                sizes="52px"
+                priority
+              />
+              <Image
+                src={ROBUST_DNA.logoHorizontalDark}
+                alt="Robust"
+                fill
+                className="hidden object-contain object-center dark:block"
+                sizes="52px"
                 priority
               />
             </div>
-            <span className="font-ui mt-0.5 text-[9px] leading-none text-muted-foreground/40">
-              Robust
-            </span>
 
             {/* Hover dropdown */}
             <div className="absolute left-full bottom-0 ml-2 opacity-0 invisible group-hover/logo:opacity-100 group-hover/logo:visible transition-all duration-200 z-50">
