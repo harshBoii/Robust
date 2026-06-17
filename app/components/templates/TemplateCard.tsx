@@ -3,6 +3,17 @@
 import { getTemplatePreviewImage } from '@/lib/templates/template-previews';
 import type { TemplateDefinition } from '@/lib/templates/types';
 
+function previewAspectClass(fixedAspectRatio?: string | null): string {
+  switch (fixedAspectRatio) {
+    case '9:16':
+      return 'aspect-[9/16]';
+    case '1:1':
+      return 'aspect-square';
+    default:
+      return 'aspect-[4/3]';
+  }
+}
+
 export function TemplateCard({
   template,
   onSelect,
@@ -22,7 +33,9 @@ export function TemplateCard({
       onClick={() => onSelect(template.id)}
       className="group flex h-full flex-col overflow-hidden rounded-xl border border-border/50 bg-background/80 text-left transition hover:border-primary/40 hover:bg-primary/5 hover:shadow-md disabled:opacity-50"
     >
-      <div className="relative aspect-[4/3] w-full overflow-hidden bg-muted/40">
+      <div
+        className={`relative w-full overflow-hidden bg-muted/40 ${previewAspectClass(template.fixedAspectRatio)}`}
+      >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={previewSrc}
