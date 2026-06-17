@@ -6,6 +6,7 @@ import { resolveSessionFromToken } from "@/lib/auth/resolve-session-from-token";
 const PUBLIC_PATH_PREFIXES = [
   "/login",
   "/signup",
+  "/landing",
   "/privacy-policy",
   "/terms-and-conditions",
   "/api/login",

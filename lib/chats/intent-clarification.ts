@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { completeJsonChatWithHistory } from '@/lib/assistant/openai-json';
 import { LLM_USER_REPLY_PRIVACY_RULES } from '@/lib/assistant/user-facing-llm-error';
 import { CHATS_INTENT_SUGGESTIONS } from '@/lib/chats/chat-path-suggestions';
+import { classifyTopLevelPath } from '@/lib/image-gen/classify-top-level';
 import { CLASSIFIER_MODEL } from '@/lib/image-gen/models';
 
 export const MAX_INTENT_CLARIFICATION_QUESTIONS = 2;
@@ -128,7 +129,8 @@ export async function runIntentClarificationTurn(input: {
     return { ready: false, reply, suggestions };
   } catch {
     if (forceRoute) {
-      return { ready: true, path: inferPathFromText(input.userText) };
+      const path = await classifyTopLevelPath(input.userText);
+      return { ready: true, path };
     }
     return {
       ready: false,
@@ -136,24 +138,4 @@ export async function runIntentClarificationTurn(input: {
       suggestions: [...DEFAULT_CLARIFICATION_SUGGESTIONS],
     };
   }
-}
-
-function inferPathFromText(text: string): TopLevelPath {
-  const lower = text.toLowerCase();
-  if (
-    /geo\b|aeo\b|seo\b|citation|bounty|share of voice|geoknight|organic|get cited/.test(lower) &&
-    !/meta pixel|facebook ad|campaign budget/.test(lower)
-  ) {
-    return 'geo';
-  }
-  if (/video|heygen|ugc|script/.test(lower) && !/image|photo|static/.test(lower)) {
-    return 'videoGen';
-  }
-  if (/image|photo|variant|on model|visual|static/.test(lower) && !/video/.test(lower)) {
-    if (/\bads?\b/.test(lower) || /campaign/.test(lower) || /static ad/.test(lower)) {
-      return 'ads';
-    }
-    return 'imageGen';
-  }
-  return 'ads';
 }

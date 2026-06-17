@@ -5,7 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { enqueueBulkPublish } from '@/lib/meta/process-publish-jobs';
 
 import { classifyTopLevelPath } from '@/lib/image-gen/classify-top-level';
-import { isAutoModeActive, looksLikeMetaAdsCreationIntent } from './auto-mode-intent';
+import { isAutoModeActive } from './auto-mode-intent';
 import { buildIntentRoutingText, runIntentClarificationTurn } from './intent-clarification';
 import {
   handleImageGenAction,
@@ -234,16 +234,16 @@ export async function handleChatMessage(
   if (pathType === null && step === 'intent') {
     intentUserRow = await userMsg(sessionId, text);
 
-    const skipClarification =
-      autoModeActive || looksLikeMetaAdsCreationIntent(text);
+    const skipClarification = autoModeActive;
 
     if (skipClarification) {
       const routeText = text.trim();
       const nextState: WorkflowState = {
         ...clearedIntentState(state, routeText),
-        autoMode: autoModeActive ? true : state.autoMode,
+        autoMode: true,
         intentNotes: routeText.slice(0, 500),
       };
+
       await updateChatSession(sessionId, companyId, {
         pathType: 'ADS',
         workflowState: nextState,

@@ -28,6 +28,7 @@ import ThemeToggle from '@/app/components/UI/ThemeToggle';
 import { ModalPortal } from '@/app/components/common/ModalPortal';
 import ChatsHistoryList from '@/app/components/chats/ChatsHistoryList';
 import GalleryUploadZone from '@/app/(frontend)/(workspace)/gallery/GalleryUploadZone';
+import { ROBUST_DNA } from '@/lib/brand/robust-dna';
 
 /* ============================================
    INLINE SVG ICONS
@@ -775,7 +776,7 @@ export default function AppSidebar({
           <div className="mb-1 flex w-full flex-col items-center select-none relative group/logo">
             <div className="relative h-10 w-10 overflow-hidden rounded-xl cursor-pointer transition-colors hover:bg-[var(--glass-hover)]">
               <Image
-                src="/mascot/Robust.png"
+                src={ROBUST_DNA.appIcon}
                 alt="Robust"
                 fill
                 className="object-contain object-center"

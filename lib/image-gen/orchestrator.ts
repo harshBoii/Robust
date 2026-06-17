@@ -1395,6 +1395,22 @@ export async function handleImageGenAction(
       } else if (ig.subpath === 'templates') {
         const patch = await hydrateFromCompany(companyId, ig);
         ig = { ...ig, ...patch };
+        ig.step = 'templateNotes';
+
+        const history = (session.messages ?? [])
+          .filter((m) => m.content)
+          .map((m) => ({
+            role: (m.role === 'USER' ? 'user' : 'assistant') as 'user' | 'assistant',
+            content: m.content!,
+          }));
+        const notes = await runTemplateNotesTurn({
+          state: ig,
+          userText: '',
+          history,
+          afterUpload: true,
+        });
+        ig = { ...ig, ...notes.state, step: 'templateNotes' };
+        newMessages.push(await assistantMsg(session.id, notes.reply));
       } else {
         const autoResult = await beginRivalInspirationOrCollectFields(
           session,
@@ -1479,22 +1495,9 @@ export async function handleImageGenAction(
         if (!ig.productDescription && fileName) {
           ig.productDescription = fileName.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ');
         }
-        ig.step = 'templateNotes';
 
-        const history = (session.messages ?? [])
-          .filter((m) => m.content)
-          .map((m) => ({
-            role: (m.role === 'USER' ? 'user' : 'assistant') as 'user' | 'assistant',
-            content: m.content!,
-          }));
-        const notes = await runTemplateNotesTurn({
-          state: ig,
-          userText: '',
-          history,
-          afterUpload: true,
-        });
-        ig = { ...ig, ...notes.state, step: 'templateNotes' };
-        newMessages.push(await assistantMsg(session.id, notes.reply));
+        newMessages.push(await assistantMsg(session.id, 'Image received.', undefined));
+        ig = await promptArtistSettings(session, ig, newMessages);
         break;
       }
 

@@ -1386,3 +1386,16 @@ html.minimal.dark ::-webkit-scrollbar-thumb:hover,
 html.dark.minimal ::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.20);
 }
+
+@keyframes auth-ticker {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.animate-auth-ticker {
+  animation: auth-ticker 28s linear infinite;
+}

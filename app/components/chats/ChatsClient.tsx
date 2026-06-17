@@ -96,15 +96,12 @@ export default function ChatsClient({
   const showImageGenArtistInComposer =
     session?.currentStep === 'imageGen' &&
     !templateAwaitingUpload &&
-    ((ig?.step === 'artistSettings' && !isTemplateFlow) ||
+    (ig?.step === 'artistSettings' ||
       (isTemplateFlow &&
-        ['templateUpload', 'templateNotes', 'reviewTemplate', 'chooseNext'].includes(
-          ig?.step ?? '',
-        )));
+        ['templateNotes', 'reviewTemplate', 'chooseNext'].includes(ig?.step ?? '')));
   const showArtistPickerMode =
     session?.currentStep === 'imageGen' &&
     ig?.step === 'artistSettings' &&
-    !isTemplateFlow &&
     !templateAwaitingUpload;
 
   const [composerArtistId, setComposerArtistId] = useState<ImageArtistId>(DEFAULT_IMAGE_ARTIST_ID);
