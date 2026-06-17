@@ -288,7 +288,7 @@ export default function AuthPage({ initialMode }: { initialMode: Mode }) {
   };
 
   const inputClass =
-    'w-full rounded-xl border border-input bg-background py-3 text-[0.9375rem] text-foreground placeholder:text-muted-foreground transition-colors focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15';
+    'w-full rounded-xl border border-[color-mix(in_srgb,var(--foreground)_12%,var(--border))] bg-background py-3 text-[0.9375rem] text-foreground shadow-[inset_0_1px_2px_rgba(0,0,0,0.03)] placeholder:text-muted-foreground transition-colors focus:border-primary/60 focus:outline-none focus:ring-2 focus:ring-primary/10';
 
   return (
     <div className="flex min-h-screen flex-col bg-background text-foreground">
@@ -336,7 +336,7 @@ export default function AuthPage({ initialMode }: { initialMode: Mode }) {
             transition={{ duration: 0.5 }}
             className="w-full max-w-[420px]"
           >
-            <div className="rounded-2xl border border-border bg-card p-7 shadow-[0_8px_40px_-12px_rgba(0,0,0,0.12)] sm:p-8">
+            <div className="rounded-2xl border border-[color-mix(in_srgb,var(--foreground)_10%,var(--border))] bg-card p-7 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_8px_32px_-12px_rgba(0,0,0,0.10)] sm:p-8">
               <h1 className="font-display text-[1.65rem] font-semibold leading-tight tracking-[-0.03em] text-foreground">
                 {mode === 'login'
                   ? twoFactorStep
