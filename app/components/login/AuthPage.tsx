@@ -336,7 +336,7 @@ export default function AuthPage({ initialMode }: { initialMode: Mode }) {
             transition={{ duration: 0.5 }}
             className="w-full max-w-[420px]"
           >
-            <div className="rounded-2xl border border-border border-l-4 border-l-primary bg-[color-mix(in_srgb,var(--primary)_5%,var(--card))] p-7 shadow-[0_24px_60px_-28px_rgba(0,0,0,0.14)] sm:p-8">
+            <div className="rounded-2xl border border-border bg-card p-7 shadow-[0_8px_40px_-12px_rgba(0,0,0,0.12)] sm:p-8">
               <h1 className="font-display text-[1.65rem] font-semibold leading-tight tracking-[-0.03em] text-foreground">
                 {mode === 'login'
                   ? twoFactorStep

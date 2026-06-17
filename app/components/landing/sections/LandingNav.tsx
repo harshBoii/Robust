@@ -39,7 +39,7 @@ export function LandingNav() {
           ))}
         </div>
         <div className="ncta">
-          <Link className="lnk" href="/login">
+          <Link className="pill pill-o pill-sm" href="/login">
             Sign in
           </Link>
           <Link className="pill pill-b pill-sm" href="/signup">
