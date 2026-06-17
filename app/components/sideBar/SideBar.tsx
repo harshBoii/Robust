@@ -777,7 +777,7 @@ export default function AppSidebar({
           <div className="mb-1 flex w-full flex-col items-center select-none relative group/logo">
             <div className="relative h-10 w-10 cursor-pointer overflow-hidden rounded-xl transition-colors hover:bg-[var(--glass-hover)]">
               <Image
-                src={ROBUST_DNA.markDark}
+                src={ROBUST_DNA.markLight}
                 alt="Robust"
                 fill
                 className="object-contain object-center dark:hidden"
@@ -785,7 +785,7 @@ export default function AppSidebar({
                 priority
               />
               <Image
-                src={ROBUST_DNA.markLight}
+                src={ROBUST_DNA.markDark}
                 alt="Robust"
                 fill
                 className="hidden object-contain object-center dark:block"
