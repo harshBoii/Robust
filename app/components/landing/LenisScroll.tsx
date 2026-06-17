@@ -6,6 +6,19 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from '
 
 const LenisContext = createContext<Lenis | null>(null);
 
+const LENIS_HTML_CLASSES = ['lenis', 'lenis-smooth', 'lenis-stopped', 'lenis-scrolling'] as const;
+
+export function clearLenisDocumentState() {
+  const html = document.documentElement;
+  const { body } = document;
+
+  html.classList.remove(...LENIS_HTML_CLASSES);
+  html.style.removeProperty('overflow');
+  html.style.removeProperty('height');
+  body.style.removeProperty('overflow');
+  body.style.removeProperty('height');
+}
+
 export function useLenis() {
   return useContext(LenisContext);
 }
@@ -16,8 +29,11 @@ export function LenisScroll({ children }: { children: ReactNode }) {
   useEffect(() => {
     const instance = new Lenis({ autoRaf: true });
     setLenis(instance);
+
     return () => {
       instance.destroy();
+      clearLenisDocumentState();
+      setLenis(null);
     };
   }, []);
 

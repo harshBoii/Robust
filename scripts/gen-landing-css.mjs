@@ -36,7 +36,15 @@ for (const line of lines) {
     continue;
   }
   const t = line.trim();
-  if (!t || t.startsWith('/*') || t.startsWith('.landing') || t.startsWith('*')) {
+  if (t.startsWith('*,') || t.startsWith('*,*')) {
+    out.push('.landing,.landing *,.landing *::before,.landing *::after{margin:0;padding:0;box-sizing:border-box}');
+    continue;
+  }
+  if (t.startsWith('@keyframes')) {
+    out.push(line.replace(/^\.landing\s+/, ''));
+    continue;
+  }
+  if (!t || t.startsWith('/*') || t.startsWith('.landing')) {
     out.push(line);
     continue;
   }

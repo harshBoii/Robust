@@ -14,7 +14,9 @@ import {
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+
+import { clearLenisDocumentState } from '@/app/components/landing/LenisScroll';
 
 type Mode = 'login' | 'signup';
 
@@ -150,6 +152,10 @@ export default function AuthPage({ initialMode }: { initialMode: Mode }) {
   const [twoFactorStep, setTwoFactorStep] = useState(false);
   const [pendingToken, setPendingToken] = useState('');
   const [totpCode, setTotpCode] = useState('');
+
+  useEffect(() => {
+    clearLenisDocumentState();
+  }, []);
 
   const toggleMode = () => {
     setMode((m) => (m === 'login' ? 'signup' : 'login'));
