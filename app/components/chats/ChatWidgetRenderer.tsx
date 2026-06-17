@@ -81,6 +81,7 @@ export function ChatWidgetRenderer({
   sessionId,
   onAction,
   imageGenArtistInComposer,
+  imageGenArtistPickerMode,
 }: {
   widgetType: string | null | undefined;
   widgetPayload: unknown;
@@ -91,6 +92,8 @@ export function ChatWidgetRenderer({
   onAction: ChatWidgetDispatch;
   /** Artist/quality dropdowns are shown in the composer footer instead */
   imageGenArtistInComposer?: boolean;
+  /** Full composer is replaced by a compact artist picker footer */
+  imageGenArtistPickerMode?: boolean;
 }) {
   if (!widgetType) return null;
 
@@ -275,6 +278,7 @@ export function ChatWidgetRenderer({
           payload={payload}
           onAction={onAction}
           hideControls={imageGenArtistInComposer}
+          pickerMode={imageGenArtistPickerMode}
         />
       );
     case 'imageGenGenerating':

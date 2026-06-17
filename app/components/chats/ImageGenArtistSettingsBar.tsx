@@ -66,6 +66,7 @@ export function ImageGenArtistSettingsBar({
   compact,
   showContinue = true,
   continueLabel = 'Continue',
+  layout = 'inline',
 }: {
   artistId: ImageArtistId;
   quality: ImageQuality;
@@ -76,13 +77,20 @@ export function ImageGenArtistSettingsBar({
   compact?: boolean;
   showContinue?: boolean;
   continueLabel?: string;
+  layout?: 'inline' | 'stacked';
 }) {
   const artistOptions = buildArtistOptions();
   const qualityOptions = buildQualityOptions();
   const artist = IMAGE_ARTISTS.find((a) => a.id === artistId) ?? IMAGE_ARTISTS[1];
 
   return (
-    <div className={['flex flex-wrap items-center gap-1', compact ? '' : 'gap-2'].join(' ')}>
+    <div
+      className={
+        layout === 'stacked'
+          ? 'flex flex-col gap-2.5'
+          : ['flex flex-wrap items-center gap-1', compact ? '' : 'gap-2'].join(' ')
+      }
+    >
       <ChatInlineSelect
         ariaLabel="Image artist"
         compact={compact}
@@ -107,7 +115,7 @@ export function ImageGenArtistSettingsBar({
           onClick={onContinue}
           className={[
             'rounded-lg bg-primary font-medium text-primary-foreground transition hover:opacity-90 disabled:opacity-50',
-            compact ? 'px-2.5 py-1.5 text-[12px]' : 'px-3.5 py-2 text-[13px]',
+            layout === 'stacked' ? 'w-full py-2 text-[13px]' : compact ? 'px-2.5 py-1.5 text-[12px]' : 'px-3.5 py-2 text-[13px]',
           ].join(' ')}
         >
           {continueLabel}

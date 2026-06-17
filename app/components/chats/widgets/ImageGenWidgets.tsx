@@ -240,11 +240,14 @@ export function ImageGenArtistSettingsWidget({
   payload,
   onAction,
   hideControls,
+  pickerMode,
 }: {
   payload: Record<string, unknown>;
   onAction: ChatWidgetDispatch;
   /** When composer footer shows the same dropdowns */
   hideControls?: boolean;
+  /** Full composer replaced by compact picker footer */
+  pickerMode?: boolean;
 }) {
   const defaults = defaultArtistSettings();
   const [artistId, setArtistId] = useState<ImageArtistId>(
@@ -266,8 +269,17 @@ export function ImageGenArtistSettingsWidget({
   if (hideControls) {
     return (
       <p className="text-[13px] text-muted-foreground">
-        Choose your image artist and quality in the menus below the message box, then tap{' '}
-        <strong className="font-medium text-foreground">Continue</strong>.
+        {pickerMode ? (
+          <>
+            Choose your image artist and quality in the picker below, then tap{' '}
+            <strong className="font-medium text-foreground">Continue</strong>.
+          </>
+        ) : (
+          <>
+            Choose your image artist and quality in the menus below the message box, then tap{' '}
+            <strong className="font-medium text-foreground">Continue</strong>.
+          </>
+        )}
       </p>
     );
   }

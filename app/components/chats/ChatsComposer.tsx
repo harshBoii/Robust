@@ -19,6 +19,12 @@ export type ChatsComposerProps = {
   suggestions?: string[];
   /** Tighter padding when pinned to the bottom of the thread */
   sticky?: boolean;
+  /** Compact footer widget (e.g. image artist picker) instead of the full message box */
+  pickerMode?: {
+    title: string;
+    description?: string;
+    children: ReactNode;
+  };
 };
 
 export function ChatsComposer({
@@ -34,6 +40,7 @@ export function ChatsComposer({
   attachmentSlot,
   suggestions,
   sticky = false,
+  pickerMode,
 }: ChatsComposerProps) {
   const [internal, setInternal] = useState('');
   const value = controlledValue ?? internal;
@@ -60,6 +67,24 @@ export function ChatsComposer({
   }
 
   const canSend = Boolean(value.trim()) && !disabled && !loading;
+
+  if (pickerMode) {
+    return (
+      <div className={['w-full shrink-0 px-4', sticky ? 'pb-3 pt-2' : 'pb-5 pt-2'].join(' ')}>
+        <div className="mx-auto max-w-md">
+          <div className="rounded-2xl border border-border/50 bg-card/90 px-4 py-3.5 shadow-md shadow-black/[0.04] ring-1 ring-black/[0.03] backdrop-blur-md">
+            <p className="text-center text-[14px] font-semibold text-foreground">{pickerMode.title}</p>
+            {pickerMode.description ? (
+              <p className="mt-1 text-center text-[12px] leading-snug text-muted-foreground">
+                {pickerMode.description}
+              </p>
+            ) : null}
+            <div className="mt-3">{pickerMode.children}</div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={['w-full shrink-0 px-4', sticky ? 'pb-3 pt-2' : 'pb-5 pt-2'].join(' ')}>

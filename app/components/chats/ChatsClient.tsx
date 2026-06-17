@@ -101,6 +101,11 @@ export default function ChatsClient({
         ['templateUpload', 'templateNotes', 'reviewTemplate', 'chooseNext'].includes(
           ig?.step ?? '',
         )));
+  const showArtistPickerMode =
+    session?.currentStep === 'imageGen' &&
+    ig?.step === 'artistSettings' &&
+    !isTemplateFlow &&
+    !templateAwaitingUpload;
 
   const [composerArtistId, setComposerArtistId] = useState<ImageArtistId>(DEFAULT_IMAGE_ARTIST_ID);
   const [composerQuality, setComposerQuality] = useState<ImageQuality>(DEFAULT_IMAGE_QUALITY);
@@ -265,6 +270,7 @@ export default function ChatsClient({
                 workflowState={session?.workflowState ?? {}}
                 currentStep={session?.currentStep ?? 'intent'}
                 imageGenArtistInComposer={showImageGenArtistInComposer}
+                imageGenArtistPickerMode={showArtistPickerMode}
                 companyId={companyId}
                 sessionId={sessionId}
                 onAction={handleAction}
@@ -383,8 +389,28 @@ export default function ChatsClient({
             placeholder: templateAwaitingUpload
               ? 'Upload your image above to continue…'
               : 'Write a message…',
-            suggestions: stepSuggestions(session?.currentStep, session?.workflowState ?? {}),
-            leadingSlot: showImageGenArtistInComposer ? (
+            suggestions: showArtistPickerMode
+              ? undefined
+              : stepSuggestions(session?.currentStep, session?.workflowState ?? {}),
+            pickerMode: showArtistPickerMode
+              ? {
+                  title: 'Choose your image artist',
+                  description: 'Pick who generates your images and at what quality.',
+                  children: (
+                    <ImageGenArtistSettingsBar
+                      layout="stacked"
+                      disabled={busy}
+                      artistId={composerArtistId}
+                      quality={composerQuality}
+                      onArtistChange={setComposerArtistId}
+                      onQualityChange={setComposerQuality}
+                      onContinue={submitArtistSettings}
+                    />
+                  ),
+                }
+              : undefined,
+            leadingSlot:
+              showImageGenArtistInComposer && !showArtistPickerMode ? (
               <ImageGenArtistSettingsBar
                 compact
                 disabled={busy}
