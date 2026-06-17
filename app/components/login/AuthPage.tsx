@@ -287,8 +287,8 @@ export default function AuthPage({ initialMode }: { initialMode: Mode }) {
     }
   };
 
-  const darkInputClass =
-    'w-full rounded-xl border border-white/10 bg-white/[0.04] py-3 text-[0.9375rem] text-white placeholder:text-white/35 transition-colors focus:border-primary/50 focus:outline-none focus:ring-2 focus:ring-primary/20';
+  const inputClass =
+    'w-full rounded-xl border border-input bg-background py-3 text-[0.9375rem] text-foreground placeholder:text-muted-foreground transition-colors focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15';
 
   return (
     <div className="flex min-h-screen flex-col bg-background text-foreground">
@@ -336,15 +336,15 @@ export default function AuthPage({ initialMode }: { initialMode: Mode }) {
             transition={{ duration: 0.5 }}
             className="w-full max-w-[420px]"
           >
-            <div className="rounded-2xl border border-white/8 border-l-4 border-l-primary bg-[color-mix(in_srgb,var(--foreground)_94%,var(--background))] p-7 shadow-[0_28px_80px_-32px_rgba(0,0,0,0.55)] sm:p-8">
-              <h1 className="font-display text-[1.65rem] font-semibold leading-tight tracking-[-0.03em] text-white">
+            <div className="rounded-2xl border border-border border-l-4 border-l-primary bg-[color-mix(in_srgb,var(--primary)_5%,var(--card))] p-7 shadow-[0_24px_60px_-28px_rgba(0,0,0,0.14)] sm:p-8">
+              <h1 className="font-display text-[1.65rem] font-semibold leading-tight tracking-[-0.03em] text-foreground">
                 {mode === 'login'
                   ? twoFactorStep
                     ? 'Verify identity'
                     : 'Welcome back'
                   : 'Create workspace'}
               </h1>
-              <p className="mt-2 font-body text-[0.875rem] leading-relaxed text-white/55">
+              <p className="mt-2 font-body text-[0.875rem] leading-relaxed text-muted-foreground">
                 {mode === 'login'
                   ? twoFactorStep
                     ? 'Enter the code from your authenticator app.'
@@ -359,7 +359,7 @@ export default function AuthPage({ initialMode }: { initialMode: Mode }) {
                     initial={{ opacity: 0, y: -8 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -8 }}
-                    className="mt-5 rounded-xl border border-red-500/35 bg-red-500/10 px-4 py-3 font-ui text-[0.8125rem] text-red-300"
+                    className="mt-5 rounded-xl border border-red-500/35 bg-red-500/10 px-4 py-3 font-ui text-[0.8125rem] text-red-600 dark:text-red-300"
                     role="alert"
                   >
                     {error}
@@ -371,7 +371,7 @@ export default function AuthPage({ initialMode }: { initialMode: Mode }) {
                     initial={{ opacity: 0, y: -8 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -8 }}
-                    className="mt-5 rounded-xl border border-primary/30 bg-primary/10 px-4 py-3 font-ui text-[0.8125rem] text-primary-foreground"
+                    className="mt-5 rounded-xl border border-green-500/35 bg-green-500/10 px-4 py-3 font-ui text-[0.8125rem] text-green-700 dark:text-green-300"
                     role="status"
                   >
                     {success}
@@ -392,7 +392,7 @@ export default function AuthPage({ initialMode }: { initialMode: Mode }) {
                       className="mt-6 space-y-4"
                     >
                       <div>
-                        <label className="mb-1.5 block font-ui text-[0.78rem] font-medium text-white/55">
+                        <label className="mb-1.5 block font-ui text-[0.78rem] font-medium text-muted-foreground">
                           Authenticator code
                         </label>
                         <input
@@ -405,7 +405,7 @@ export default function AuthPage({ initialMode }: { initialMode: Mode }) {
                           autoComplete="one-time-code"
                           required
                           maxLength={6}
-                          className={`${darkInputClass} px-4 text-center tracking-[0.35em]`}
+                          className={`${inputClass} px-4 text-center tracking-[0.35em]`}
                         />
                       </div>
                       <button
@@ -417,7 +417,7 @@ export default function AuthPage({ initialMode }: { initialMode: Mode }) {
                       </button>
                       <button
                         type="button"
-                        className="w-full text-center font-ui text-[0.8rem] text-white/45 hover:text-white/75"
+                        className="w-full text-center font-ui text-[0.8rem] text-muted-foreground hover:text-foreground"
                         onClick={() => {
                           setTwoFactorStep(false);
                           setPendingToken('');
@@ -440,23 +440,23 @@ export default function AuthPage({ initialMode }: { initialMode: Mode }) {
                       className="mt-6 space-y-4"
                     >
                       <div>
-                        <label className="mb-1.5 block font-ui text-[0.78rem] font-medium text-white/55">
+                        <label className="mb-1.5 block font-ui text-[0.78rem] font-medium text-muted-foreground">
                           Workspace username
                         </label>
                         <div className="relative">
-                          <Building2 className="pointer-events-none absolute top-1/2 left-3.5 h-4 w-4 -translate-y-1/2 text-white/35" />
+                          <Building2 className="pointer-events-none absolute top-1/2 left-3.5 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                           <input
                             value={userName}
                             onChange={(e) => setUserName(e.target.value)}
                             placeholder="your-brand"
                             autoComplete="username"
                             required
-                            className={`${darkInputClass} pl-10`}
+                            className={`${inputClass} pl-10`}
                           />
                         </div>
                       </div>
                       <div>
-                        <label className="mb-1.5 block font-ui text-[0.78rem] font-medium text-white/55">
+                        <label className="mb-1.5 block font-ui text-[0.78rem] font-medium text-muted-foreground">
                           Password
                         </label>
                         <div className="relative">
@@ -467,12 +467,12 @@ export default function AuthPage({ initialMode }: { initialMode: Mode }) {
                             placeholder="••••••••"
                             autoComplete="current-password"
                             required
-                            className={`${darkInputClass} pr-11 pl-4`}
+                            className={`${inputClass} pr-11 pl-4`}
                           />
                           <button
                             type="button"
                             onClick={() => setShowPassword((v) => !v)}
-                            className="absolute top-1/2 right-3.5 -translate-y-1/2 text-white/35 hover:text-white/65"
+                            className="absolute top-1/2 right-3.5 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                             aria-label={showPassword ? 'Hide password' : 'Show password'}
                           >
                             {showPassword ? (
@@ -530,7 +530,7 @@ export default function AuthPage({ initialMode }: { initialMode: Mode }) {
                       },
                     ].map(({ label, value, setter, placeholder, type, auto, required: req = true }) => (
                       <div key={label}>
-                        <label className="mb-1.5 block font-ui text-[0.78rem] font-medium text-white/55">
+                        <label className="mb-1.5 block font-ui text-[0.78rem] font-medium text-muted-foreground">
                           {label}
                         </label>
                         <input
@@ -540,12 +540,12 @@ export default function AuthPage({ initialMode }: { initialMode: Mode }) {
                           placeholder={placeholder}
                           autoComplete={auto}
                           required={req}
-                          className={`${darkInputClass} px-4`}
+                          className={`${inputClass} px-4`}
                         />
                       </div>
                     ))}
                     <div>
-                      <label className="mb-1.5 block font-ui text-[0.78rem] font-medium text-white/55">
+                      <label className="mb-1.5 block font-ui text-[0.78rem] font-medium text-muted-foreground">
                         Password
                       </label>
                       <div className="relative">
@@ -556,12 +556,12 @@ export default function AuthPage({ initialMode }: { initialMode: Mode }) {
                           placeholder="••••••••"
                           required
                           minLength={8}
-                          className={`${darkInputClass} pr-11 pl-4`}
+                          className={`${inputClass} pr-11 pl-4`}
                         />
                         <button
                           type="button"
                           onClick={() => setShowSignupPassword((v) => !v)}
-                          className="absolute top-1/2 right-3.5 -translate-y-1/2 text-white/35 hover:text-white/65"
+                          className="absolute top-1/2 right-3.5 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                           aria-label={showSignupPassword ? 'Hide password' : 'Show password'}
                         >
                           {showSignupPassword ? (
@@ -573,7 +573,7 @@ export default function AuthPage({ initialMode }: { initialMode: Mode }) {
                       </div>
                     </div>
                     <div>
-                      <label className="mb-1.5 block font-ui text-[0.78rem] font-medium text-white/55">
+                      <label className="mb-1.5 block font-ui text-[0.78rem] font-medium text-muted-foreground">
                         Confirm password
                       </label>
                       <input
@@ -583,7 +583,7 @@ export default function AuthPage({ initialMode }: { initialMode: Mode }) {
                         placeholder="••••••••"
                         required
                         minLength={8}
-                        className={`${darkInputClass} px-4`}
+                        className={`${inputClass} px-4`}
                       />
                     </div>
                     <button
@@ -597,13 +597,13 @@ export default function AuthPage({ initialMode }: { initialMode: Mode }) {
                 )}
               </AnimatePresence>
 
-              <p className="mt-6 text-center font-body text-[0.875rem] text-white/45">
+              <p className="mt-6 text-center font-body text-[0.875rem] text-muted-foreground">
                 {mode === 'login' ? (
                   <>
                     Don&apos;t have a workspace?{' '}
                     <Link
                       href="/signup"
-                      className="font-semibold text-primary hover:underline underline-offset-4"
+                      className="font-semibold text-primary underline underline-offset-4 hover:text-primary/80"
                     >
                       Sign up free
                     </Link>
@@ -614,7 +614,7 @@ export default function AuthPage({ initialMode }: { initialMode: Mode }) {
                     <button
                       type="button"
                       onClick={toggleMode}
-                      className="font-semibold text-primary hover:underline underline-offset-4"
+                      className="font-semibold text-primary underline underline-offset-4 hover:text-primary/80"
                     >
                       Log in
                     </button>

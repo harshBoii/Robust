@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 
-import { AUTH_COOKIE_NAME } from "@/lib/auth/constants";
+import { AUTH_COOKIE_NAME, UNAUTHENTICATED_REDIRECT_PATH } from "@/lib/auth/constants";
 import { resolveSessionFromToken } from "@/lib/auth/resolve-session-from-token";
 
 const PUBLIC_PATH_PREFIXES = [
@@ -68,13 +68,13 @@ export async function proxy(request: NextRequest) {
   }
 
   if (!token) {
-    return NextResponse.redirect(new URL("/login", request.url));
+    return NextResponse.redirect(new URL(UNAUTHENTICATED_REDIRECT_PATH, request.url));
   }
 
   const session = await resolveSessionFromToken(token);
   if (!session) {
     return clearSessionCookie(
-      NextResponse.redirect(new URL("/login", request.url)),
+      NextResponse.redirect(new URL(UNAUTHENTICATED_REDIRECT_PATH, request.url)),
     );
   }
 

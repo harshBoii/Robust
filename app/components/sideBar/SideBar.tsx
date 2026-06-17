@@ -29,6 +29,7 @@ import { ModalPortal } from '@/app/components/common/ModalPortal';
 import ChatsHistoryList from '@/app/components/chats/ChatsHistoryList';
 import GalleryUploadZone from '@/app/(frontend)/(workspace)/gallery/GalleryUploadZone';
 import { ROBUST_DNA } from '@/lib/brand/robust-dna';
+import { UNAUTHENTICATED_REDIRECT_PATH } from '@/lib/auth/constants';
 
 /* ============================================
    INLINE SVG ICONS
@@ -644,7 +645,7 @@ export default function AppSidebar({
       console.warn('Logout request error:', e);
     }
     // Full navigation so the cleared httpOnly cookie is committed before subsequent loads.
-    window.location.assign('/login');
+    window.location.assign(UNAUTHENTICATED_REDIRECT_PATH);
   };
 
   useEffect(() => {
