@@ -146,9 +146,14 @@ export function OnboardingBrandPreview({
           ) : null}
 
           {enriching ? (
-            <div className="mt-4 flex items-center gap-2 rounded-lg border border-primary/20 bg-primary/5 px-3 py-2.5 text-xs text-primary">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Learning your brand from {displayDomain}…
+            <div className="mt-4 space-y-2 rounded-lg border border-primary/20 bg-primary/5 px-3 py-2.5 text-xs text-primary">
+              <div className="flex items-center gap-2">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Learning your brand — usually 2–5 minutes
+              </div>
+              <p className="text-[11px] leading-relaxed text-primary/80">
+                Deep breath. Fields below will fill in as we go.
+              </p>
             </div>
           ) : null}
         </div>

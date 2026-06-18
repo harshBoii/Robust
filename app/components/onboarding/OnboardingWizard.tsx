@@ -14,6 +14,7 @@ import { CheckCircle2, Loader2, Share2, ShoppingBag, Sparkles } from 'lucide-rea
 
 import { clearLenisDocumentState } from '@/app/components/landing/LenisScroll';
 import { OnboardingBrandPreview } from '@/app/components/onboarding/OnboardingBrandPreview';
+import { OnboardingEnrichingWait } from '@/app/components/onboarding/OnboardingEnrichingWait';
 import { OnboardingPhaseBar } from '@/app/components/onboarding/OnboardingPhaseBar';
 import { OnboardingWelcomePanel } from '@/app/components/onboarding/OnboardingWelcomePanel';
 
@@ -340,7 +341,7 @@ export default function OnboardingWizard() {
               <p className="font-medium text-foreground">What happens next</p>
               <ol className="mt-2 list-decimal space-y-1 pl-5">
                 <li>Enter your company name and domain</li>
-                <li>We auto-fill brand DNA from your site</li>
+                <li>We auto-fill brand DNA from your site (about 2–5 minutes)</li>
                 <li>Connect channels (optional) and review your plan</li>
               </ol>
             </div>
@@ -407,15 +408,9 @@ export default function OnboardingWizard() {
 
       case 'enriching':
         return (
-          <div className="flex flex-col items-center gap-4 py-12 text-center">
-            <Loader2 className="h-10 w-10 animate-spin text-primary" />
-            <div>
-              <h2 className="font-display text-xl font-bold text-foreground">Building your brand profile</h2>
-              <p className="mt-2 text-sm text-muted-foreground">
-                Crawling {domain || company?.domain || 'your site'} and generating brand DNA…
-              </p>
-            </div>
-          </div>
+          <OnboardingEnrichingWait
+            domain={domain || company?.domain || 'your site'}
+          />
         );
 
       case 'brand-basics':
