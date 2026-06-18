@@ -93,7 +93,7 @@ export async function completeJsonResponsesWithWebSearch(params: {
 
   const response = await openai.responses.create({
     model: params.model,
-    reasoning: params.reasoning ?? { effort: 'high' },
+    ...(params.reasoning ? { reasoning: params.reasoning } : {}),
     instructions: params.system,
     input: [{ role: 'user', content: userContent }],
     tools: [{ type: 'web_search' }],

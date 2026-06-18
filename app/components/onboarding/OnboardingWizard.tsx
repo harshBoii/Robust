@@ -45,6 +45,7 @@ export default function OnboardingWizard() {
   const [step, setStep] = useState<OnboardingStep>('welcome');
   const [company, setCompany] = useState<OnboardingCompanySnapshot | null>(null);
   const [plan, setPlan] = useState<StartupPlan | null>(null);
+  const [planStatus, setPlanStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -90,7 +91,10 @@ export default function OnboardingWizard() {
     }
     setMetaConnected(snap.integrations.metaConnected);
     setShopifyConnected(snap.integrations.shopifyConnected);
-    if (snap.onboardingPlan) setPlan(snap.onboardingPlan);
+    if (snap.onboardingPlan) {
+      setPlan(snap.onboardingPlan);
+      setPlanStatus('ready');
+    }
     if (snap.accessRequestedAt) {
       setStep('done');
     } else if (
@@ -209,6 +213,7 @@ export default function OnboardingWizard() {
   };
 
   const generatePlan = useCallback(async () => {
+    setPlanStatus('loading');
     setLoading(true);
     setError('');
     try {
@@ -217,8 +222,10 @@ export default function OnboardingWizard() {
         { method: 'POST' },
       );
       setPlan(data.plan);
+      setPlanStatus('ready');
       applyCompany(data.company);
     } catch (e) {
+      setPlanStatus('error');
       setError(e instanceof Error ? e.message : 'Could not generate plan');
     } finally {
       setLoading(false);
@@ -226,10 +233,10 @@ export default function OnboardingWizard() {
   }, [applyCompany]);
 
   useEffect(() => {
-    if (step === 'your-plan' && !plan && !loading) {
+    if (step === 'your-plan' && planStatus === 'idle') {
       void generatePlan();
     }
-  }, [step, plan, loading, generatePlan]);
+  }, [step, planStatus, generatePlan]);
 
   const createCompany = async () => {
     setLoading(true);
@@ -487,12 +494,26 @@ export default function OnboardingWizard() {
                 Based on your brand, integrations, and industry research.
               </p>
             </div>
-            {loading || !plan ? (
+            {planStatus === 'loading' || (planStatus === 'idle' && !plan) ? (
               <div className="flex items-center gap-3 py-8 text-sm text-muted-foreground">
                 <Loader2 className="h-5 w-5 animate-spin text-primary" />
                 Generating your strategy…
               </div>
-            ) : (
+            ) : planStatus === 'error' && !plan ? (
+              <div className="space-y-4 py-4">
+                <p className="text-sm text-muted-foreground">
+                  We couldn&apos;t generate a personalized plan right now. You can retry or continue
+                  with a general recommendation.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => void generatePlan()}
+                  className="glass-button px-4 py-2 text-sm"
+                >
+                  Retry
+                </button>
+              </div>
+            ) : plan ? (
               <div className="space-y-4">
                 <div className="rounded-xl border border-primary/30 bg-primary/5 p-4">
                   <span className="inline-block rounded-full bg-primary/15 px-2.5 py-0.5 text-xs font-semibold text-primary">
@@ -530,7 +551,7 @@ export default function OnboardingWizard() {
                   </ul>
                 </div>
               </div>
-            )}
+            ) : null}
           </div>
         );
 

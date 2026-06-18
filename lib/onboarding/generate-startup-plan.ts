@@ -2,10 +2,17 @@ import 'server-only';
 
 import { z } from 'zod';
 
-import { completeJsonResponsesWithWebSearch, parseLlmJson } from '@/lib/assistant/openai-json';
+import {
+  completeJsonChat,
+  completeJsonResponsesWithWebSearch,
+  parseLlmJson,
+} from '@/lib/assistant/openai-json';
+import { CHAT_AGENT_MODEL } from '@/lib/assistant/models';
 import { prisma } from '@/lib/prisma';
 
 import type { StartupPlan } from './types';
+
+const PLAN_MODEL = process.env.ONBOARDING_PLAN_MODEL?.trim() || 'gpt-4.1';
 
 const planSchema = z.object({
   recommendedApproach: z.enum(['aeo_first', 'ads_first', 'balanced']),
@@ -33,13 +40,40 @@ Return JSON only with keys:
 - firstWeekActions: 4-6 concrete first-week steps in Robust
 - metricsToWatch: 3-5 KPIs to track`;
 
-export async function generateStartupPlan(companyId: string): Promise<StartupPlan> {
-  const company = await prisma.company.findUnique({
+function buildContext(company: NonNullable<Awaited<ReturnType<typeof loadCompanyContext>>>) {
+  return {
+    company: {
+      name: company.name,
+      domain: company.domain,
+      website: company.website,
+    },
+    brandEntity: company.brandEntity,
+    metaAdsProfile: company.metaIntegration
+      ? {
+          connected: true,
+          hasAdAccount: Boolean(company.metaIntegration.adAccountId),
+          brandVoice: company.metaIntegration.brandVoice,
+          topAdExamples: company.metaIntegration.topAdExamples,
+          audienceInsights: company.metaIntegration.audienceInsights,
+          avgWinningCtr: company.metaIntegration.avgWinningCtr,
+        }
+      : { connected: false },
+    shopify: {
+      connected: company.shopifyShops.length > 0,
+      shopDomain: company.shopifyShops[0]?.shopDomain ?? null,
+      productCount: company._count.shopifyProducts,
+    },
+  };
+}
+
+async function loadCompanyContext(companyId: string) {
+  return prisma.company.findUnique({
     where: { id: companyId },
     select: {
       name: true,
       domain: true,
       website: true,
+      onboardingPlan: true,
       brandEntity: {
         include: {
           communicationDna: true,
@@ -65,40 +99,54 @@ export async function generateStartupPlan(companyId: string): Promise<StartupPla
       _count: { select: { shopifyProducts: true } },
     },
   });
+}
 
-  if (!company) throw new Error('Company not found');
+function parsePlan(raw: string): StartupPlan {
+  return planSchema.parse(parseLlmJson(raw));
+}
 
-  const context = {
-    company: {
-      name: company.name,
-      domain: company.domain,
-      website: company.website,
-    },
-    brandEntity: company.brandEntity,
-    metaAdsProfile: company.metaIntegration
-      ? {
-          connected: true,
-          hasAdAccount: Boolean(company.metaIntegration.adAccountId),
-          brandVoice: company.metaIntegration.brandVoice,
-          topAdExamples: company.metaIntegration.topAdExamples,
-          audienceInsights: company.metaIntegration.audienceInsights,
-          avgWinningCtr: company.metaIntegration.avgWinningCtr,
-        }
-      : { connected: false },
-    shopify: {
-      connected: company.shopifyShops.length > 0,
-      shopDomain: company.shopifyShops[0]?.shopDomain ?? null,
-      productCount: company._count.shopifyProducts,
-    },
-  };
-
-  const raw = await completeJsonResponsesWithWebSearch({
-    model: 'gpt-4.1',
+async function generateWithWebSearch(context: unknown): Promise<string> {
+  return completeJsonResponsesWithWebSearch({
+    model: PLAN_MODEL,
     system: SYSTEM,
     user: `Create a personalized getting-started plan for this brand:\n${JSON.stringify(context, null, 2)}`,
-    reasoning: { effort: 'high' },
   });
+}
 
-  const parsed = planSchema.parse(parseLlmJson(raw));
-  return parsed;
+async function generateWithoutWebSearch(context: unknown): Promise<string> {
+  return completeJsonChat({
+    model: CHAT_AGENT_MODEL,
+    system: SYSTEM,
+    user: `Create a personalized getting-started plan for this brand (no live web search — use general industry knowledge):\n${JSON.stringify(context, null, 2)}`,
+  });
+}
+
+export async function generateStartupPlan(companyId: string): Promise<StartupPlan> {
+  const company = await loadCompanyContext(companyId);
+  if (!company) throw new Error('Company not found');
+
+  const cached = company.onboardingPlan;
+  if (cached && typeof cached === 'object') {
+    const parsed = planSchema.safeParse(cached);
+    if (parsed.success) return parsed.data;
+  }
+
+  const context = buildContext(company);
+
+  try {
+    const raw = await generateWithWebSearch(context);
+    return parsePlan(raw);
+  } catch (webSearchError) {
+    console.warn('[onboarding/plan] web search failed, falling back to chat', webSearchError);
+    try {
+      const raw = await generateWithoutWebSearch(context);
+      return parsePlan(raw);
+    } catch (fallbackError) {
+      const webMsg =
+        webSearchError instanceof Error ? webSearchError.message : 'web search failed';
+      const fallbackMsg =
+        fallbackError instanceof Error ? fallbackError.message : 'fallback failed';
+      throw new Error(`Plan generation failed: ${webMsg}; fallback: ${fallbackMsg}`);
+    }
+  }
 }
