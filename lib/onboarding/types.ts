@@ -25,6 +25,17 @@ export type StartupPlan = {
   metricsToWatch: string[];
 };
 
+export type DomainPreviewResult = {
+  ok: boolean;
+  domain: string;
+  website: string;
+  title: string | null;
+  productLinkCount: number;
+  colorCount: number;
+  isShopify: boolean;
+  message: string;
+};
+
 export type OnboardingCompanySnapshot = {
   id: string;
   name: string;

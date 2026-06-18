@@ -1,27 +1,21 @@
 'use client';
 
-import { ROBUST_DNA } from '@/lib/brand/robust-dna';
-import type { OnboardingCompanySnapshot, OnboardingStep, StartupPlan } from '@/lib/onboarding/types';
+import type {
+  DomainPreviewResult,
+  OnboardingCompanySnapshot,
+  OnboardingStep,
+  StartupPlan,
+} from '@/lib/onboarding/types';
 import { ONBOARDING_STEPS } from '@/lib/onboarding/types';
-import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import {
-  Bot,
-  Building2,
-  CheckCircle2,
-  Globe,
-  Loader2,
-  Rocket,
-  Search,
-  Share2,
-  ShoppingBag,
-  TrendingUp,
-} from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { CheckCircle2, Loader2, Share2, ShoppingBag, Sparkles } from 'lucide-react';
 
 import { clearLenisDocumentState } from '@/app/components/landing/LenisScroll';
-import { OnboardingStepBar } from '@/app/components/onboarding/OnboardingStepBar';
+import { OnboardingBrandPreview } from '@/app/components/onboarding/OnboardingBrandPreview';
+import { OnboardingPhaseBar } from '@/app/components/onboarding/OnboardingPhaseBar';
+import { OnboardingWelcomePanel } from '@/app/components/onboarding/OnboardingWelcomePanel';
 
 const inputClass =
   'w-full rounded-xl border border-[color-mix(in_srgb,var(--foreground)_12%,var(--border))] bg-background px-4 py-3 text-[0.9375rem] text-foreground shadow-[inset_0_1px_2px_rgba(0,0,0,0.03)] placeholder:text-muted-foreground transition-colors focus:border-primary/60 focus:outline-none focus:ring-2 focus:ring-primary/10';
@@ -65,6 +59,10 @@ export default function OnboardingWizard() {
 
   const [metaConnected, setMetaConnected] = useState(false);
   const [shopifyConnected, setShopifyConnected] = useState(false);
+
+  const [domainPreview, setDomainPreview] = useState<DomainPreviewResult | null>(null);
+  const [domainPreviewLoading, setDomainPreviewLoading] = useState(false);
+  const lastPreviewedDomain = useRef('');
 
   const stepIndex = ONBOARDING_STEPS.indexOf(step);
 
@@ -284,6 +282,42 @@ export default function OnboardingWizard() {
     return `/shopify/install?shop=${encodeURIComponent(shop)}&onboarding=1`;
   }, [shopDomain]);
 
+  const checkDomainPreview = useCallback(async (rawDomain: string) => {
+    const trimmed = rawDomain.trim();
+    if (!trimmed || trimmed === lastPreviewedDomain.current) return;
+
+    lastPreviewedDomain.current = trimmed;
+    setDomainPreviewLoading(true);
+    try {
+      const data = await apiJson<{ preview: DomainPreviewResult }>('/api/onboarding/domain-preview', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ domain: trimmed }),
+      });
+      setDomainPreview(data.preview);
+    } catch {
+      setDomainPreview({
+        ok: false,
+        domain: trimmed,
+        website: '',
+        title: null,
+        productLinkCount: 0,
+        colorCount: 0,
+        isShopify: false,
+        message: 'Could not verify domain right now. Try again in a moment.',
+      });
+    } finally {
+      setDomainPreviewLoading(false);
+    }
+  }, []);
+
+  const handleDomainChange = (value: string) => {
+    setDomain(value);
+    if (value.trim() !== lastPreviewedDomain.current) {
+      setDomainPreview(null);
+    }
+  };
+
   const renderStep = () => {
     switch (step) {
       case 'welcome':
@@ -294,19 +328,22 @@ export default function OnboardingWizard() {
                 Welcome to Robust
               </p>
               <h1 className="mt-3 font-display text-2xl font-bold tracking-tight text-foreground">
-                Let&apos;s set up your brand in a few guided steps
+                Let&apos;s set up your brand in four quick phases
               </h1>
               <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
-                We&apos;ll learn your company from your domain, optionally connect Facebook and
-                Shopify, build your brand DNA, and recommend whether to lead with AEO or paid ads.
-                At the end you&apos;ll request access — an admin approves before you can log in.
+                Basics → Brand → Channels → Plan. We&apos;ll learn your company from your domain,
+                optionally connect Facebook and Shopify, and recommend whether to lead with AEO or
+                paid ads. At the end you request access — an admin approves before you can log in.
               </p>
             </div>
-            <ul className="space-y-3 text-sm text-muted-foreground">
-              <li className="flex gap-2"><Rocket className="mt-0.5 h-4 w-4 shrink-0 text-primary" /> Auto-pause losing ads, amplify winners</li>
-              <li className="flex gap-2"><Search className="mt-0.5 h-4 w-4 shrink-0 text-primary" /> Win LLM citations with GEO/AEO bounties</li>
-              <li className="flex gap-2"><Bot className="mt-0.5 h-4 w-4 shrink-0 text-primary" /> AI creative + publishing across channels</li>
-            </ul>
+            <div className="rounded-xl border border-border bg-card/60 p-4 text-sm text-muted-foreground">
+              <p className="font-medium text-foreground">What happens next</p>
+              <ol className="mt-2 list-decimal space-y-1 pl-5">
+                <li>Enter your company name and domain</li>
+                <li>We auto-fill brand DNA from your site</li>
+                <li>Connect channels (optional) and review your plan</li>
+              </ol>
+            </div>
           </div>
         );
 
@@ -316,16 +353,54 @@ export default function OnboardingWizard() {
             <div>
               <h2 className="font-display text-xl font-bold text-foreground">Your company</h2>
               <p className="mt-1 text-sm text-muted-foreground">
-                We use your domain to auto-fill brand profile and DNA.
+                We use your domain to auto-fill brand profile and DNA. Tab out of the domain field
+                to verify we can reach your site.
               </p>
             </div>
             <label className="block space-y-1.5">
               <span className="text-sm font-medium text-foreground">Company name</span>
-              <input className={inputClass} value={name} onChange={(e) => setName(e.target.value)} placeholder="Acme D2C" />
+              <input
+                className={inputClass}
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Acme D2C"
+              />
             </label>
             <label className="block space-y-1.5">
               <span className="text-sm font-medium text-foreground">Company domain</span>
-              <input className={inputClass} value={domain} onChange={(e) => setDomain(e.target.value)} placeholder="acme.com" />
+              <input
+                className={inputClass}
+                value={domain}
+                onChange={(e) => handleDomainChange(e.target.value)}
+                onBlur={() => void checkDomainPreview(domain)}
+                placeholder="acme.com"
+              />
+              {domainPreviewLoading ? (
+                <p className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+                  Checking {domain.trim() || 'domain'}…
+                </p>
+              ) : domainPreview ? (
+                <p
+                  className={[
+                    'flex items-start gap-2 rounded-lg px-3 py-2 text-xs leading-relaxed',
+                    domainPreview.ok
+                      ? 'bg-primary/5 text-foreground'
+                      : 'bg-amber-500/10 text-amber-900 dark:text-amber-100',
+                  ].join(' ')}
+                >
+                  {domainPreview.ok ? (
+                    <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
+                  ) : (
+                    <Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-600" />
+                  )}
+                  {domainPreview.message}
+                </p>
+              ) : domain.trim() ? (
+                <p className="text-xs text-muted-foreground">
+                  Leave the field to verify your domain before continuing.
+                </p>
+              ) : null}
             </label>
           </div>
         );
@@ -621,6 +696,15 @@ export default function OnboardingWizard() {
         setError('Company name and domain are required.');
         return;
       }
+      if (domainPreviewLoading) {
+        setError('Still verifying your domain — one moment.');
+        return;
+      }
+      if (!domainPreview || lastPreviewedDomain.current !== domain.trim()) {
+        await checkDomainPreview(domain);
+        setError('Please verify your domain (tab out of the field) before continuing.');
+        return;
+      }
       return createCompany();
     }
     if (step === 'brand-basics') return saveBrandBasics();
@@ -638,50 +722,37 @@ export default function OnboardingWizard() {
   };
 
   const showNav = step !== 'done' && step !== 'enriching';
+  const showWelcomePanel = step === 'welcome';
 
   return (
     <div className="flex min-h-dvh flex-col bg-background lg:flex-row">
       <aside className="relative hidden w-[42%] border-r border-border bg-card lg:flex lg:flex-col">
-        <div className="flex flex-1 flex-col justify-between px-10 py-10">
-          <div className="flex items-center gap-3">
-            <div className="relative h-11 w-11 overflow-hidden rounded-xl">
-              <Image src={ROBUST_DNA.markLight} alt="" width={44} height={44} className="object-contain dark:hidden" priority />
-              <Image src={ROBUST_DNA.markDark} alt="" width={44} height={44} className="hidden object-contain dark:block" priority />
-            </div>
-            <div>
-              <div className="font-display text-lg font-bold tracking-tight">Robust</div>
-              <div className="text-xs text-muted-foreground">Onboarding</div>
-            </div>
-          </div>
-          <div className="max-w-md space-y-4">
-            <h2 className="font-display text-3xl font-bold leading-tight tracking-tight">
-              Grow with <span className="text-primary">ads + AEO</span> in one place
-            </h2>
-            <p className="text-sm leading-relaxed text-muted-foreground">
-              We learn your brand upfront so automation and citations hit the ground running.
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {[
-                { Icon: Building2, label: 'Brand DNA' },
-                { Icon: TrendingUp, label: 'Meta ads' },
-                { Icon: Globe, label: 'AEO bounties' },
-              ].map(({ Icon, label }) => (
-                <span key={label} className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-xs font-medium">
-                  <Icon className="h-3.5 w-3.5 text-primary" /> {label}
-                </span>
-              ))}
-            </div>
-          </div>
-          <p className="text-xs text-muted-foreground">
-            Already have access?{' '}
-            <Link href="/login" className="font-medium text-primary hover:underline">Log in</Link>
-          </p>
-        </div>
+        {showWelcomePanel ? (
+          <OnboardingWelcomePanel />
+        ) : (
+          <OnboardingBrandPreview
+            step={step}
+            company={company}
+            companyName={name}
+            domain={domain}
+            domainPreview={domainPreview}
+            canonicalName={canonicalName}
+            industry={industry}
+            oneLiner={oneLiner}
+            category={category}
+            businessModel={businessModel}
+            primaryAudience={primaryAudience}
+            metaConnected={metaConnected}
+            shopifyConnected={shopifyConnected}
+            enriching={step === 'enriching' || loading}
+            plan={plan}
+          />
+        )}
       </aside>
 
       <main className="flex flex-1 flex-col">
         <div className="border-b border-border px-6 py-4 lg:px-10">
-          <OnboardingStepBar current={step} />
+          <OnboardingPhaseBar current={step} />
         </div>
         <div className="flex flex-1 flex-col justify-between px-6 py-8 lg:px-10">
           <div className="mx-auto w-full max-w-lg">{renderStep()}</div>
