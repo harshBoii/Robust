@@ -5,25 +5,39 @@ import {
   META_OAUTH_SCOPES,
   signMetaOAuthState,
 } from "@/lib/auth/meta-oauth-state";
-import { getSession } from "@/lib/auth/session";
+import { resolveCompanyAuthContext } from "@/lib/auth/resolve-company-auth";
 
 const META_OAUTH_DIALOG = "https://www.facebook.com/v21.0/dialog/oauth";
 
 export async function GET(req: NextRequest) {
   if (!isMetaOAuthConfigured()) {
-    return NextResponse.redirect(
-      new URL("/profile/integration?meta_oauth=config", req.url),
-    );
+    const isOnboarding = req.nextUrl.searchParams.get("onboarding") === "1";
+    const dest = isOnboarding
+      ? "/signup?step=facebook&status=error&reason=config"
+      : "/profile/integration?meta_oauth=config";
+    return NextResponse.redirect(new URL(dest, req.url));
   }
 
-  const session = await getSession();
-  if (!session) {
-    return NextResponse.redirect(new URL("/login?meta_oauth=session", req.url));
+  const isOnboarding = req.nextUrl.searchParams.get("onboarding") === "1";
+  const ctx = await resolveCompanyAuthContext();
+  if (!ctx) {
+    const dest = isOnboarding
+      ? "/signup?step=facebook&status=error&reason=session"
+      : "/login?meta_oauth=session";
+    return NextResponse.redirect(new URL(dest, req.url));
+  }
+
+  if (isOnboarding && ctx.mode !== "onboarding") {
+    return NextResponse.redirect(
+      new URL("/signup?step=facebook&status=error&reason=session", req.url),
+    );
   }
 
   const clientId = process.env.META_APP_ID!.trim();
   const redirectUri = process.env.META_REDIRECT_URI!.trim();
-  const state = await signMetaOAuthState(session.companyId);
+  const state = await signMetaOAuthState(ctx.companyId, {
+    returnTo: isOnboarding ? "onboarding" : "integration",
+  });
 
   const url = new URL(META_OAUTH_DIALOG);
   url.searchParams.set("client_id", clientId);

@@ -82,6 +82,32 @@ export async function completeJsonResponses(params: {
   return text.trim() || '{}';
 }
 
+/** Responses API with web search tool for research-backed JSON output. */
+export async function completeJsonResponsesWithWebSearch(params: {
+  model: string;
+  system: string;
+  user: string;
+  reasoning?: { effort: ReasoningEffort };
+}): Promise<string> {
+  const userContent = withJsonModeUserMessage(params.user);
+
+  const response = await openai.responses.create({
+    model: params.model,
+    reasoning: params.reasoning ?? { effort: 'high' },
+    instructions: params.system,
+    input: [{ role: 'user', content: userContent }],
+    tools: [{ type: 'web_search' }],
+    text: { format: { type: 'json_object' } },
+  });
+
+  const text =
+    typeof response.output_text === 'string' && response.output_text.trim()
+      ? response.output_text
+      : extractResponsesOutputText(response);
+
+  return text.trim() || '{}';
+}
+
 export async function completeJsonChat(params: {
   model: string;
   system: string;

@@ -13,9 +13,15 @@ function getJwtSecretKey() {
   return new TextEncoder().encode(raw);
 }
 
-export async function signMetaOAuthState(companyId: string): Promise<string> {
+export async function signMetaOAuthState(
+  companyId: string,
+  opts?: { returnTo?: 'onboarding' | 'integration' },
+): Promise<string> {
   const key = getJwtSecretKey();
-  return new SignJWT({ purpose: "meta_oauth" })
+  return new SignJWT({
+    purpose: "meta_oauth",
+    returnTo: opts?.returnTo ?? "integration",
+  })
     .setProtectedHeader({ alg: "HS256" })
     .setSubject(companyId)
     .setIssuer(META_OAUTH_ISS)
@@ -24,7 +30,10 @@ export async function signMetaOAuthState(companyId: string): Promise<string> {
     .sign(key);
 }
 
-export async function verifyMetaOAuthState(state: string): Promise<string | null> {
+export async function verifyMetaOAuthState(state: string): Promise<{
+  companyId: string;
+  returnTo: 'onboarding' | 'integration';
+} | null> {
   try {
     const key = getJwtSecretKey();
     const { payload } = await jwtVerify(state, key, {
@@ -34,7 +43,9 @@ export async function verifyMetaOAuthState(state: string): Promise<string | null
     if (payload.purpose !== "meta_oauth" || typeof payload.sub !== "string") {
       return null;
     }
-    return payload.sub;
+    const returnTo =
+      payload.returnTo === "onboarding" ? "onboarding" : "integration";
+    return { companyId: payload.sub, returnTo };
   } catch {
     return null;
   }

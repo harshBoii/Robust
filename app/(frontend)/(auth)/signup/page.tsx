@@ -1,8 +1,21 @@
 'use client';
 
-import AuthPage from '@/app/components/login/AuthPage';
+import { Suspense } from 'react';
 
-export default function SignupPage() {
-  return <AuthPage initialMode="signup" />;
+import OnboardingWizard from '@/app/components/onboarding/OnboardingWizard';
+
+function SignupFallback() {
+  return (
+    <div className="flex min-h-dvh items-center justify-center text-sm text-muted-foreground">
+      Loading onboarding…
+    </div>
+  );
 }
 
+export default function SignupPage() {
+  return (
+    <Suspense fallback={<SignupFallback />}>
+      <OnboardingWizard />
+    </Suspense>
+  );
+}

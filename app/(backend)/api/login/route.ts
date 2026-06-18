@@ -1,3 +1,4 @@
+import { AccessStatus } from "@/app/generated/prisma/client";
 import { NextResponse } from "next/server";
 
 import { establishSessionResponse } from "@/lib/auth/establish-session";
@@ -48,6 +49,7 @@ export async function POST(request: Request) {
       email: true,
       logoUrl: true,
       subscriptionStatus: true,
+      accessStatus: true,
       createdAt: true,
       twoFactorEnabled: true,
     },
@@ -78,6 +80,25 @@ export async function POST(request: Request) {
     return NextResponse.json(
       { error: "Invalid username or password" },
       { status: 401 },
+    );
+  }
+
+  if (company.accessStatus !== AccessStatus.APPROVED) {
+    await logLoginActivity({
+      companyId: company.id,
+      success: false,
+      ipAddress,
+      userAgent,
+    });
+    return NextResponse.json(
+      {
+        error:
+          company.accessStatus === AccessStatus.PENDING
+            ? "Your access request is pending approval."
+            : "Your access request was not approved.",
+        accessStatus: company.accessStatus,
+      },
+      { status: 403 },
     );
   }
 

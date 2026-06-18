@@ -1,3 +1,4 @@
+import { AccessStatus } from '@/app/generated/prisma/client';
 import { NextResponse } from 'next/server';
 
 import { establishSessionResponse } from '@/lib/auth/establish-session';
@@ -63,12 +64,32 @@ export async function POST(request: Request) {
       email: true,
       logoUrl: true,
       subscriptionStatus: true,
+      accessStatus: true,
       createdAt: true,
     },
   });
 
   if (!company) {
     return NextResponse.json({ error: 'Account not found' }, { status: 404 });
+  }
+
+  if (company.accessStatus !== AccessStatus.APPROVED) {
+    await logLoginActivity({
+      companyId,
+      success: false,
+      ipAddress,
+      userAgent,
+    });
+    return NextResponse.json(
+      {
+        error:
+          company.accessStatus === AccessStatus.PENDING
+            ? 'Your access request is pending approval.'
+            : 'Your access request was not approved.',
+        accessStatus: company.accessStatus,
+      },
+      { status: 403 },
+    );
   }
 
   await logLoginActivity({

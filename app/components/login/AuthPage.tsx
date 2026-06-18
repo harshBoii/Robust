@@ -158,12 +158,11 @@ export default function AuthPage({ initialMode }: { initialMode: Mode }) {
   }, []);
 
   const toggleMode = () => {
-    setMode((m) => (m === 'login' ? 'signup' : 'login'));
-    setError('');
-    setSuccess('');
-    setTwoFactorStep(false);
-    setPendingToken('');
-    setTotpCode('');
+    if (mode === 'login') {
+      router.push('/signup');
+      return;
+    }
+    router.push('/login');
   };
 
   const handleLogin = async (e: React.FormEvent) => {

@@ -39,6 +39,14 @@ model Company {
   subscriptionCreatedAt DateTime?          @map("subscription_created_at")
   subscriptionUpdatedAt DateTime?          @map("subscription_updated_at")
 
+  // Onboarding / access request
+  accessStatus      AccessStatus @default(APPROVED) @map("access_status")
+  accessRequestedAt DateTime?    @map("access_requested_at") @db.Timestamptz(3)
+  accessReviewedAt  DateTime?    @map("access_reviewed_at") @db.Timestamptz(3)
+  accessReviewNote  String?      @map("access_review_note") @db.Text
+  onboardingPlan    Json?        @map("onboarding_plan")
+  onboardingStep    String?      @map("onboarding_step") @db.VarChar(64)
+
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
 
@@ -2185,6 +2193,12 @@ enum SubscriptionStatus {
   PENDING
   FAILED
   ON_HOLD
+}
+
+enum AccessStatus {
+  PENDING
+  APPROVED
+  REJECTED
 }
 
 enum AssetType {
