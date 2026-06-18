@@ -8,7 +8,7 @@ import type { AccessRequestRow } from '@/lib/superadmin/access-requests';
 import type { StartupPlan } from '@/lib/onboarding/types';
 
 async function apiJson<T>(url: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(url, init);
+  const res = await fetch(url, { credentials: 'include', ...init });
   const data = (await res.json()) as T & { error?: string };
   if (!res.ok) throw new Error(data.error ?? `Request failed (${res.status})`);
   return data;
@@ -202,14 +202,12 @@ export default function AccessRequestsClient() {
   };
 
   return (
-    <div className="mx-auto max-w-2xl px-4 py-10">
+    <div className="mx-auto max-w-2xl">
       <header className="mb-8">
-        <h1 className="font-display text-2xl font-bold tracking-tight">Access requests</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
+        <p className="text-[11px] font-semibold uppercase tracking-widest text-primary">Superadmin</p>
+        <h1 className="mt-1 font-display text-2xl font-bold tracking-tight">Access requests</h1>
+        <p className="mt-2 text-sm text-muted-foreground">
           Review onboarding applications — accept to grant login access.
-        </p>
-        <p className="mt-2 text-xs text-amber-600 dark:text-amber-400">
-          v1: unprotected route — add auth before production.
         </p>
       </header>
 

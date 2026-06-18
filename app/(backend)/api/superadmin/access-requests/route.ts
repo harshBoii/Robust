@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 
+import { requireSuperadminSession } from '@/lib/auth/superadmin-session';
 import {
   listPendingAccessRequests,
   listRecentlyReviewedAccessRequests,
@@ -7,8 +8,10 @@ import {
 
 export const dynamic = 'force-dynamic';
 
-// v1: unprotected — add SUPERADMIN auth before production
 export async function GET() {
+  const auth = await requireSuperadminSession();
+  if (auth.error) return auth.error;
+
   const [pending, reviewed] = await Promise.all([
     listPendingAccessRequests(),
     listRecentlyReviewedAccessRequests(),

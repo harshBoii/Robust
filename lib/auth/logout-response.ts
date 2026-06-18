@@ -1,7 +1,7 @@
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 
-import { AUTH_COOKIE_NAME } from './constants';
+import { AUTH_COOKIE_NAME, SUPERADMIN_COOKIE_NAME } from './constants';
 import { verifySessionToken } from './jwt';
 import { revokeAuthSession } from './session-store';
 
@@ -24,5 +24,6 @@ export async function logoutJsonResponse(): Promise<NextResponse> {
 
   const res = NextResponse.json({ ok: true });
   res.cookies.delete(AUTH_COOKIE_NAME);
+  res.cookies.delete(SUPERADMIN_COOKIE_NAME);
   return res;
 }

@@ -182,9 +182,16 @@ export default function AuthPage({ initialMode }: { initialMode: Mode }) {
         company?: { id: string };
         requires2fa?: boolean;
         pendingToken?: string;
+        superadmin?: boolean;
       };
       if (!res.ok) {
         setError(data.error ?? 'Login failed');
+        return;
+      }
+      if (data.superadmin) {
+        setSuccess('Signed in as superadmin!');
+        router.push('/superadmin/home');
+        router.refresh();
         return;
       }
       if (data.requires2fa && data.pendingToken) {

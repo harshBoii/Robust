@@ -212,16 +212,15 @@ export default function MetaApiLogsClient() {
   };
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      <div className="mx-auto max-w-6xl px-4 py-8">
-        <header className="mb-8">
-          <p className="text-[11px] font-semibold uppercase tracking-widest text-primary">Superadmin</p>
-          <h1 className="mt-1 font-display text-3xl font-semibold tracking-tight">Meta API logs</h1>
-          <p className="mt-2 max-w-2xl text-[14px] text-muted-foreground">
-            Full Meta Graph API request and response history per company. Access tokens are redacted in
-            stored URLs.
-          </p>
-        </header>
+    <div className="mx-auto max-w-6xl space-y-8">
+      <header>
+        <p className="text-[11px] font-semibold uppercase tracking-widest text-primary">Superadmin</p>
+        <h1 className="mt-1 font-display text-3xl font-semibold tracking-tight">Meta API logs</h1>
+        <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
+          Full Meta Graph API request and response history per company. Access tokens are redacted in
+          stored URLs.
+        </p>
+      </header>
 
         <div className="relative mb-8">
           <div className="flex items-center gap-2 rounded-xl border border-border/40 bg-card/60 px-3 py-2 shadow-sm">
@@ -340,7 +339,6 @@ export default function MetaApiLogsClient() {
             ) : null}
           </div>
         )}
-      </div>
     </div>
   );
 }

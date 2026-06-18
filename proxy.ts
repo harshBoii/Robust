@@ -1,7 +1,12 @@
 import { type NextRequest, NextResponse } from "next/server";
 
-import { AUTH_COOKIE_NAME, UNAUTHENTICATED_REDIRECT_PATH } from "@/lib/auth/constants";
+import {
+  AUTH_COOKIE_NAME,
+  SUPERADMIN_COOKIE_NAME,
+  UNAUTHENTICATED_REDIRECT_PATH,
+} from "@/lib/auth/constants";
 import { resolveSessionFromToken } from "@/lib/auth/resolve-session-from-token";
+import { verifySuperadminToken } from "@/lib/auth/superadmin-token";
 
 const PUBLIC_PATH_PREFIXES = [
   "/login",
@@ -12,8 +17,6 @@ const PUBLIC_PATH_PREFIXES = [
   "/api/login",
   "/api/signup",
   "/api/onboarding",
-  "/api/superadmin/access-requests",
-  "/superadmin",
   "/api/logout",
   "/api/auth/logout",
   "/api/auth/2fa/verify",
@@ -40,6 +43,15 @@ function isPublicVideoDownloadPath(pathname: string): boolean {
   return /^\/api\/videos\/[^/]+\/download$/.test(pathname);
 }
 
+function isSuperadminPath(pathname: string): boolean {
+  return (
+    pathname === "/superadmin" ||
+    pathname.startsWith("/superadmin/") ||
+    pathname === "/api/superadmin" ||
+    pathname.startsWith("/api/superadmin/")
+  );
+}
+
 function isPublicPath(pathname: string): boolean {
   if (isPublicAssetDownloadPath(pathname)) return true;
   if (isPublicVideoDownloadPath(pathname)) return true;
@@ -53,12 +65,43 @@ function clearSessionCookie(response: NextResponse) {
   return response;
 }
 
+function clearSuperadminCookie(response: NextResponse) {
+  response.cookies.delete(SUPERADMIN_COOKIE_NAME);
+  return response;
+}
+
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const token = request.cookies.get(AUTH_COOKIE_NAME)?.value;
+  const superadminToken = request.cookies.get(SUPERADMIN_COOKIE_NAME)?.value;
+
+  if (isSuperadminPath(pathname)) {
+    if (!superadminToken) {
+      if (pathname.startsWith("/api/")) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      }
+      return NextResponse.redirect(new URL("/login", request.url));
+    }
+
+    const superadminSession = await verifySuperadminToken(superadminToken);
+    if (!superadminSession) {
+      const res = pathname.startsWith("/api/")
+        ? NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+        : NextResponse.redirect(new URL("/login", request.url));
+      return clearSuperadminCookie(res);
+    }
+
+    return NextResponse.next();
+  }
 
   if (isPublicPath(pathname)) {
     if (pathname === "/login" || pathname === "/signup") {
+      if (superadminToken) {
+        const superadminSession = await verifySuperadminToken(superadminToken);
+        if (superadminSession) {
+          return NextResponse.redirect(new URL("/superadmin/home", request.url));
+        }
+      }
       if (token) {
         const session = await resolveSessionFromToken(token);
         if (session) {

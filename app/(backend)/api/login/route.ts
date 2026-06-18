@@ -6,6 +6,11 @@ import { signPendingLoginToken } from "@/lib/auth/pending-login";
 import { verifyPassword } from "@/lib/auth/password";
 import { getRequestIp, getRequestUserAgent } from "@/lib/auth/request-meta";
 import { logLoginActivity } from "@/lib/auth/session-store";
+import {
+  isSuperadminCredentials,
+  isSuperadminCredentialsConfigured,
+} from "@/lib/auth/superadmin-credentials";
+import { establishSuperadminResponse } from "@/lib/auth/superadmin-session";
 import { prisma } from "@/lib/prisma";
 
 type LoginBody = {
@@ -36,6 +41,29 @@ export async function POST(request: Request) {
 
   if (userName.length > 255 || password.length > 1024) {
     return NextResponse.json({ error: "Payload too large" }, { status: 400 });
+  }
+
+  if (isSuperadminCredentials(userName, password)) {
+    try {
+      return await establishSuperadminResponse(userName, { superadmin: true });
+    } catch (err) {
+      console.error(err);
+      return NextResponse.json(
+        { error: "Authentication is not configured correctly" },
+        { status: 500 },
+      );
+    }
+  }
+
+  if (
+    process.env.NODE_ENV === "production" &&
+    !isSuperadminCredentialsConfigured() &&
+    userName === process.env.SUPERADMIN_USERNAME?.trim()
+  ) {
+    return NextResponse.json(
+      { error: "Superadmin authentication is not configured" },
+      { status: 500 },
+    );
   }
 
   const company = await prisma.company.findUnique({
