@@ -265,17 +265,20 @@ function ManualProductForm({
   setForm,
   error,
   showReviewBanner,
+  lockStatus,
 }: {
   form: CustomProductFormState;
   setForm: (next: CustomProductFormState) => void;
   error: string | null;
   showReviewBanner: boolean;
+  lockStatus?: boolean;
 }) {
   return (
     <div className="space-y-5">
       {showReviewBanner ? (
         <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-800 dark:text-amber-200">
-          AI draft saved — review the fields below and tap Save to confirm.
+          AI draft saved in the background — review the fields below, then tap Save to publish as
+          active.
         </p>
       ) : null}
 
@@ -312,17 +315,23 @@ function ManualProductForm({
             <span className="mb-1.5 block font-ui text-[10px] font-medium text-muted-foreground">
               Status
             </span>
-            <select
-              className={inputClass}
-              value={form.status}
-              onChange={(e) =>
-                setForm({ ...form, status: e.target.value as CustomProductStatus })
-              }
-            >
-              <option value="DRAFT">Draft</option>
-              <option value="ACTIVE">Active</option>
-              <option value="INACTIVE">Inactive</option>
-            </select>
+            {lockStatus ? (
+              <p className="rounded-xl border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
+                Active (applied when you save)
+              </p>
+            ) : (
+              <select
+                className={inputClass}
+                value={form.status}
+                onChange={(e) =>
+                  setForm({ ...form, status: e.target.value as CustomProductStatus })
+                }
+              >
+                <option value="DRAFT">Draft</option>
+                <option value="ACTIVE">Active</option>
+                <option value="INACTIVE">Inactive</option>
+              </select>
+            )}
           </label>
           <label className="block sm:col-span-2">
             <span className="mb-1.5 block font-ui text-[10px] font-medium text-muted-foreground">
@@ -468,10 +477,18 @@ export function AddCustomProductDialog({
   const [extracting, setExtracting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const dialogInitializedRef = useRef(false);
+
   const showAiTab = mode === 'create' && !draftProductId;
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      dialogInitializedRef.current = false;
+      return;
+    }
+    if (dialogInitializedRef.current) return;
+    dialogInitializedRef.current = true;
+
     setEntryMode('manual');
     setAiSource('website');
     setWebsiteUrl('');
@@ -481,7 +498,9 @@ export function AddCustomProductDialog({
     setDraftProductId(null);
     setAiExtracted(false);
     setError(null);
-  }, [open, initialForm]);
+    // Only reset when the dialog opens — not on parent re-renders during AI extract.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   const handleExtract = async () => {
     setExtracting(true);
@@ -510,11 +529,11 @@ export function AddCustomProductDialog({
       }
 
       const { product } = result;
+      const filledForm = productToForm(product);
       setDraftProductId(product.id);
       setAiExtracted(true);
-      setForm(productToForm(product));
+      setForm(filledForm);
       setEntryMode('manual');
-      onSaved(product, { phase: 'draft' });
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Extraction failed');
     } finally {
@@ -532,6 +551,9 @@ export function AddCustomProductDialog({
     setError(null);
     try {
       const payload = formToPayload(form);
+      if (aiExtracted && draftProductId) {
+        payload.status = 'ACTIVE';
+      }
       const saveId = draftProductId ?? productId;
       const isPatch = Boolean(saveId);
 
@@ -569,8 +591,11 @@ export function AddCustomProductDialog({
   if (!open) return null;
 
   const title = mode === 'create' ? 'Add product or service' : 'Edit product or service';
-  const saveLabel =
-    draftProductId || mode === 'edit' ? 'Save changes' : mode === 'create' ? 'Create' : 'Save';
+  const saveLabel = aiExtracted
+    ? 'Save & activate'
+    : draftProductId || mode === 'edit'
+      ? 'Save changes'
+      : 'Create';
 
   return (
     <ModalPortal>
@@ -713,6 +738,7 @@ export function AddCustomProductDialog({
                 setForm={setForm}
                 error={error}
                 showReviewBanner={aiExtracted}
+                lockStatus={aiExtracted}
               />
             )}
           </div>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pencil, Trash2 } from 'lucide-react';
 
 import {
@@ -115,6 +115,8 @@ export default function CustomProductsSection({
   };
 
   const handleSaved = (product: CustomProductDto, meta?: { phase?: 'draft' | 'confirmed' }) => {
+    if (meta?.phase === 'draft') return;
+
     setProducts((prev) => {
       const idx = prev.findIndex((p) => p.id === product.id);
       if (idx === -1) return [product, ...prev];
@@ -122,14 +124,6 @@ export default function CustomProductsSection({
       next[idx] = product;
       return next;
     });
-
-    if (meta?.phase === 'draft') {
-      toast.push({
-        title: 'AI draft saved — review and confirm',
-        kind: 'info',
-      });
-      return;
-    }
 
     if (meta?.phase === 'confirmed') {
       toast.push({ title: 'Product saved', kind: 'success' });
@@ -141,6 +135,11 @@ export default function CustomProductsSection({
       kind: 'success',
     });
   };
+
+  const dialogInitialForm = useMemo(
+    () => (editingProduct ? productToForm(editingProduct) : emptyCustomProductForm()),
+    [editingProduct],
+  );
 
   return (
     <div className="space-y-3">
@@ -250,7 +249,7 @@ export default function CustomProductsSection({
         open={dialogOpen}
         mode={dialogMode}
         productId={editingProduct?.id}
-        initialForm={editingProduct ? productToForm(editingProduct) : emptyCustomProductForm()}
+        initialForm={dialogInitialForm}
         onClose={closeDialog}
         onSaved={handleSaved}
       />
