@@ -1,8 +1,10 @@
 'use client';
 
 import Link from 'next/link';
-import { ChevronLeft, Package } from 'lucide-react';
+import { useState } from 'react';
+import { ChevronLeft, Package, Plus } from 'lucide-react';
 
+import CustomProductsSection from '@/app/components/profile/CustomProductsSection';
 import {
   profileCard,
   profileCardHeader,
@@ -11,6 +13,8 @@ import {
 import ShopProductsClient from '@/app/components/shop/ShopProductsClient';
 
 export default function ProfileProductsPageClient() {
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
+
   return (
     <div className="flex h-full min-h-0 w-full flex-col gap-2 overflow-hidden">
       <div className={`${profileCard} shrink-0`}>
@@ -22,19 +26,42 @@ export default function ProfileProductsPageClient() {
                 Products
               </h1>
               <p className="font-body text-[11px] text-muted-foreground">
-                Shopify products synced to your workspace
+                Custom offerings and Shopify products for your workspace
               </p>
             </div>
           </div>
-          <Link href="/profile" className={`${profileGhostButton} shrink-0`}>
-            <ChevronLeft className="h-3 w-3" />
-            Profile
-          </Link>
+          <div className="flex shrink-0 items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setCreateDialogOpen(true)}
+              className="glass-button-primary inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-semibold"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              Add product or service
+            </button>
+            <Link href="/profile" className={profileGhostButton}>
+              <ChevronLeft className="h-3 w-3" />
+              Profile
+            </Link>
+          </div>
         </div>
       </div>
 
-      <div className={`${profileCard} min-h-0 flex-1 overflow-y-auto p-3`}>
-        <ShopProductsClient embedded />
+      <div className={`${profileCard} min-h-0 flex-1 overflow-y-auto p-3 space-y-5`}>
+        <CustomProductsSection
+          createDialogOpen={createDialogOpen}
+          onCreateDialogOpenChange={setCreateDialogOpen}
+        />
+
+        <div className="border-t border-border pt-4">
+          <div className="mb-3">
+            <h2 className="font-heading text-sm font-semibold text-foreground">Shopify products</h2>
+            <p className="font-body text-[11px] text-muted-foreground">
+              Products synced from your connected Shopify store
+            </p>
+          </div>
+          <ShopProductsClient embedded />
+        </div>
       </div>
     </div>
   );

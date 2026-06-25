@@ -96,6 +96,7 @@ model Company {
   metaApiLogs             MetaApiLog[]
   companyJobConfigs       CompanyJobConfig[]
   lastMicroserviceJobAt   DateTime? @map("last_microservice_job_at") @db.Timestamptz(3)
+  customProducts          CustomProduct[]
 
   @@index([slug])
   @@map("companies")
@@ -265,6 +266,37 @@ model Offering {
   @@unique([brandEntityId, slug])
   @@index([companyId])
   @@map("offerings")
+}
+
+model CustomProduct {
+  id              String              @id @default(cuid())
+  companyId       String              @map("company_id")
+  name            String              @db.VarChar(500)
+  description     String?             @db.Text
+  category        String?             @db.VarChar(255)
+  productType     CustomProductType   @default(SERVICE) @map("product_type")
+  status          CustomProductStatus @default(DRAFT)
+
+  // Content generation
+  tagline         String?             @db.VarChar(500)
+  keyBenefits     Json?               @default("[]") @map("key_benefits")
+  targetAudience  String?             @map("target_audience") @db.Text
+  keywords        Json?               @default("[]")
+  toneNotes       String?             @map("tone_notes") @db.Text
+
+  // Context
+  mediaUrls       Json?               @default("[]") @map("media_urls")
+  faqs            Json?               @default("[]")
+  certifications  String?             @db.Text
+
+  createdAt       DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@index([companyId, status])
+  @@map("custom_products")
 }
 
 model AuthSession {
@@ -2338,6 +2370,17 @@ enum OfferingType {
   PRODUCT
   SERVICE
   OTHER
+}
+
+enum CustomProductType {
+  PRODUCT
+  SERVICE
+}
+
+enum CustomProductStatus {
+  ACTIVE
+  INACTIVE
+  DRAFT
 }
 
 enum RivalScrapeStatus {

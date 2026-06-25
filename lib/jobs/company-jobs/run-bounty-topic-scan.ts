@@ -1,18 +1,18 @@
 import 'server-only';
 
-import { runRadarJob } from '@/lib/jobs/run-radar';
+import { scanBountyJob } from '@/lib/geo/bounty/scanBountyJob';
 
 import type { JobRunResult } from './types';
 
-/** Topic discovery via full radar microservice (phase-1: same path as radar refresh). */
+/** Topic discovery via bounty microservice (`POST /company/bounty`). */
 export async function runBountyTopicScanJob(companyId: string): Promise<JobRunResult> {
   try {
-    const result = await runRadarJob(companyId);
+    const result = await scanBountyJob(companyId);
     return {
       status: 'SUCCESS',
       summary: {
-        topicsDiscovered: result.topics?.length ?? 0,
-        promptsDiscovered: result.prompts?.length ?? 0,
+        topicsDiscovered: result.topicsDiscovered,
+        promptsDiscovered: result.promptsDiscovered,
       },
     };
   } catch (err) {

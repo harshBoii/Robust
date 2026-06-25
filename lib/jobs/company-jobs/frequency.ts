@@ -97,7 +97,7 @@ export function jobUseCaseDescription(jobType: CompanyJobType): string {
     case 'BOUNTY_PAGE_GENERATION':
       return 'Creates 2–5 bounty pages per run from random active prompts on the platforms you select.';
     case 'BOUNTY_TOPIC_SCAN':
-      return 'Discovers new bounty topics and niches for your brand by scanning LLM radar opportunities.';
+      return 'Discovers new bounty topics and niches for your brand via the bounty microservice.';
     case 'RADAR_PROMPT_REFRESH':
       return 'Refreshes home radar data and generates new search prompts for your existing topics.';
     default:

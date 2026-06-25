@@ -32,7 +32,7 @@ function buildPriceString(params: {
   return `${currency ? `${currency} ` : ""}${single}`.trim();
 }
 
-function buildProductDescriptionWithPrice(input: {
+export function buildProductDescriptionWithPrice(input: {
   description?: string | null;
   priceMinAmount?: unknown;
   priceMaxAmount?: unknown;
@@ -43,6 +43,145 @@ function buildProductDescriptionWithPrice(input: {
   if (!priceStr) return desc;
   if (!desc) return `Price: ${priceStr}`;
   return `${desc} | Price: ${priceStr}`;
+}
+
+function asStringArray(v: unknown): string[] {
+  if (!Array.isArray(v)) return [];
+  return v.filter((x): x is string => typeof x === "string").map((s) => s.trim()).filter(Boolean);
+}
+
+function asFaqArray(v: unknown): Array<{ question: string; answer: string }> {
+  if (!Array.isArray(v)) return [];
+  const items: Array<{ question: string; answer: string }> = [];
+  for (const item of v) {
+    if (!item || typeof item !== "object") continue;
+    const row = item as Record<string, unknown>;
+    const question = typeof row.question === "string" ? row.question.trim() : "";
+    const answer = typeof row.answer === "string" ? row.answer.trim() : "";
+    if (!question || !answer) continue;
+    items.push({ question, answer });
+  }
+  return items;
+}
+
+export function buildCustomProductDescription(product: {
+  description?: string | null;
+  category?: string | null;
+  productType?: string | null;
+  tagline?: string | null;
+  keyBenefits?: unknown;
+  targetAudience?: string | null;
+  keywords?: unknown;
+  toneNotes?: string | null;
+  mediaUrls?: unknown;
+  faqs?: unknown;
+  certifications?: string | null;
+}) {
+  const parts: string[] = [];
+
+  const tagline = product.tagline?.trim();
+  if (tagline) parts.push(`Tagline: ${tagline}`);
+
+  const meta: string[] = [];
+  if (product.category?.trim()) meta.push(`Category: ${product.category.trim()}`);
+  if (product.productType?.trim()) {
+    meta.push(`Type: ${product.productType.trim().toLowerCase()}`);
+  }
+  if (meta.length) parts.push(meta.join(" | "));
+
+  const description = product.description?.trim();
+  if (description) parts.push(description);
+
+  const targetAudience = product.targetAudience?.trim();
+  if (targetAudience) parts.push(`Target audience: ${targetAudience}`);
+
+  const keyBenefits = asStringArray(product.keyBenefits);
+  if (keyBenefits.length) {
+    parts.push(`Key benefits:\n${keyBenefits.map((b) => `- ${b}`).join("\n")}`);
+  }
+
+  const keywords = asStringArray(product.keywords);
+  if (keywords.length) parts.push(`Keywords: ${keywords.join(", ")}`);
+
+  const toneNotes = product.toneNotes?.trim();
+  if (toneNotes) parts.push(`Tone: ${toneNotes}`);
+
+  const certifications = product.certifications?.trim();
+  if (certifications) parts.push(`Certifications: ${certifications}`);
+
+  const mediaUrls = asStringArray(product.mediaUrls);
+  if (mediaUrls.length) parts.push(`Media: ${mediaUrls.join(", ")}`);
+
+  const faqs = asFaqArray(product.faqs);
+  if (faqs.length) {
+    parts.push(
+      `FAQs:\n${faqs.map((f) => `Q: ${f.question}\nA: ${f.answer}`).join("\n\n")}`,
+    );
+  }
+
+  return parts.join("\n\n");
+}
+
+export type StandOutProductInput = {
+  name: string;
+  shortDescription: string;
+};
+
+export async function buildStandOutProducts(
+  companyId: string,
+): Promise<StandOutProductInput[]> {
+  const [shopifyProducts, customProducts] = await Promise.all([
+    prisma.shopifyProduct.findMany({
+      where: { companyId },
+      select: {
+        title: true,
+        description: true,
+        priceMinAmount: true,
+        priceMaxAmount: true,
+        currencyCode: true,
+      },
+      orderBy: { shopifyUpdatedAt: "desc" },
+    }),
+    prisma.customProduct.findMany({
+      where: { companyId, status: "ACTIVE" },
+      select: {
+        name: true,
+        description: true,
+        category: true,
+        productType: true,
+        tagline: true,
+        keyBenefits: true,
+        targetAudience: true,
+        keywords: true,
+        toneNotes: true,
+        mediaUrls: true,
+        faqs: true,
+        certifications: true,
+      },
+      orderBy: { updatedAt: "desc" },
+    }),
+  ]);
+
+  const fromShopify = shopifyProducts
+    .filter((p) => Boolean(p.title?.trim()))
+    .map((p) => ({
+      name: p.title!.trim(),
+      shortDescription: buildProductDescriptionWithPrice({
+        description: p.description,
+        priceMinAmount: p.priceMinAmount,
+        priceMaxAmount: p.priceMaxAmount,
+        currencyCode: p.currencyCode,
+      }),
+    }));
+
+  const fromCustom = customProducts
+    .filter((p) => Boolean(p.name?.trim()))
+    .map((p) => ({
+      name: p.name.trim(),
+      shortDescription: buildCustomProductDescription(p),
+    }));
+
+  return [...fromShopify, ...fromCustom].slice(0, 7);
 }
 
 function topicTitleToPathSegment(title: string): string | null {
@@ -155,15 +294,40 @@ export async function buildBountyGenerationPayload(opts: {
     orderBy: { shopifyUpdatedAt: "desc" },
   });
 
-  const offerings = shopifyProducts.map((p) => ({
-    name: p.title ?? "",
-    description: buildProductDescriptionWithPrice({
-      description: p.description,
-      priceMinAmount: p.priceMinAmount,
-      priceMaxAmount: p.priceMaxAmount,
-      currencyCode: p.currencyCode,
-    }),
-  }));
+  const customProducts = await prisma.customProduct.findMany({
+    where: { companyId: opts.companyId, status: "ACTIVE" },
+    select: {
+      name: true,
+      description: true,
+      category: true,
+      productType: true,
+      tagline: true,
+      keyBenefits: true,
+      targetAudience: true,
+      keywords: true,
+      toneNotes: true,
+      mediaUrls: true,
+      faqs: true,
+      certifications: true,
+    },
+    orderBy: { updatedAt: "desc" },
+  });
+
+  const offerings = [
+    ...shopifyProducts.map((p) => ({
+      name: p.title ?? "",
+      description: buildProductDescriptionWithPrice({
+        description: p.description,
+        priceMinAmount: p.priceMinAmount,
+        priceMaxAmount: p.priceMaxAmount,
+        currencyCode: p.currencyCode,
+      }),
+    })),
+    ...customProducts.map((p) => ({
+      name: p.name,
+      description: buildCustomProductDescription(p),
+    })),
+  ];
 
   const lowerIncludes = (label: string, needles: string[]) =>
     needles.some((n) => label.toLowerCase().includes(n));
