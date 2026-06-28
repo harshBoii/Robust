@@ -356,7 +356,24 @@ export default function ProfileClient({ profile }: ProfileClientProps) {
       </div>
 
       {/* Stats row */}
-      <div className="grid shrink-0 grid-cols-2 gap-2 lg:grid-cols-4">
+      <div className="grid shrink-0 grid-cols-2 gap-2 lg:grid-cols-5">
+        <div className="relative flex items-center gap-2.5 px-2.5 py-2 overflow-hidden rounded-xl border border-amber-500/40 bg-gradient-to-br from-amber-500/15 via-orange-500/5 to-transparent shadow-[0_0_15px_rgba(245,158,11,0.15)] transition-all hover:-translate-y-0.5 hover:shadow-[0_4px_20px_rgba(245,158,11,0.25)]">
+          <div className="pointer-events-none absolute inset-0 bg-gradient-to-tr from-transparent via-white/30 to-transparent -translate-x-full animate-[shimmer_3s_infinite_linear]" />
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-amber-400 to-orange-500 shadow-inner">
+            <Sparkles className="h-3.5 w-3.5 text-white drop-shadow-md" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <p className="truncate font-display text-[13px] font-bold leading-none text-transparent bg-clip-text bg-gradient-to-br from-amber-600 to-orange-600 dark:from-amber-400 dark:to-orange-400">
+                $350.00
+              </p>
+              <span className="inline-flex shrink-0 items-center rounded-full bg-gradient-to-r from-amber-200 to-yellow-400 px-1.5 py-[2px] font-ui text-[8px] font-bold uppercase tracking-wider text-amber-900 shadow-sm whitespace-nowrap">
+                Free 1-Week Trial
+              </span>
+            </div>
+            <p className="mt-0.5 truncate font-ui text-[9px] font-medium text-amber-700/90 dark:text-amber-400/90">Credits Left</p>
+          </div>
+        </div>
         <StatCard
           icon={ImageIcon}
           value={profile.stats.assets.toLocaleString('en-US')}
