@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -146,21 +146,38 @@ const PRIMARY_NAV_GROUPS: NavGroup[] = [
 /* ============================================
    PRIMARY SIDEBAR ICON
 ============================================ */
+const HOVER_PREVIEW_DELAY_MS = 175;
+const HOVER_REVERT_DELAY_MS = 100;
+
 const PrimarySidebarIcon = ({
   icon: Icon,
   label,
   isActive,
   onClick,
+  onMouseEnter,
+  onMouseLeave,
+  onFocus,
+  onBlur,
 }: {
   icon: React.ComponentType<{ className?: string }>;
   label: string;
   isActive: boolean;
   onClick: () => void;
+  onMouseEnter?: () => void;
+  onMouseLeave?: () => void;
+  onFocus?: () => void;
+  onBlur?: (e: React.FocusEvent) => void;
 }) => (
-  <div className="flex w-full flex-col items-center select-none">
+  <div
+    className="flex w-full flex-col items-center select-none"
+    onMouseEnter={onMouseEnter}
+    onMouseLeave={onMouseLeave}
+  >
     <button
       type="button"
       onClick={onClick}
+      onFocus={onFocus}
+      onBlur={onBlur}
       title={label}
       className={`sidebar-icon relative flex items-center justify-center w-10 h-10 rounded-xl transition-all duration-200 ${
         isActive
@@ -602,8 +619,87 @@ export default function AppSidebar({
   const pathname = usePathname();
   const router   = useRouter();
   const [activeSection,    setActiveSection]    = useState('home');
+  const [hoveredPrimaryId, setHoveredPrimaryId] = useState<string | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [galleryUploadModalOpen, setGalleryUploadModalOpen] = useState(false);
+  const hoverPreviewTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hoverRevertTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastPreviewSectionIdRef = useRef<string | null>(null);
+  const secondaryAsideRef = useRef<HTMLElement | null>(null);
+
+  const clearHoverPreviewTimeout = useCallback(() => {
+    if (hoverPreviewTimeoutRef.current !== null) {
+      clearTimeout(hoverPreviewTimeoutRef.current);
+      hoverPreviewTimeoutRef.current = null;
+    }
+  }, []);
+
+  const clearHoverRevertTimeout = useCallback(() => {
+    if (hoverRevertTimeoutRef.current !== null) {
+      clearTimeout(hoverRevertTimeoutRef.current);
+      hoverRevertTimeoutRef.current = null;
+    }
+  }, []);
+
+  const scheduleHoverPreview = useCallback(
+    (sectionId: string) => {
+      clearHoverRevertTimeout();
+      clearHoverPreviewTimeout();
+      lastPreviewSectionIdRef.current = sectionId;
+      hoverPreviewTimeoutRef.current = setTimeout(() => {
+        setHoveredPrimaryId(sectionId);
+        hoverPreviewTimeoutRef.current = null;
+      }, HOVER_PREVIEW_DELAY_MS);
+    },
+    [clearHoverPreviewTimeout, clearHoverRevertTimeout],
+  );
+
+  const scheduleHoverRevert = useCallback(() => {
+    clearHoverPreviewTimeout();
+    clearHoverRevertTimeout();
+    hoverRevertTimeoutRef.current = setTimeout(() => {
+      setHoveredPrimaryId(null);
+      lastPreviewSectionIdRef.current = null;
+      hoverRevertTimeoutRef.current = null;
+    }, HOVER_REVERT_DELAY_MS);
+  }, [clearHoverPreviewTimeout, clearHoverRevertTimeout]);
+
+  const confirmHoverInSecondary = useCallback(() => {
+    clearHoverRevertTimeout();
+    const sectionId = lastPreviewSectionIdRef.current;
+    if (sectionId) {
+      clearHoverPreviewTimeout();
+      setHoveredPrimaryId(sectionId);
+    }
+  }, [clearHoverPreviewTimeout, clearHoverRevertTimeout]);
+
+  const handlePrimaryBlur = useCallback(
+    (e: React.FocusEvent) => {
+      const next = e.relatedTarget as Node | null;
+      if (next && secondaryAsideRef.current?.contains(next)) {
+        confirmHoverInSecondary();
+        return;
+      }
+      scheduleHoverRevert();
+    },
+    [confirmHoverInSecondary, scheduleHoverRevert],
+  );
+
+  const handleSecondaryBlur = useCallback(
+    (e: React.FocusEvent) => {
+      const next = e.relatedTarget as Node | null;
+      if (next && e.currentTarget.contains(next)) return;
+      scheduleHoverRevert();
+    },
+    [scheduleHoverRevert],
+  );
+
+  useEffect(() => {
+    return () => {
+      clearHoverPreviewTimeout();
+      clearHoverRevertTimeout();
+    };
+  }, [clearHoverPreviewTimeout, clearHoverRevertTimeout]);
 
   const getFirstRoute = (sectionId: string) => {
     switch (sectionId) {
@@ -621,6 +717,10 @@ export default function AppSidebar({
   };
 
   const handleSectionClick = (sectionId: string) => {
+    clearHoverPreviewTimeout();
+    clearHoverRevertTimeout();
+    lastPreviewSectionIdRef.current = null;
+    setHoveredPrimaryId(null);
     setActiveSection(sectionId);
     router.push(getFirstRoute(sectionId));
   };
@@ -649,6 +749,11 @@ export default function AppSidebar({
   };
 
   useEffect(() => {
+    // Navigation commit clears hover preview — secondary is then route-driven.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setHoveredPrimaryId(null);
+    lastPreviewSectionIdRef.current = null;
+
     // eslint-disable-next-line react-hooks/set-state-in-effect
     if      (pathname === '/')                   setActiveSection('home');
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -672,7 +777,8 @@ export default function AppSidebar({
     else                                         setActiveSection('home');
   }, [pathname]);
 
-  const currentSection = MAIN_SECTIONS.find((s) => s.id === activeSection);
+  const displaySectionId = hoveredPrimaryId ?? activeSection;
+  const currentSection = MAIN_SECTIONS.find((s) => s.id === displaySectionId);
   const showSecondary  = !sidebarCollapsed && currentSection?.hasSecondary;
 
   const springTransition = {
@@ -732,6 +838,10 @@ export default function AppSidebar({
                     label={section.label}
                     isActive={activeSection === section.id}
                     onClick={() => handleSectionClick(section.id)}
+                    onMouseEnter={() => scheduleHoverPreview(section.id)}
+                    onMouseLeave={scheduleHoverRevert}
+                    onFocus={() => scheduleHoverPreview(section.id)}
+                    onBlur={handlePrimaryBlur}
                   />
                 ))}
               </div>
@@ -842,6 +952,7 @@ export default function AppSidebar({
       <AnimatePresence initial={false}>
         {showSecondary && (
           <motion.aside
+            ref={secondaryAsideRef}
             key="secondary-sidebar"
             className="glass-sidebar-secondary flex-shrink-0 flex flex-col h-screen overflow-hidden"
             style={{ width: 224, minWidth: 224 }}
@@ -849,6 +960,10 @@ export default function AppSidebar({
             animate={{ x: 0,       opacity: 1 }}
             exit={{    x: '-100%', opacity: 0 }}
             transition={springTransition}
+            onMouseEnter={confirmHoverInSecondary}
+            onMouseLeave={scheduleHoverRevert}
+            onFocus={confirmHoverInSecondary}
+            onBlur={handleSecondaryBlur}
           >
             {/* Header */}
             <div className="px-4 py-3.5 flex items-center justify-between flex-shrink-0 border-b border-[var(--glass-border)]">
@@ -878,7 +993,7 @@ export default function AppSidebar({
             {/* Nav content */}
             <nav className="flex-1 overflow-y-auto px-2 py-1 glass-scrollbar">
               <SecondarySidebarContent
-                activeSection={activeSection}
+                activeSection={displaySectionId}
                 onGalleryUploadClick={
                   companyId ? () => setGalleryUploadModalOpen(true) : undefined
                 }
