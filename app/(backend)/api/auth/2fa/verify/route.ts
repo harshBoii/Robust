@@ -6,6 +6,7 @@ import { verifyPendingLoginToken } from '@/lib/auth/pending-login';
 import { getRequestIp, getRequestUserAgent } from '@/lib/auth/request-meta';
 import { logLoginActivity } from '@/lib/auth/session-store';
 import { verifyCompanyTotp } from '@/lib/auth/two-factor';
+import { resolveLandingPath } from '@/lib/nav/landing-path';
 import { prisma } from '@/lib/prisma';
 
 type Body = {
@@ -117,6 +118,7 @@ export async function POST(request: Request) {
           subscriptionStatus: company.subscriptionStatus,
           createdAt: company.createdAt,
         },
+        landingPath: await resolveLandingPath(companyId),
       },
     });
   } catch (err) {

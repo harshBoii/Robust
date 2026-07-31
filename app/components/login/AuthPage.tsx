@@ -17,6 +17,10 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
 import { clearLenisDocumentState } from '@/app/components/landing/LenisScroll';
+import {
+  ORGANIC_LANDING_PATH,
+  PAID_GROWTH_LANDING_PATH as DEFAULT_LANDING_PATH,
+} from '@/lib/nav/paid-growth';
 
 type Mode = 'login' | 'signup';
 
@@ -183,6 +187,7 @@ export default function AuthPage({ initialMode }: { initialMode: Mode }) {
         requires2fa?: boolean;
         pendingToken?: string;
         superadmin?: boolean;
+        landingPath?: string;
       };
       if (!res.ok) {
         setError(data.error ?? 'Login failed');
@@ -201,7 +206,9 @@ export default function AuthPage({ initialMode }: { initialMode: Mode }) {
         return;
       }
       setSuccess('Signed in!');
-      router.push('/home');
+      // The server picks the landing route — a user without Meta connected must not be
+      // dropped onto the Paid Growth dashboard, which cannot render without it.
+      router.push(data.landingPath ?? DEFAULT_LANDING_PATH);
       router.refresh();
     } catch (err) {
       console.error(err);
@@ -223,13 +230,13 @@ export default function AuthPage({ initialMode }: { initialMode: Mode }) {
         body: JSON.stringify({ pendingToken, code: totpCode }),
         credentials: 'include',
       });
-      const data = (await res.json()) as { error?: string };
+      const data = (await res.json()) as { error?: string; landingPath?: string };
       if (!res.ok) {
         setError(data.error ?? 'Verification failed');
         return;
       }
       setSuccess('Signed in!');
-      router.push('/home');
+      router.push(data.landingPath ?? DEFAULT_LANDING_PATH);
       router.refresh();
     } catch (err) {
       console.error(err);
@@ -282,14 +289,15 @@ export default function AuthPage({ initialMode }: { initialMode: Mode }) {
         body: JSON.stringify({ userName: signupUserName, password: signupPassword }),
         credentials: 'include',
       });
-      const loginData = (await loginRes.json()) as { error?: string };
+      const loginData = (await loginRes.json()) as { error?: string; landingPath?: string };
       if (!loginRes.ok) {
         setMode('login');
         setUserName(signupUserName);
         setError(loginData.error ?? 'Account created. Please log in.');
         return;
       }
-      router.push('/home');
+      // A brand-new company has no Meta integration, so this resolves to Organic Marketing.
+      router.push(loginData.landingPath ?? ORGANIC_LANDING_PATH);
       router.refresh();
     } catch (err) {
       console.error(err);

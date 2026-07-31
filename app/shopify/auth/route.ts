@@ -4,6 +4,7 @@ import { getShopifyConfig } from "@/lib/shopify/config";
 import { normalizeShopDomain } from "@/lib/shopify/domain";
 import { verifyHmacFromSearchParams } from "@/lib/shopify/hmac";
 import { resolveCompanyIdForShopifyLoad } from "@/lib/shopify/resolveCompany";
+import { resolveLandingPath } from "@/lib/nav/landing-path";
 import { prisma } from "@/lib/prisma";
 
 /**
@@ -37,7 +38,8 @@ export async function GET(request: NextRequest) {
   });
 
   if (installed?.status === "installed") {
-    return NextResponse.redirect(new URL("/home", request.url));
+    const landing = await resolveLandingPath(installed.companyId);
+    return NextResponse.redirect(new URL(landing, request.url));
   }
 
   const installUrl = new URL("/shopify/install", request.url);

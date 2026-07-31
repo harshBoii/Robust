@@ -2,6 +2,7 @@ import { AccessStatus } from "@/app/generated/prisma/client";
 import { NextResponse } from "next/server";
 
 import { establishSessionResponse } from "@/lib/auth/establish-session";
+import { resolveLandingPath } from "@/lib/nav/landing-path";
 import { signPendingLoginToken } from "@/lib/auth/pending-login";
 import { verifyPassword } from "@/lib/auth/password";
 import { getRequestIp, getRequestUserAgent } from "@/lib/auth/request-meta";
@@ -177,6 +178,7 @@ export async function POST(request: Request) {
           subscriptionStatus: company.subscriptionStatus,
           createdAt: company.createdAt,
         },
+        landingPath: await resolveLandingPath(company.id),
       },
     });
   } catch (err) {
