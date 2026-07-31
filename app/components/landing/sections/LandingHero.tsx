@@ -43,7 +43,7 @@ export function LandingHero() {
       // Restate the CSS start-state in gsap's own units so every transform
       // it later touches is normalised (the CSS values only exist to stop a
       // flash of un-animated hero before hydration).
-      gsap.set('.hero-sky', { yPercent: -38 });
+      gsap.set('.hero-sky-drift', { yPercent: -38 });
       gsap.set('.hw-i', { yPercent: 110, opacity: 0 });
       gsap.set('.hero-puff', { scale: 0.55, opacity: 0.05 });
       gsap.set(
@@ -120,19 +120,20 @@ export function LandingHero() {
             scrub: 0.9,
           },
         })
-        .to('.hero-sky', { yPercent: -72, ease: 'none' }, 0)
+        .to('.hero-sky-drift', { yPercent: -72, ease: 'none' }, 0)
         .to(
           '.hero-puff',
           {
             opacity: 0.92,
-            scale: (i: number) => 1.5 + i * 0.14,
-            xPercent: (i: number) => (i % 2 === 0 ? -13 : 13),
+            // scale only — x/y belong to the ambient drift below, and two
+            // tweens fighting over the same transform channel reads as jitter
+            scale: (i: number) => 1.55 + i * 0.16,
             ease: 'power1.out',
             stagger: { each: 0.06, from: 'center' },
           },
           0,
         )
-        .to('.hero-wisp', { opacity: 0.5, scale: 1.35, ease: 'none' }, 0)
+        .to('.hero-wisp', { opacity: 0.42, ease: 'none' }, 0)
         // the sheet goes solid before the bank finishes drifting, so the seam
         // between the dark panel and the white page is buried, not revealed
         .to('.hero-sheet', { opacity: 1, duration: 0.55, ease: 'power1.in' }, 0.15);
@@ -208,48 +209,54 @@ export function LandingHero() {
       <div className="hero-dissolve" aria-hidden="true">
         <div className="hero-sheet" />
         <div className="hero-sky">
-          <svg className="hero-wisp" viewBox="0 0 600 300" preserveAspectRatio="none">
-            <defs>
-              <filter id="heroCloudNoise" x="0" y="0" width="100%" height="100%">
-                <feTurbulence
-                  type="fractalNoise"
-                  baseFrequency="0.011 0.028"
-                  numOctaves="5"
-                  seed="7"
-                  result="noise"
-                />
-                <feColorMatrix
-                  in="noise"
-                  type="matrix"
-                  values="0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 1.1 0 0 0 -0.35"
-                />
-              </filter>
-              <linearGradient id="heroCloudFade" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0" stopColor="#fff" stopOpacity="0" />
-                <stop offset="0.45" stopColor="#fff" stopOpacity="1" />
-                <stop offset="1" stopColor="#fff" stopOpacity="0.2" />
-              </linearGradient>
-              <mask id="heroCloudMask">
-                <rect width="600" height="300" fill="url(#heroCloudFade)" />
-              </mask>
-            </defs>
-            <g mask="url(#heroCloudMask)">
-              <rect width="600" height="300" filter="url(#heroCloudNoise)" />
-            </g>
-          </svg>
+          <div className="hero-sky-drift">
+            <svg className="hero-wisp" viewBox="0 0 600 300" preserveAspectRatio="none">
+              <defs>
+                <filter id="heroCloudNoise" x="0" y="0" width="100%" height="100%">
+                  <feTurbulence
+                    type="fractalNoise"
+                    baseFrequency="0.011 0.028"
+                    numOctaves="3"
+                    seed="7"
+                    result="noise"
+                  />
+                  <feColorMatrix
+                    in="noise"
+                    type="matrix"
+                    values="0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 1.1 0 0 0 -0.35"
+                  />
+                </filter>
+                <linearGradient id="heroCloudFade" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0" stopColor="#fff" stopOpacity="0" />
+                  <stop offset="0.45" stopColor="#fff" stopOpacity="1" />
+                  <stop offset="1" stopColor="#fff" stopOpacity="0.2" />
+                </linearGradient>
+                <mask id="heroCloudMask">
+                  <rect width="600" height="300" fill="url(#heroCloudFade)" />
+                </mask>
+              </defs>
+              <g mask="url(#heroCloudMask)">
+                <rect width="600" height="300" filter="url(#heroCloudNoise)" />
+              </g>
+            </svg>
 
-          <span className="hero-puff hp1" />
-          <span className="hero-puff hp2" />
-          <span className="hero-puff hp3" />
-          <span className="hero-puff hp4" />
-          <span className="hero-puff hp5" />
-          <span className="hero-puff hp6" />
+            <span className="hero-puff hp1" />
+            <span className="hero-puff hp2" />
+            <span className="hero-puff hp3" />
+            <span className="hero-puff hp4" />
+            <span className="hero-puff hp5" />
+            <span className="hero-puff hp6" />
+          </div>
         </div>
       </div>
 
       <div className="stage">
         <div className="stage-glow" />
         <div className="wide">
+          <FadeIn className="stage-caption">
+            <span className="stage-kicker">The workspace</span>
+            <p>Everything the system did today — attributed, measured, and already live.</p>
+          </FadeIn>
           <FadeIn className="appwin">
             <div className="appbar">
               <div className="tl">

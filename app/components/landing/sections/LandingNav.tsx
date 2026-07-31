@@ -21,11 +21,13 @@ export function LandingNav() {
   const lenis = useLenis();
   // The hero is dark and full-bleed, so the bar inverts until the page turns white.
   const [onDark, setOnDark] = useState(true);
+  // Transparent at rest, but hero copy scrolls underneath — so it earns a scrim.
+  const [scrolled, setScrolled] = useState(false);
 
   useEffect(() => {
     gsap.registerPlugin(ScrollTrigger);
 
-    const trigger = ScrollTrigger.create({
+    const invert = ScrollTrigger.create({
       // flips once the cloud wash has actually whitened the strip behind the bar
       trigger: '.hero-panel',
       start: 'bottom 28%',
@@ -33,11 +35,21 @@ export function LandingNav() {
       onLeaveBack: () => setOnDark(true),
     });
 
-    return () => trigger.kill();
+    const scrim = ScrollTrigger.create({
+      trigger: '.landing',
+      start: 'top -60',
+      end: 'max',
+      onToggle: (self) => setScrolled(self.isActive),
+    });
+
+    return () => {
+      invert.kill();
+      scrim.kill();
+    };
   }, []);
 
   return (
-    <nav className={onDark ? 'nav-dark' : undefined}>
+    <nav className={[onDark && 'nav-dark', scrolled && 'nav-scrolled'].filter(Boolean).join(' ')}>
       <div className="nv">
         <Link className="brand" href="/landing">
           <BrandMark className="mark" />
