@@ -9,10 +9,20 @@ import {
 } from "@/app/components/geo/bounty/reddit-publish-target-modal";
 import { publishPlatformLabel } from "@/lib/geo/bounty/spread-platforms";
 
+type BlogDestination = "shopify" | "wordpress";
+
 type PublishTargets = {
   shopify: { available: boolean };
-  wordpressWoo: { available: boolean; reason?: string };
+  wordpress: {
+    available: boolean;
+    reason?: string;
+    siteUrl?: string;
+    jsonLdMode?: "PLUGIN" | "INLINE" | "SEO_PLUGIN" | "UNAVAILABLE";
+    schemaWarning?: string;
+  };
   websiteBlog?: { available: boolean; reason?: string };
+  defaultBlogDestination?: BlogDestination | null;
+  blogDestinationRequired?: boolean;
   social?: Record<string, { available: boolean; reason?: string }>;
 };
 
@@ -57,7 +67,7 @@ export function ArticleActions({
   const [blogPublished, setBlogPublished] = useState(false);
   const [loading, setLoading] = useState(true);
   const [targetsError, setTargetsError] = useState<string | null>(null);
-  const [blogDestination, setBlogDestination] = useState<"shopify" | "wordpress_wc">("shopify");
+  const [blogDestination, setBlogDestination] = useState<BlogDestination | "">("");
   const [redditModalOpen, setRedditModalOpen] = useState(false);
 
   const loadData = useCallback(async () => {
@@ -82,8 +92,9 @@ export function ArticleActions({
       } else {
         const data = targetsJson.data as PublishTargets;
         setTargets(data);
-        if (data.shopify.available) setBlogDestination("shopify");
-        else if (data.wordpressWoo.available) setBlogDestination("wordpress_wc");
+        // Leave the picker empty when both providers are connected and no default is
+        // configured — the server rejects an ambiguous publish, so make the user choose.
+        setBlogDestination(data.defaultBlogDestination ?? "");
       }
 
       if (contentRes.ok && contentJson?.success) {
@@ -123,7 +134,15 @@ export function ArticleActions({
 
   const canPublishBlog =
     targets &&
-    (targets.shopify.available || targets.wordpressWoo.available || targets.websiteBlog?.available);
+    (targets.shopify.available || targets.wordpress.available || targets.websiteBlog?.available);
+
+  // Both connected with no default: a destination must be picked before publishing.
+  const needsDestinationChoice = Boolean(
+    isBlog && canPublishBlog && targets?.blogDestinationRequired && !blogDestination,
+  );
+
+  const schemaWarning =
+    isBlog && blogDestination === "wordpress" ? targets?.wordpress.schemaWarning : undefined;
 
   const socialAvailability = !isBlog ? targets?.social?.[selectedPlatform] : null;
   const canPublishSocial = socialAvailability?.available ?? false;
@@ -132,7 +151,9 @@ export function ArticleActions({
     ? blogPublished
     : activeContent?.status?.toUpperCase() === "PUBLISHED";
 
-  const canPublish = isBlog ? Boolean(canPublishBlog) : canPublishSocial;
+  const canPublish = isBlog
+    ? Boolean(canPublishBlog) && !needsDestinationChoice
+    : canPublishSocial;
 
   const currentStatus = statusLabel(
     isBlog ? blogPublished : false,
@@ -187,9 +208,9 @@ export function ArticleActions({
     try {
       if (isBlog) {
         const path =
-          blogDestination === "shopify"
-            ? `/api/geo/bounty/${encodeURIComponent(bountyId)}/approve-shopify`
-            : `/api/geo/bounty/${encodeURIComponent(bountyId)}/approve-wordpress`;
+          blogDestination === "wordpress"
+            ? `/api/geo/bounty/${encodeURIComponent(bountyId)}/approve-wordpress`
+            : `/api/geo/bounty/${encodeURIComponent(bountyId)}/approve-shopify`;
 
         const res = await fetch(path, {
           method: "POST",
@@ -201,7 +222,17 @@ export function ArticleActions({
           setMessage(json?.error ?? "Failed to publish blog");
           return;
         }
-        setMessage("Published blog successfully.");
+
+        // Publishing can succeed while schema delivery does not — surface that rather
+        // than reporting an unqualified success.
+        const warnings: string[] = Array.isArray(json?.data?.warnings)
+          ? json.data.warnings
+          : [];
+        setMessage(
+          warnings.length > 0
+            ? `Published blog, with warnings: ${warnings.join(" ")}`
+            : "Published blog successfully.",
+        );
         setBlogPublished(true);
       } else {
         await publishSocial();
@@ -268,14 +299,17 @@ export function ArticleActions({
             <span className="whitespace-nowrap">Publish to</span>
             <select
               value={blogDestination}
-              onChange={(e) => setBlogDestination(e.target.value as "shopify" | "wordpress_wc")}
+              onChange={(e) => setBlogDestination(e.target.value as BlogDestination | "")}
               disabled={!canPublishBlog}
               className="rounded-md border border-[var(--glass-border)] bg-[var(--glass)] px-2 py-1.5 text-xs text-foreground min-w-[160px]"
             >
+              <option value="" disabled>
+                Choose a destination…
+              </option>
               <option value="shopify" disabled={!targets?.shopify.available}>
                 Shopify
               </option>
-              <option value="wordpress_wc" disabled={!targets?.wordpressWoo.available}>
+              <option value="wordpress" disabled={!targets?.wordpress.available}>
                 WordPress
               </option>
             </select>
@@ -294,8 +328,22 @@ export function ArticleActions({
 
       {isBlog && !canPublishBlog && (
         <p className="text-xs text-muted-foreground">
-          Connect Shopify or WordPress under Connection to publish blogs.
+          Connect Shopify or WordPress under{" "}
+          <Link href="/profile/integration" className="text-[var(--sibling-primary)] hover:underline">
+            Profile → Integrations
+          </Link>{" "}
+          to publish blogs.
         </p>
+      )}
+
+      {needsDestinationChoice && (
+        <p className="text-xs text-amber-600 dark:text-amber-400">
+          Shopify and WordPress are both connected — choose where this blog should publish.
+        </p>
+      )}
+
+      {schemaWarning && (
+        <p className="text-xs text-amber-600 dark:text-amber-400">{schemaWarning}</p>
       )}
 
       {!isBlog && !canPublishSocial && !isPublished && (

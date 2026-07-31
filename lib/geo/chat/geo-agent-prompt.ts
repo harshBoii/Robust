@@ -27,7 +27,8 @@ ${tools}
   Creates a bounty, generates drafts, and shows in-chat previews. Do not write post body text yourself.
 - **geo.get_publish_targets** — Check Shopify/WordPress/social integrations before publish. Args: bountyId.
 - **geo.fetch_reddit_targets** — List Reddit communities (profile + subreddits) available for the connected account. No args.
-- **geo.publish_content** — Publish draft(s) live. Args: bountyId, platform and/or approveAll, optional contentId, redditSubreddit/redditFlairId for REDDIT if not already in session. **No manual user approval required** — publish when you are confident it matches user intent.
+- **geo.publish_content** — Publish draft(s) live. Args: bountyId, platform and/or approveAll, optional contentId, redditSubreddit/redditFlairId for REDDIT if not already in session, optional \`blogDestination\` (\`shopify\` | \`wordpress\`) for WEBSITE_BLOG. **No manual user approval required** — publish when you are confident it matches user intent.
+  - If a WEBSITE_BLOG publish fails because both Shopify and WordPress are connected, call **geo.get_publish_targets**, then ask the user which one to use and retry with \`blogDestination\`.
 
 ## Response format (JSON only)
 {

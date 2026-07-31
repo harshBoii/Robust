@@ -1,10 +1,9 @@
 import { prisma } from "@/lib/prisma";
 import { ShopifyAdminError, shopifyGraphql } from "@/lib/shopify/admin";
 import { syncBountyRevenueForCompany } from "@/lib/geo/radar/bountySync";
-import {
-  buildRelatedArticlesAppend,
-  minimalMarkdownToHtml,
-} from "@/lib/geo/bounty/markdownToHtmlForPublish";
+import { minimalMarkdownToHtml } from "@/lib/geo/bounty/markdownToHtmlForPublish";
+import { appendNewArticleLinkToPillar as appendPillarLink } from "@/lib/geo/bounty/pillar-interlink";
+import { channelTitleFromSlug, topicChannelSlug } from "@/lib/geo/bounty/topic-slug";
 
 const JSON_LD_NAMESPACE = "custom";
 const JSON_LD_KEY = "json_ld";
@@ -22,20 +21,6 @@ const UPDATE_ARTICLE = `
 `;
 
 type GqlUserError = { field: string[] | null; message: string; code: string | null };
-
-function topicNameToShopifyBlogHandle(name: string): string | null {
-  const handle = name
-    .trim()
-    .toLowerCase()
-    .replace(/&/g, " and ")
-    .split(/\s+/)
-    .filter(Boolean)
-    .join("-")
-    .replace(/[^a-z0-9-]/g, "")
-    .replace(/-+/g, "-")
-    .replace(/^-|-$/g, "");
-  return handle ? handle : null;
-}
 
 function jsonStringifyAndValidate(
   value: unknown
@@ -124,7 +109,7 @@ async function ensureBlogChannel(opts: {
     }
   `;
 
-  const title = opts.handle === "vlogs" ? "Vlogs" : opts.handle;
+  const title = channelTitleFromSlug(opts.handle);
 
   const res = await shopifyGraphql<{
     blogCreate: {
@@ -189,45 +174,41 @@ async function appendNewArticleLinkToPillar(opts: {
   newArticleTitle: string;
   newArticleHandle: string | null | undefined;
 }): Promise<void> {
-  const gid = opts.pillarPage.shopifyArticleGid;
   const handle = opts.newArticleHandle?.trim();
-  if (!gid || !handle) return;
-  if (opts.pillarPage.id === opts.currentAeoPageId) return;
 
-  const newArticleUrl = storefrontBlogArticleUrl({
-    shopDomain: opts.shopDomain,
-    blogHandle: opts.channelHandle,
-    articleHandle: handle,
-  });
-  const updatedPillarPageContent = buildRelatedArticlesAppend(opts.pillarMarkdown, {
-    title: opts.newArticleTitle,
-    url: newArticleUrl,
-  });
-  const updatedBody = minimalMarkdownToHtml(updatedPillarPageContent);
-
-  const updateRes = await shopifyGraphql<{
-    articleUpdate: {
-      article: { id: string; handle: string } | null;
-      userErrors: GqlUserError[];
-    } | null;
-  }>({
-    ctx: { shopDomain: opts.shopDomain, accessToken: opts.accessToken },
-    query: UPDATE_ARTICLE,
-    variables: {
-      id: gid,
-      article: { body: updatedBody },
+  await appendPillarLink({
+    pillar: {
+      id: opts.pillarPage.id,
+      externalId: opts.pillarPage.shopifyArticleGid,
+      markdown: opts.pillarMarkdown,
     },
-  });
+    currentAeoPageId: opts.currentAeoPageId,
+    newArticleTitle: opts.newArticleTitle,
+    newArticleUrl: handle
+      ? storefrontBlogArticleUrl({
+          shopDomain: opts.shopDomain,
+          blogHandle: opts.channelHandle,
+          articleHandle: handle,
+        })
+      : null,
+    logPrefix: "[geo/approve-shopify]",
+    updateRemoteBody: async (gid, html) => {
+      const updateRes = await shopifyGraphql<{
+        articleUpdate: {
+          article: { id: string; handle: string } | null;
+          userErrors: GqlUserError[];
+        } | null;
+      }>({
+        ctx: { shopDomain: opts.shopDomain, accessToken: opts.accessToken },
+        query: UPDATE_ARTICLE,
+        variables: { id: gid, article: { body: html } },
+      });
 
-  const updateErrors = updateRes.data?.articleUpdate?.userErrors ?? [];
-  if (updateErrors.length > 0) {
-    console.warn("[geo/approve-shopify] pillar articleUpdate errors", updateErrors);
-    return;
-  }
-
-  await prisma.aeoPage.update({
-    where: { id: opts.pillarPage.id },
-    data: { description: updatedPillarPageContent },
+      const updateErrors = updateRes.data?.articleUpdate?.userErrors ?? [];
+      if (updateErrors.length > 0) {
+        throw new Error(`articleUpdate userErrors: ${JSON.stringify(updateErrors)}`);
+      }
+    },
   });
 }
 
@@ -307,7 +288,7 @@ export async function approveBountyToShopify(opts: {
     bounty.aeoPage.llm_prompt?.llmTopic?.name ??
     bounty.aeoPage.llm_prompt?.topic ??
     "";
-  const channelHandle = topicNameToShopifyBlogHandle(rawTopicName) ?? "quick-reads";
+  const channelHandle = topicChannelSlug(rawTopicName);
   try {
     const ensured = await ensureBlogChannel({
       shopId: shop.id,

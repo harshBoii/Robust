@@ -4,6 +4,7 @@ import { X } from 'lucide-react';
 
 import ManagerMetaClient from '@/app/components/manager/ManagerMetaClient';
 import ManagerShopifyClient from '@/app/components/manager/ManagerShopifyClient';
+import ManagerWordPressClient from '@/app/components/manager/ManagerWordPressClient';
 import { ModalBackdrop } from '@/app/components/common/ModalBackdrop';
 import { ModalPortal } from '@/app/components/common/ModalPortal';
 import SocialProviderConnectionPanel from '@/app/components/profile/SocialProviderConnectionPanel';
@@ -55,6 +56,17 @@ export function ShopifyConnectionModal({ onClose }: { onClose: () => void }) {
   return (
     <IntegrationModalShell title="Shopify connection" onClose={onClose}>
       <ManagerShopifyClient
+        embedded
+        onConnectClick={() => closeModalAfterConnect(onClose)}
+      />
+    </IntegrationModalShell>
+  );
+}
+
+export function WordPressConnectionModal({ onClose }: { onClose: () => void }) {
+  return (
+    <IntegrationModalShell title="WordPress connection" onClose={onClose}>
+      <ManagerWordPressClient
         embedded
         onConnectClick={() => closeModalAfterConnect(onClose)}
       />

@@ -198,6 +198,7 @@ export async function executeGeoTool(
                 companyId: ctx.companyId,
                 bountyId,
                 platform: 'WEBSITE_BLOG',
+                destination: resolveBlogDestinationOpt(args, ctx.geo),
               });
               results.push({ platform: 'WEBSITE_BLOG', success: true, ...result });
             } catch (err) {
@@ -265,6 +266,8 @@ export async function executeGeoTool(
           platform: resolved,
           contentId,
           reddit: resolved === 'REDDIT' ? resolveRedditOpts(args, ctx.geo) : undefined,
+          destination:
+            resolved === 'WEBSITE_BLOG' ? resolveBlogDestinationOpt(args, ctx.geo) : undefined,
         });
 
         statePatch = {
@@ -287,6 +290,18 @@ export async function executeGeoTool(
       statePatch,
     };
   }
+}
+
+/** WEBSITE_BLOG destination from the tool call, falling back to the pending publish state. */
+function resolveBlogDestinationOpt(
+  args: Record<string, unknown>,
+  geo: GeoChatState,
+): 'shopify' | 'wordpress' | null {
+  const raw =
+    (typeof args.blogDestination === 'string' ? args.blogDestination.trim() : '') ||
+    geo.pendingPublish?.blogDestination ||
+    '';
+  return raw === 'shopify' || raw === 'wordpress' ? raw : null;
 }
 
 function resolveRedditOpts(

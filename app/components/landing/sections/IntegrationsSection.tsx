@@ -10,6 +10,7 @@ import {
   SiShopify,
   SiTiktok,
   SiWoocommerce,
+  SiWordpress,
   SiYoutube,
 } from 'react-icons/si';
 import type { IconType } from 'react-icons';
@@ -37,6 +38,7 @@ const INTEGRATIONS: IntegrationItem[] = [
   { kind: 'si', Icon: SiTiktok,      name: 'TikTok',      color: '#010101' },
   { kind: 'si', Icon: SiYoutube,     name: 'YouTube',     color: '#FF0000' },
   { kind: 'si', Icon: SiShopify,     name: 'Shopify',     color: '#96BF48' },
+  { kind: 'si', Icon: SiWordpress,   name: 'WordPress',   color: '#21759B' },
   { kind: 'si', Icon: SiWoocommerce, name: 'WooCommerce', color: '#7F54B3' },
   { kind: 'si', Icon: SiHubspot,     name: 'HubSpot',     color: '#FF7A59' },
   { kind: 'si', Icon: SiSalesforce,  name: 'Salesforce',  color: '#00A1E0' },

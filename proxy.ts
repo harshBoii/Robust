@@ -23,6 +23,16 @@ const PUBLIC_PATH_PREFIXES = [
   "/api/auth/callback",
   "/shopify",
   "/api/shopify",
+  /**
+   * WordPress connect handshake. The callback is a top-level redirect back from the
+   * customer's own wp-admin, so it must not be gated on a session that may have expired
+   * while they were approving — otherwise the returned application password is silently
+   * dropped at the login redirect. Each route does its own auth: /authorize and
+   * /disconnect call getSession(), /callback is authorized by the httpOnly state cookie.
+   */
+  "/wordpress",
+  /** Companion WordPress plugin zip — GPL, no reason to gate it. */
+  "/downloads",
   "/api/mcpServer",
   /** Stream queue reconcile (Bearer STREAM_QUEUE_RECONCILE_SECRET outside development). */
   "/api/public/stream-queue",

@@ -1,8 +1,12 @@
 import { prisma } from "@/lib/prisma";
 import type { BountySpreadPlatform } from "@/app/generated/prisma/client";
 import { approveBountyToShopify } from "@/lib/geo/bounty/approveBountyToShopify";
-import { minimalMarkdownToHtml } from "@/lib/geo/bounty/markdownToHtmlForPublish";
-import { wpSafeFetch } from "@/lib/wordpress/client";
+import { approveBountyToWordPress } from "@/lib/geo/bounty/approveBountyToWordPress";
+import {
+  getBlogConnectivity,
+  resolveBlogDestination,
+  type BlogDestination,
+} from "@/lib/geo/bounty/blog-destination";
 import type {
   PublishAdapter,
   PublishResult,
@@ -20,14 +24,12 @@ async function getSocialIntegration(companyId: string, provider: "X" | "LINKEDIN
 const websiteBlogAdapter: PublishAdapter = {
   platform: "WEBSITE_BLOG",
   async isAvailable(companyId) {
-    const shopify = await prisma.shopifyShop.findFirst({
-      where: { companyId, status: "installed" },
-      select: { id: true },
-    });
-    if (shopify) return { available: true };
+    const connectivity = await getBlogConnectivity(companyId);
+    if (connectivity.shopify || connectivity.wordpress) return { available: true };
     return {
       available: false,
-      reason: "Connect Shopify or WordPress under Connection to publish website blogs",
+      reason:
+        "Connect Shopify or WordPress under Profile → Integrations to publish website blogs",
     };
   },
   async publish(opts) {
@@ -35,12 +37,15 @@ const websiteBlogAdapter: PublishAdapter = {
       throw new Error("No AEO page found for this bounty");
     }
 
-    const shopify = await prisma.shopifyShop.findFirst({
-      where: { companyId: opts.companyId, status: "installed" },
-      select: { id: true },
+    const resolution = await resolveBlogDestination({
+      companyId: opts.companyId,
+      requested: opts.destination ?? null,
     });
+    if (!resolution.ok) {
+      throw new Error(resolution.reason);
+    }
 
-    if (shopify) {
+    if (resolution.destination === "shopify") {
       const result = await approveBountyToShopify({
         companyId: opts.companyId,
         bountyId: opts.bountyId,
@@ -48,46 +53,22 @@ const websiteBlogAdapter: PublishAdapter = {
       return {
         publishedUrl: result.canonicalUrl ?? null,
         externalPostId: result.articleId ?? null,
+        destination: "shopify",
+        warnings: result.partial
+          ? ["Shopify reported errors but the article was created."]
+          : undefined,
       };
     }
 
-    const aeoPage = opts.aeoPage;
-    const title = (aeoPage.seoTitle ?? aeoPage.title ?? "").trim();
-    const html = minimalMarkdownToHtml(aeoPage.description ?? "");
-    const excerpt = (aeoPage.seoDescription ?? "").trim();
-
-    const { data: post } = await wpSafeFetch(opts.companyId, (wp) =>
-      wp.createPost({
-        title,
-        slug: aeoPage.slug,
-        status: "publish",
-        content: html,
-        ...(excerpt ? { excerpt } : {}),
-      })
-    );
-
-    const link =
-      typeof post?.link === "string"
-        ? post.link
-        : typeof post?.guid?.rendered === "string"
-          ? post.guid.rendered
-          : null;
-
-    if (link) {
-      await prisma.aeoPage.update({
-        where: { id: aeoPage.id },
-        data: { canonicalUrl: link.slice(0, 1000), publishedAt: new Date() },
-      });
-    }
-
-    await prisma.citationBounty.update({
-      where: { id: opts.bountyId },
-      data: { publishedAt: new Date() },
+    const result = await approveBountyToWordPress({
+      companyId: opts.companyId,
+      bountyId: opts.bountyId,
     });
-
     return {
-      publishedUrl: link ?? null,
-      externalPostId: post?.id != null ? String(post.id) : null,
+      publishedUrl: result.canonicalUrl ?? null,
+      externalPostId: result.postId != null ? String(result.postId) : null,
+      destination: "wordpress",
+      warnings: result.warnings.length > 0 ? result.warnings : undefined,
     };
   },
 };
@@ -176,6 +157,8 @@ export async function publishBountyContent(opts: {
   platform: BountySpreadPlatform;
   contentId?: string;
   reddit?: RedditPublishOptions;
+  /** WEBSITE_BLOG only: publish to Shopify or WordPress. */
+  destination?: BlogDestination | null;
 }): Promise<PublishResult & { contentId: string }> {
   const bounty = await prisma.citationBounty.findFirst({
     where: { id: opts.bountyId, companyId: opts.companyId },
@@ -220,6 +203,7 @@ export async function publishBountyContent(opts: {
         updatedAt: new Date(),
       },
       aeoPage: bounty.aeoPage,
+      destination: opts.destination ?? null,
     });
     return { ...result, contentId: bounty.aeoPage?.id ?? "" };
   }
