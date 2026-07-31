@@ -7,6 +7,8 @@ export type GeoPendingPublish = {
   approveAll?: boolean;
   redditSubreddit?: string;
   redditFlairId?: string;
+  /** WEBSITE_BLOG only: which CMS to publish to when both are connected. */
+  blogDestination?: 'shopify' | 'wordpress';
 };
 
 export type GeoChatState = {

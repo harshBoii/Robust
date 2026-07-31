@@ -1,115 +1,70 @@
-import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
-import { getSession } from "@/lib/auth/session";
-import { syncBountyRevenueForCompany } from "@/lib/geo/radar/bountySync";
-import { minimalMarkdownToHtml } from "@/lib/geo/bounty/markdownToHtmlForPublish";
-import { wpSafeFetch } from "@/lib/wordpress/client";
+import { NextResponse } from 'next/server';
 
-export async function POST(
-  _req: NextRequest,
-  context: { params: Promise<{ id: string }> }
-) {
+import { getSession } from '@/lib/auth/session';
+import { approveBountyToWordPress } from '@/lib/geo/bounty/approveBountyToWordPress';
+import { isWordPressApiError, wordPressErrorMessage } from '@/lib/wordpress/errors';
+
+/** Map a typed WordPress client error onto a meaningful HTTP status. */
+function statusForError(code: string): number {
+  switch (code) {
+    case 'WP_NOT_CONNECTED':
+      return 404;
+    case 'WP_NOT_CONFIGURED':
+      return 500;
+    case 'WP_UNAUTHORIZED':
+      return 401;
+    case 'WP_FORBIDDEN':
+      return 403;
+    case 'WP_TIMEOUT':
+      return 504;
+    default:
+      return 502;
+  }
+}
+
+export async function POST(_req: Request, context: { params: Promise<{ id: string }> }) {
   const { id: bountyId } = await context.params;
+
   const session = await getSession();
   if (!session?.companyId) {
-    return NextResponse.json({ success: false, error: "Not authenticated" }, { status: 401 });
+    return NextResponse.json({ success: false, error: 'Not authenticated' }, { status: 401 });
   }
-
-  const companyId = session.companyId;
-
-  const bounty = await prisma.citationBounty.findFirst({
-    where: { id: bountyId, companyId },
-    select: {
-      id: true,
-      query: true,
-      aeoPage: {
-        select: {
-          id: true,
-          slug: true,
-          title: true,
-          seoTitle: true,
-          seoDescription: true,
-          description: true,
-        },
-      },
-    },
-  });
-
-  if (!bounty || !bounty.aeoPage) {
-    return NextResponse.json(
-      { success: false, error: "Bounty or generated page not found" },
-      { status: 404 }
-    );
-  }
-
-  const aeoPage = bounty.aeoPage;
-  const title = (aeoPage.seoTitle ?? aeoPage.title ?? bounty.query).trim();
-  const html = minimalMarkdownToHtml(aeoPage.description ?? "");
-  const excerpt = (aeoPage.seoDescription ?? "").trim();
 
   try {
-    const { data: post } = await wpSafeFetch(companyId, (wp) =>
-      wp.createPost({
-        title,
-        slug: aeoPage.slug,
-        status: "publish",
-        content: html,
-        ...(excerpt ? { excerpt } : {}),
-      })
-    );
-
-    const link =
-      typeof post?.link === "string"
-        ? post.link
-        : typeof post?.guid?.rendered === "string"
-          ? post.guid.rendered
-          : null;
-
-    if (link) {
-      await prisma.aeoPage.update({
-        where: { id: aeoPage.id },
-        data: { canonicalUrl: link.slice(0, 1000) },
-      });
-    }
-
-    await prisma.citationBounty.update({
-      where: { id: bountyId },
-      data: { publishedAt: new Date() },
+    const result = await approveBountyToWordPress({
+      companyId: session.companyId,
+      bountyId,
     });
-    await syncBountyRevenueForCompany(prisma, companyId);
 
     return NextResponse.json({
       success: true,
       data: {
-        postId: post?.id ?? null,
-        link: link ?? undefined,
+        postId: result.postId,
+        link: result.canonicalUrl ?? undefined,
+        channelSlug: result.channelSlug,
+        schemaMode: result.schemaMode,
+        schemaAttached: result.schemaAttached,
+        schemaVerified: result.schemaVerified,
+        warnings: result.warnings,
       },
     });
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    if (msg === "WP_NOT_CONNECTED") {
+    if (isWordPressApiError(err)) {
       return NextResponse.json(
-        { success: false, error: "WordPress not connected" },
-        { status: 404 }
+        { success: false, error: wordPressErrorMessage(err), code: err.code },
+        { status: statusForError(err.code) },
       );
     }
-    if (msg === "WP_UNAUTHORIZED") {
-      return NextResponse.json(
-        { success: false, error: "WordPress rejected credentials — reconnect in Connection" },
-        { status: 401 }
-      );
+
+    const message = err instanceof Error ? err.message : String(err);
+    if (message === 'Bounty or generated page not found') {
+      return NextResponse.json({ success: false, error: message }, { status: 404 });
     }
-    if (msg.startsWith("WP_ERROR:")) {
-      const code = msg.replace("WP_ERROR:", "");
-      return NextResponse.json(
-        { success: false, error: `WordPress API error (${code})` },
-        { status: 502 }
-      );
-    }
-    console.error("[geo/approve-wordpress]", err);
+
+    console.error('[geo/approve-wordpress]', err);
     return NextResponse.json(
-      { success: false, error: msg || "Failed to publish to WordPress" },
-      { status: 502 }
+      { success: false, error: message || 'Failed to publish to WordPress' },
+      { status: 502 },
     );
   }
 }

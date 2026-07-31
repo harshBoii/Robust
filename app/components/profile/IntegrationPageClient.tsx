@@ -5,13 +5,14 @@ import { useCallback, useEffect, useState } from 'react';
 import { Plug, Share2 } from 'lucide-react';
 
 import { ProfileSecondaryNav } from '@/app/components/profile/ProfileSecondaryNav';
-import { SiMeta, SiShopify, SiReddit, SiX, SiGoogle } from 'react-icons/si';
+import { SiMeta, SiShopify, SiReddit, SiWordpress, SiX, SiGoogle } from 'react-icons/si';
 import { FaLinkedin } from 'react-icons/fa';
 
 import {
   MetaConnectionModal,
   ShopifyConnectionModal,
   SocialConnectionModal,
+  WordPressConnectionModal,
 } from '@/app/components/profile/IntegrationConnectionModals';
 import { GoogleAdsConnectionModal } from '@/app/components/profile/GoogleAdsConnectionModal';
 import type { ProviderStatus } from '@/app/components/profile/SocialProviderConnectionPanel';
@@ -25,7 +26,13 @@ import {
 import type { SocialProvider } from '@/app/generated/prisma/client';
 import { fromZernioPlatform } from '@/lib/zernio/platforms';
 
-type IntegrationModal = 'meta' | 'shopify' | 'google-ads' | SocialProvider | null;
+type IntegrationModal =
+  | 'meta'
+  | 'shopify'
+  | 'wordpress'
+  | 'google-ads'
+  | SocialProvider
+  | null;
 
 type CardConfig = {
   id: IntegrationModal;
@@ -155,6 +162,7 @@ export default function IntegrationPageClient() {
   const [metaConnected, setMetaConnected] = useState(false);
   const [googleAdsConnected, setGoogleAdsConnected] = useState(false);
   const [shopifyConnected, setShopifyConnected] = useState(false);
+  const [wordpressConnected, setWordpressConnected] = useState(false);
   const [socialProviders, setSocialProviders] = useState<ProviderStatus[]>([]);
   const [loading, setLoading] = useState(true);
   const [zernioError, setZernioError] = useState<string | null>(null);
@@ -163,12 +171,15 @@ export default function IntegrationPageClient() {
 
   const loadStatus = useCallback(async () => {
     try {
-      const [meta, shopify, social, gads] = await Promise.all([
+      const [meta, shopify, wordpress, social, gads] = await Promise.all([
         json<{
           hasAdAccountAndPage: boolean;
         }>(await fetch('/api/meta/integration')).catch(() => ({ hasAdAccountAndPage: false })),
         json<{ connected: boolean }>(
           await fetch('/api/company/shopify-app', { credentials: 'include' }),
+        ).catch(() => ({ connected: false })),
+        json<{ connected: boolean }>(
+          await fetch('/api/company/wordpress-app', { credentials: 'include' }),
         ).catch(() => ({ connected: false })),
         json<{ providers: ProviderStatus[] }>(
           await fetch('/api/integrations/social', { credentials: 'include' }),
@@ -179,6 +190,7 @@ export default function IntegrationPageClient() {
       ]);
       setMetaConnected(meta.hasAdAccountAndPage);
       setShopifyConnected(shopify.connected);
+      setWordpressConnected(wordpress.connected);
       setSocialProviders(social.providers);
       setGoogleAdsConnected(Boolean(gads.integration?.customerId));
     } catch (e) {
@@ -227,6 +239,13 @@ export default function IntegrationPageClient() {
     } else if (params.get('shopify_connected') || params.get('shopify_error')) {
       setModal('shopify');
       shouldCleanUrl = true;
+    } else if (
+      params.get('wordpress_connected') ||
+      params.get('wordpress_error') ||
+      params.get('wordpress_warning')
+    ) {
+      // The modal's own effect reads and scrubs these params, so leave them in place here.
+      setModal('wordpress');
     } else {
       const zernioErrorParam = params.get('zernio_error');
       if (zernioErrorParam) {
@@ -243,7 +262,11 @@ export default function IntegrationPageClient() {
         shouldCleanUrl = true;
       } else {
         const modalParam = params.get('modal');
-        if (modalParam === 'meta' || modalParam === 'shopify') {
+        if (
+          modalParam === 'meta' ||
+          modalParam === 'shopify' ||
+          modalParam === 'wordpress'
+        ) {
           setModal(modalParam);
         } else if (modalParam === 'x') setModal('X');
         else if (modalParam === 'linkedin') setModal('LINKEDIN');
@@ -357,6 +380,14 @@ export default function IntegrationPageClient() {
               connected={shopifyConnected}
               onManage={() => setModal('shopify')}
             />
+            <IntegrationCard
+              label="WordPress"
+              description="Publish blog posts with full JSON-LD schema"
+              icon={SiWordpress}
+              iconClassName="text-[#21759B]"
+              connected={wordpressConnected}
+              onManage={() => setModal('wordpress')}
+            />
             {SOCIAL_CARDS.map((card) => {
               const provider = card.id as SocialProvider;
               const connected = socialConnected(provider);
@@ -388,6 +419,14 @@ export default function IntegrationPageClient() {
         <GoogleAdsConnectionModal onClose={dismissModal} onConnected={() => void loadStatus()} />
       ) : null}
       {modal === 'shopify' ? <ShopifyConnectionModal onClose={dismissModal} /> : null}
+      {modal === 'wordpress' ? (
+        <WordPressConnectionModal
+          onClose={() => {
+            dismissModal();
+            void loadStatus();
+          }}
+        />
+      ) : null}
       {modal === 'X' || modal === 'LINKEDIN' || modal === 'REDDIT' ? (
         <SocialConnectionModal provider={modal} onClose={dismissModal} />
       ) : null}
