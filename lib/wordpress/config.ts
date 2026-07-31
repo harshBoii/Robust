@@ -20,8 +20,20 @@ export function getWordPressAppName(): string {
   return process.env.WORDPRESS_APP_NAME?.trim() || 'Immortel';
 }
 
+/**
+ * App ID for the handshake, normalized to lowercase.
+ *
+ * WordPress validates this with `wp_is_uuid()`, whose regex is `[0-9a-f]` with no `i`
+ * flag — an uppercase UUID (what `uuidgen` emits on macOS) is rejected outright and
+ * `authorize-application.php` hard-fails with "The application ID must be a UUID".
+ * Returns null for anything that isn't UUID-shaped, since WP only validates the value
+ * when it is present, and omitting it is better than failing the whole handshake.
+ */
 export function getWordPressAppId(): string | null {
-  return process.env.WORDPRESS_APP_ID?.trim() || null;
+  const raw = process.env.WORDPRESS_APP_ID?.trim().toLowerCase();
+  if (!raw) return null;
+  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+  return UUID_RE.test(raw) ? raw : null;
 }
 
 export function getWordPressCallbackOrigin(): string | null {
