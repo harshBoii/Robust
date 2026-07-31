@@ -28,6 +28,7 @@
     "clsx": "^2.1.1",
     "framer-motion": "^12.38.0",
     "google-ads-api": "^23.0.1",
+    "gsap": "^3.15.0",
     "hls.js": "^1.6.16",
     "image-size": "^2.0.2",
     "jose": "^6.2.3",

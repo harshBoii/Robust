@@ -3,7 +3,7 @@
 .landing{
   --paper:#fbfbfd;--surface:#ffffff;--fog:#f5f5f7;--ink:#1d1d1f;--ink2:#6e6e73;--ink3:#86868b;
   --hair:#d2d2d7;--hair2:#e8e8ed;--blue:#0071e3;--bluehv:#0077ed;--link:#0066cc;
-  --pos:#1c8c4e;--coal:#000000;--coal2:#161617;--snow:#f5f5f7;
+  --pos:#1c8c4e;--coal:#000000;--coal2:#161617;--snow:#f5f5f7;--night:#0e1116;
   --sf:"SF Pro Display","SF Pro Text",-apple-system,BlinkMacSystemFont,"Helvetica Neue",Helvetica,Arial,sans-serif;
   --ease:cubic-bezier(.28,.11,.32,1)
 }
@@ -21,10 +21,19 @@
 .landing .pill-b{background:var(--blue);color:#fff}.landing .pill-b:hover{background:var(--bluehv)}
 .landing .pill-o{background:transparent;color:var(--link);border:1px solid var(--hair)}.landing .pill-o:hover{background:rgba(0,0,0,.03);border-color:var(--ink3)}
 .landing .pill-w{background:#fff;color:var(--ink)}.landing .pill-w:hover{background:#f0f0f2}
+.landing .pill-ghost{background:transparent;color:#f5f5f7;border:1px solid rgba(255,255,255,.26);gap:7px}
+.landing .pill-ghost:hover{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.5)}
+.landing .pill-ghost svg{width:7px;height:12px;margin-top:1px}
 .landing .pill-sm{height:36px;padding:0 16px;font-size:15px}
 
 /* NAV */
-.landing nav{position:fixed;top:0;left:0;right:0;z-index:600;height:48px;background:rgba(251,251,253,.72);backdrop-filter:saturate(180%) blur(20px);-webkit-backdrop-filter:saturate(180%) blur(20px);border-bottom:1px solid rgba(0,0,0,.06)}
+.landing nav{position:fixed;top:0;left:0;right:0;z-index:600;height:48px;background:rgba(251,251,253,.72);backdrop-filter:saturate(180%) blur(20px);-webkit-backdrop-filter:saturate(180%) blur(20px);border-bottom:1px solid rgba(0,0,0,.06);transition:background .45s var(--ease),border-color .45s var(--ease),backdrop-filter .45s var(--ease)}
+/* inverted while the bar floats over the dark hero */
+.landing nav.nav-dark{background:transparent;backdrop-filter:none;-webkit-backdrop-filter:none;border-bottom-color:transparent}
+.landing nav.nav-dark .brand,.landing nav.nav-dark .nlinks a{color:#f5f5f7}
+.landing nav.nav-dark .pill-o{color:#f5f5f7;border-color:rgba(255,255,255,.26)}
+.landing nav.nav-dark .pill-o:hover{background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.5)}
+.landing .brand,.landing .nlinks a{transition:color .45s var(--ease)}
 .landing .nv{max-width:1024px;margin:0 auto;height:48px;padding:0 22px;display:flex;align-items:center;justify-content:space-between}
 .landing .brand{display:flex;align-items:center;gap:9px;color:var(--ink);font-size:19px;font-weight:600;letter-spacing:-.02em}
 .landing .mark{width:24px;height:24px}
@@ -33,18 +42,82 @@
 .landing .nlinks a:hover{opacity:1}
 .landing .ncta{display:flex;align-items:center;gap:14px}
 
-/* HERO */
-.landing .hero{padding:120px 0 0;text-align:center;background:var(--paper)}
-.landing .eyebrow{font-size:17px;font-weight:800;color:var(--ink);letter-spacing:.12em;text-transform:uppercase;margin-bottom:14px;display:inline-flex;align-items:center;gap:10px}
-.landing .eyebrow::before,.eyebrow::after{content:'';display:block;width:28px;height:1.5px;background:var(--ink);opacity:.18}
-.landing .hl{font-size:clamp(44px,7.2vw,88px);font-weight:600;line-height:1.04;letter-spacing:-.025em;color:var(--ink);max-width:14ch;margin:0 auto}
-.landing .hsub{font-size:clamp(19px,2.4vw,28px);font-weight:400;line-height:1.32;letter-spacing:0;color:var(--ink2);max-width:30ch;margin:22px auto 0}
-.landing .hactions{margin-top:26px;display:flex;gap:26px;align-items:center;justify-content:center}
-.landing .hactions .lnk{font-size:19px}
-.landing .hactions .lnk svg{width:8px;height:14px}
+/* ============================ HERO ============================ */
+.landing .hero{position:relative;background:var(--paper);overflow:hidden}
+
+/* split panel: full-bleed vista on the left, copy on the right */
+.landing .hero-panel{position:relative;display:grid;grid-template-columns:minmax(0,.88fr) minmax(0,1.12fr);min-height:100svh;background:var(--night);color:#f5f5f7;isolation:isolate}
+
+/* --- vista --- */
+.landing .hero-visual{position:relative;margin:0;overflow:hidden;clip-path:inset(0% 0% 100% 0%);will-change:clip-path}
+.landing .hero-visual-media{position:absolute;inset:-3%;background-image:
+  url('/landing/hero-vista.jpg'),
+  radial-gradient(120% 78% at 32% 10%,#d8e6f2 0%,#a8c6de 26%,#7b9fbe 48%,rgba(123,159,190,0) 72%),
+  linear-gradient(180deg,#c3daea 0%,#9ab9d2 26%,#6d8f8d 54%,#3d5a4a 78%,#1d2e26 100%);
+  background-size:cover;background-position:center;background-repeat:no-repeat;transform-origin:50% 50%;will-change:transform}
+/* legibility + the right edge melting into the dark panel, as in the reference */
+.landing .hero-visual-scrim{position:absolute;inset:0;background:
+  linear-gradient(180deg,rgba(10,14,18,.32) 0%,rgba(10,14,18,0) 24%,rgba(10,14,18,0) 44%,rgba(10,14,18,.58) 84%,rgba(10,14,18,.78) 100%)}
+.landing .hero-visual::after{content:'';position:absolute;top:0;right:0;bottom:0;width:16%;background:linear-gradient(90deg,rgba(14,17,22,0),var(--night));pointer-events:none}
+/* start-states below are opacity-only on purpose: gsap owns every transform,
+   so a CSS percentage transform can never stack on top of its yPercent */
+.landing .hero-quote{position:absolute;z-index:2;left:clamp(22px,3.2vw,46px);right:clamp(22px,3vw,40px);bottom:clamp(58px,6.4vw,92px);font-size:clamp(24px,2.9vw,42px);font-weight:500;letter-spacing:-.024em;line-height:1.08;color:#fff;text-shadow:0 1px 26px rgba(0,0,0,.42);opacity:0}
+.landing .hero-visual-foot{position:absolute;z-index:2;left:clamp(22px,3.2vw,46px);right:clamp(22px,3vw,40px);bottom:clamp(20px,2.4vw,32px);display:flex;align-items:center;justify-content:space-between;gap:16px;font-size:12.5px;letter-spacing:.01em;color:rgba(255,255,255,.6);opacity:0}
+.landing .hero-visual-tags i{font-style:normal;opacity:.5;margin:0 5px}
+
+/* --- copy --- */
+.landing .hero-copy{display:flex;flex-direction:column;justify-content:center;padding:clamp(88px,9vw,132px) clamp(30px,5vw,84px) clamp(64px,7vw,100px);max-width:680px;will-change:transform,opacity}
+.landing .hero-eyebrow{display:inline-flex;align-items:center;gap:12px;font-size:12px;font-weight:700;letter-spacing:.17em;text-transform:uppercase;color:rgba(245,245,247,.52);margin-bottom:clamp(20px,2.4vw,30px);opacity:0}
+.landing .hero-eyebrow::before{content:'';display:block;width:26px;height:1px;background:currentColor;opacity:.7}
+.landing .hero-h1{font-size:clamp(38px,4.9vw,68px);font-weight:600;letter-spacing:-.032em;line-height:1.05;color:#f5f5f7;max-width:13ch}
+/* each word rides up out of its own mask */
+.landing .hw{display:inline-block;overflow:hidden;vertical-align:bottom;padding-bottom:.14em;margin:0 .1em -.14em 0}
+.landing .hw-i{display:inline-block;opacity:0}
+.landing .hero-sub{font-size:clamp(17px,1.4vw,20px);font-weight:400;line-height:1.47;color:#a1a1a6;max-width:36ch;margin-top:clamp(18px,2vw,26px);opacity:0}
+.landing .hero-actions{margin-top:clamp(28px,3.2vw,40px);display:flex;align-items:center;gap:14px;flex-wrap:wrap;opacity:0}
+
+.landing .hero-scrollcue{position:absolute;z-index:6;right:clamp(26px,3.6vw,54px);bottom:clamp(24px,3vw,38px);width:1px;height:58px;background:rgba(255,255,255,.14);overflow:hidden;opacity:0}
+.landing .hero-scrollcue span{position:absolute;inset:0;background:linear-gradient(180deg,transparent,#f5f5f7);animation:heroCue 2.6s var(--ease) infinite}
+@keyframes heroCue{0%{transform:translateY(-100%)}62%,100%{transform:translateY(100%)}}
+
+/* --- cloud dissolve: dark hero -> white page --- */
+.landing .hero-dissolve{position:relative;z-index:4;height:clamp(200px,26vh,330px);background:var(--paper)}
+/* reaches only far enough up to swallow the seam — never the live hero copy */
+.landing .hero-sheet{position:absolute;left:-10%;right:-10%;bottom:0;top:-46vh;opacity:0;pointer-events:none;background:linear-gradient(180deg,rgba(251,251,253,0) 0%,rgba(251,251,253,.42) 38%,var(--paper) 64%)}
+/* soft top edge: the bank thins out as it rises, so the strip behind the nav
+   whitens last instead of the whole hero flashing white at once */
+.landing .hero-sky{position:absolute;left:50%;margin-left:-85%;top:0;width:170%;height:104vh;pointer-events:none;
+  -webkit-mask-image:linear-gradient(180deg,rgba(0,0,0,0) 0%,rgba(0,0,0,.18) 20%,rgba(0,0,0,.72) 40%,#000 58%);
+  mask-image:linear-gradient(180deg,rgba(0,0,0,0) 0%,rgba(0,0,0,.18) 20%,rgba(0,0,0,.72) 40%,#000 58%)}
+.landing .hero-wisp{position:absolute;left:0;top:20%;width:100%;height:80%;opacity:.1;mix-blend-mode:screen;transform-origin:50% 100%}
+.landing .hero-puff{position:absolute;display:block;border-radius:50%;opacity:.05;filter:blur(20px);will-change:transform,opacity;background:radial-gradient(circle at 50% 50%,rgba(255,255,255,.98) 0%,rgba(255,255,255,.9) 30%,rgba(255,255,255,.5) 55%,rgba(255,255,255,0) 74%)}
+/* overlapping across the full width so the bank reads as one continuous mass */
+.landing .hp1{left:-10%;top:44%;width:36%;height:40%}
+.landing .hp2{left:9%;top:29%;width:42%;height:57%}
+.landing .hp3{left:29%;top:46%;width:40%;height:42%}
+.landing .hp4{left:49%;top:25%;width:44%;height:60%}
+.landing .hp5{left:67%;top:44%;width:38%;height:44%}
+.landing .hp6{left:83%;top:51%;width:33%;height:38%}
+
+@media(prefers-reduced-motion:reduce){
+  .landing .hero-visual{clip-path:none}
+  .landing .hw-i,.landing .hero-quote,.landing .hero-visual-foot,.landing .hero-eyebrow,
+  .landing .hero-sub,.landing .hero-actions{opacity:1;transform:none}
+  .landing .hero-scrollcue span{animation:none}
+}
+
+@media(max-width:980px){
+  .landing .hero-panel{grid-template-columns:1fr;min-height:0}
+  .landing .hero-visual{min-height:46svh}
+  .landing .hero-visual::after{top:auto;right:0;left:0;bottom:0;width:auto;height:22%;background:linear-gradient(180deg,rgba(14,17,22,0),var(--night))}
+  .landing .hero-copy{padding:46px 22px 68px;max-width:none}
+  .landing .hero-h1{max-width:none}
+  .landing .hero-scrollcue{display:none}
+  .landing .hero-dissolve{height:clamp(200px,30vh,300px)}
+}
 
 /* HERO PRODUCT FRAME */
-.landing .stage{margin-top:60px;position:relative;padding-bottom:90px}
+.landing .stage{margin-top:-64px;position:relative;z-index:5;padding-bottom:90px}
 .landing .stage-glow{position:absolute;top:-20px;left:50%;transform:translateX(-50%);width:120%;height:520px;background:radial-gradient(60% 70% at 50% 30%,rgba(0,113,227,.07),transparent 70%);pointer-events:none}
 .landing .appwin{position:relative;max-width:940px;margin:0 auto;background:var(--surface);border-radius:22px;box-shadow:0 2px 6px rgba(0,0,0,.04),0 30px 80px -20px rgba(0,0,0,.18);overflow:hidden;border:1px solid var(--hair2)}
 .landing .appbar{height:46px;display:flex;align-items:center;padding:0 18px;border-bottom:1px solid var(--hair2);gap:14px}
