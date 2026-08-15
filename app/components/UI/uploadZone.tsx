@@ -39,30 +39,33 @@ export function UploadZone({ companyId, onUploadStart }: UploadZoneProps) {
   const allDone =
     hasFiles && files.every((f) => f.status === "ready" || f.status === "error");
   const readyCount = files.filter((f) => f.status === "ready").length;
-  const [refreshIn, setRefreshIn] = useState<number | null>(null);
+  const [dismissIn, setDismissIn] = useState<number | null>(null);
+  const [statusHidden, setStatusHidden] = useState(false);
 
   useEffect(() => {
     if (!allDone) {
-      setRefreshIn(null);
+      setDismissIn(null);
+      setStatusHidden(false);
       return;
     }
+    if (statusHidden) return;
 
-    setRefreshIn(30);
+    setDismissIn(30);
     const startedAt = Date.now();
     const tick = window.setInterval(() => {
       const remaining = Math.max(
         0,
         30 - Math.round((Date.now() - startedAt) / 1000),
       );
-      setRefreshIn(remaining);
+      setDismissIn(remaining);
       if (remaining === 0) {
         window.clearInterval(tick);
-        window.dispatchEvent(new Event("robust-gallery-refresh"));
+        setStatusHidden(true);
       }
     }, 250);
 
     return () => window.clearInterval(tick);
-  }, [allDone]);
+  }, [allDone, statusHidden]);
 
   return (
     <div className="w-full space-y-4 animate-fade-up">
@@ -137,7 +140,7 @@ export function UploadZone({ companyId, onUploadStart }: UploadZoneProps) {
       </div>
 
       {/* ── File List ── */}
-      {hasFiles && (
+      {hasFiles && !statusHidden && (
         <div className="space-y-3 animate-fade-up">
           <div className="flex items-center justify-between px-1">
             <div className="flex items-center gap-2">
@@ -154,9 +157,9 @@ export function UploadZone({ companyId, onUploadStart }: UploadZoneProps) {
                   {readyCount}/{files.length} ready
                 </span>
               )}
-              {allDone && refreshIn != null && refreshIn > 0 && (
+              {allDone && dismissIn != null && dismissIn > 0 && (
                 <span className="text-xs text-muted-foreground">
-                  Refreshing in {refreshIn}s
+                  This message goes in {dismissIn}s
                 </span>
               )}
             </div>
