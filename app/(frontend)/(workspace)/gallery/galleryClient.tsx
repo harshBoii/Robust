@@ -404,7 +404,9 @@ export default function GalleryClient({
   const [preview, setPreview] = useState<PreviewState>(null);
   const [openingId, setOpeningId] = useState<string | null>(null);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
+  const [deleteRequestIds, setDeleteRequestIds] = useState<string[] | null>(null);
+  const [deletingIds, setDeletingIds] = useState<Set<string>>(() => new Set());
   const [viewMode, setViewMode] = useState<ViewMode>("flat");
   const [openFolder, setOpenFolder] = useState<BulkGroup | null>(null);
   const [analyzeBusy, setAnalyzeBusy] = useState(false);
@@ -588,36 +590,77 @@ export default function GalleryClient({
     }
   };
 
-  const deleteAsset = async (asset: GalleryAsset) => {
-    const label = asset.title || asset.filename;
-    if (
-      !window.confirm(
-        `Delete "${label}" permanently? This removes the file from storage and cannot be undone.`,
-      )
-    ) {
-      return;
-    }
+  const requestDelete = (ids: string[]) => {
+    const uniqueIds = [...new Set(ids)].filter((id) =>
+      assets.some((asset) => asset.id === id),
+    );
+    if (uniqueIds.length > 0) setDeleteRequestIds(uniqueIds);
+  };
 
-    setDeletingId(asset.id);
+  const confirmDelete = async () => {
+    if (!deleteRequestIds?.length || deletingIds.size > 0) return;
+
+    const ids = deleteRequestIds;
+    setDeletingIds(new Set(ids));
     setError(null);
+    const deletedIds: string[] = [];
+    const failures: string[] = [];
+
     try {
-      const res = await fetch(`/api/gallery/assets/${asset.id}`, {
-        method: "DELETE",
-        credentials: "include",
-      });
-      const data = (await res.json().catch(() => ({}))) as { error?: string };
-      if (!res.ok) {
-        throw new Error(data.error ?? "Delete failed");
+      // Keep external storage/API traffic bounded for large selections.
+      for (let index = 0; index < ids.length; index += 4) {
+        const batch = ids.slice(index, index + 4);
+        const results = await Promise.all(
+          batch.map(async (id) => {
+            const res = await fetch(`/api/gallery/assets/${id}`, {
+              method: "DELETE",
+              credentials: "include",
+            });
+            const data = (await res.json().catch(() => ({}))) as {
+              error?: string;
+            };
+            return { id, ok: res.ok, error: data.error };
+          }),
+        );
+
+        for (const result of results) {
+          if (result.ok) deletedIds.push(result.id);
+          else failures.push(result.error ?? "Delete failed");
+        }
       }
 
-      setAssets((current) => current.filter((item) => item.id !== asset.id));
+      if (deletedIds.length > 0) {
+        const deleted = new Set(deletedIds);
+        setAssets((current) => current.filter((item) => !deleted.has(item.id)));
+        setSelectedIds((current) => {
+          const next = new Set(current);
+          deletedIds.forEach((id) => next.delete(id));
+          return next;
+        });
+      }
+
+      if (failures.length > 0) {
+        setError(
+          `${failures.length} asset${failures.length === 1 ? "" : "s"} could not be deleted. ${failures[0]}`,
+        );
+      }
     } catch (e) {
       console.error(e);
       setError(e instanceof Error ? e.message : "Delete failed");
     } finally {
-      setDeletingId(null);
+      setDeletingIds(new Set());
+      setDeleteRequestIds(null);
     }
   };
+
+  useEffect(() => {
+    if (!deleteRequestIds || deletingIds.size > 0) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setDeleteRequestIds(null);
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [deleteRequestIds, deletingIds.size]);
 
   const openAsset = async (asset: GalleryAsset) => {
     setOpeningId(asset.id);
@@ -667,15 +710,35 @@ export default function GalleryClient({
 
   const renderAssetCard = (asset: GalleryAsset) => {
     const usageTags = getUsageTags(asset);
+    const isSelected = selectedIds.has(asset.id);
     const isBusy =
       openingId === asset.id ||
       downloadingId === asset.id ||
-      deletingId === asset.id;
+      deletingIds.has(asset.id);
     return (
       <div
         key={asset.id}
-        className="group glass-card overflow-hidden rounded-2xl p-0 text-left transition hover:border-primary/30"
+        className={`group glass-card relative overflow-hidden rounded-2xl p-0 text-left transition hover:border-primary/30 ${
+          isSelected ? "border-primary/60 ring-2 ring-primary/25" : ""
+        }`}
       >
+        <label className="absolute right-2 top-2 z-10 flex h-7 w-7 cursor-pointer items-center justify-center rounded-lg bg-black/65 shadow-sm backdrop-blur-sm">
+          <input
+            type="checkbox"
+            checked={isSelected}
+            disabled={isBusy}
+            onChange={(event) => {
+              setSelectedIds((current) => {
+                const next = new Set(current);
+                if (event.target.checked) next.add(asset.id);
+                else next.delete(asset.id);
+                return next;
+              });
+            }}
+            className="h-4 w-4 cursor-pointer accent-primary disabled:cursor-not-allowed"
+            aria-label={`Select ${asset.title || asset.filename}`}
+          />
+        </label>
         <button
           type="button"
           disabled={isBusy}
@@ -745,11 +808,11 @@ export default function GalleryClient({
             <button
               type="button"
               disabled={isBusy}
-              onClick={() => void deleteAsset(asset)}
+              onClick={() => requestDelete([asset.id])}
               className="inline-flex items-center gap-1.5 rounded-lg border border-destructive/25 px-2.5 py-1.5 text-xs font-medium text-destructive transition hover:border-destructive/45 hover:bg-destructive/10 disabled:opacity-50"
               aria-label={`Delete ${asset.title || asset.filename}`}
             >
-              {deletingId === asset.id ? (
+              {deletingIds.has(asset.id) ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
               ) : (
                 <Trash2 className="h-3.5 w-3.5" />
@@ -757,6 +820,67 @@ export default function GalleryClient({
               Delete
             </button>
           </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderSelectionToolbar = (viewAssets: GalleryAsset[]) => {
+    const viewIds = viewAssets.map((asset) => asset.id);
+    const selectedInView = viewIds.filter((id) => selectedIds.has(id));
+    const allSelected =
+      viewIds.length > 0 && selectedInView.length === viewIds.length;
+
+    return (
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--glass-border)] bg-[var(--glass-bg)] px-3 py-2.5">
+        <div className="flex items-center gap-3">
+          <label className="inline-flex cursor-pointer items-center gap-2 text-sm font-medium text-foreground">
+            <input
+              type="checkbox"
+              checked={allSelected}
+              onChange={(event) => {
+                setSelectedIds((current) => {
+                  const next = new Set(current);
+                  viewIds.forEach((id) => {
+                    if (event.target.checked) next.add(id);
+                    else next.delete(id);
+                  });
+                  return next;
+                });
+              }}
+              className="h-4 w-4 cursor-pointer accent-primary"
+            />
+            Select all
+          </label>
+          <span className="text-xs text-muted-foreground">
+            {selectedInView.length} selected
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          {selectedInView.length > 0 ? (
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedIds((current) => {
+                  const next = new Set(current);
+                  viewIds.forEach((id) => next.delete(id));
+                  return next;
+                });
+              }}
+              className="rounded-lg px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:bg-[var(--glass-hover)] hover:text-foreground"
+            >
+              Clear
+            </button>
+          ) : null}
+          <button
+            type="button"
+            disabled={selectedInView.length === 0 || deletingIds.size > 0}
+            onClick={() => requestDelete(selectedInView)}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-destructive px-3 py-1.5 text-xs font-semibold text-destructive-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+            Delete selected
+          </button>
         </div>
       </div>
     );
@@ -860,7 +984,10 @@ export default function GalleryClient({
       {assets.length > 0 ? (
         <div className="min-h-0 flex-1 overflow-y-auto glass-scrollbar pt-8">
           {viewMode === "flat" ? (
-            <div className={gridClass}>{assets.map(renderAssetCard)}</div>
+            <>
+              {renderSelectionToolbar(assets)}
+              <div className={gridClass}>{assets.map(renderAssetCard)}</div>
+            </>
           ) : !hideFoldersView ? (
             <div className={folderGridClass}>
               {bulkGroups.map((group) => (
@@ -951,6 +1078,7 @@ export default function GalleryClient({
               </button>
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto glass-scrollbar px-4 py-4 sm:px-5 sm:py-5">
+              {renderSelectionToolbar(openFolder.assets)}
               {folderGroupedSections ? (
                 <div className="space-y-8">
                   {folderGroupedSections.map((section) => (
@@ -981,6 +1109,71 @@ export default function GalleryClient({
             </div>
           </div>
         </div>,
+            document.body,
+          )
+        : null}
+
+      {deleteRequestIds && typeof document !== "undefined"
+        ? createPortal(
+            <div className="fixed inset-0 z-modal flex items-center justify-center p-4">
+              <button
+                type="button"
+                className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+                aria-label="Cancel deletion"
+                disabled={deletingIds.size > 0}
+                onClick={() => setDeleteRequestIds(null)}
+              />
+              <div
+                role="alertdialog"
+                aria-modal="true"
+                aria-labelledby="delete-assets-title"
+                aria-describedby="delete-assets-description"
+                className="glass-modal relative z-10 w-full max-w-md rounded-2xl border border-destructive/20 p-6 shadow-2xl"
+              >
+                <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-full bg-destructive/10 text-destructive">
+                  <Trash2 className="h-5 w-5" />
+                </div>
+                <h2
+                  id="delete-assets-title"
+                  className="font-heading text-xl font-semibold text-foreground"
+                >
+                  Delete {deleteRequestIds.length} asset
+                  {deleteRequestIds.length === 1 ? "" : "s"}?
+                </h2>
+                <p
+                  id="delete-assets-description"
+                  className="mt-2 text-sm leading-6 text-muted-foreground"
+                >
+                  This permanently removes the selected{" "}
+                  {deleteRequestIds.length === 1 ? "file" : "files"} from storage.
+                  This action cannot be undone.
+                </p>
+                <div className="mt-6 flex justify-end gap-3">
+                  <button
+                    type="button"
+                    disabled={deletingIds.size > 0}
+                    onClick={() => setDeleteRequestIds(null)}
+                    autoFocus
+                    className="glass-button rounded-xl px-4 py-2.5 text-sm font-medium text-foreground disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    disabled={deletingIds.size > 0}
+                    onClick={() => void confirmDelete()}
+                    className="inline-flex min-w-28 items-center justify-center gap-2 rounded-xl bg-destructive px-4 py-2.5 text-sm font-semibold text-destructive-foreground transition hover:opacity-90 disabled:opacity-60"
+                  >
+                    {deletingIds.size > 0 ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Trash2 className="h-4 w-4" />
+                    )}
+                    {deletingIds.size > 0 ? "Deleting…" : "Delete"}
+                  </button>
+                </div>
+              </div>
+            </div>,
             document.body,
           )
         : null}
