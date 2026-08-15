@@ -396,5 +396,11 @@ export function useUploader(
     [uploadWithBulkId],
   );
 
-  return { files, upload, uploadWithBulkId };
+  const clear = useCallback(() => {
+    sseRef.current?.close();
+    sseRef.current = null;
+    setFiles([]);
+  }, []);
+
+  return { files, upload, uploadWithBulkId, clear };
 }

@@ -11,7 +11,7 @@ interface UploadZoneProps {
 }
 
 export function UploadZone({ companyId, onUploadStart }: UploadZoneProps) {
-  const { files, upload } = useUploader(companyId, onUploadStart);
+  const { files, upload, clear } = useUploader(companyId, onUploadStart);
   const inputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
 
@@ -39,33 +39,31 @@ export function UploadZone({ companyId, onUploadStart }: UploadZoneProps) {
   const allDone =
     hasFiles && files.every((f) => f.status === "ready" || f.status === "error");
   const readyCount = files.filter((f) => f.status === "ready").length;
-  const [dismissIn, setDismissIn] = useState<number | null>(null);
-  const [statusHidden, setStatusHidden] = useState(false);
+  const [refreshIn, setRefreshIn] = useState<number | null>(null);
 
   useEffect(() => {
     if (!allDone) {
-      setDismissIn(null);
-      setStatusHidden(false);
+      setRefreshIn(null);
       return;
     }
-    if (statusHidden) return;
 
-    setDismissIn(30);
+    setRefreshIn(30);
     const startedAt = Date.now();
     const tick = window.setInterval(() => {
       const remaining = Math.max(
         0,
         30 - Math.round((Date.now() - startedAt) / 1000),
       );
-      setDismissIn(remaining);
+      setRefreshIn(remaining);
       if (remaining === 0) {
         window.clearInterval(tick);
-        setStatusHidden(true);
+        window.dispatchEvent(new Event("robust-gallery-refresh"));
+        clear();
       }
     }, 250);
 
     return () => window.clearInterval(tick);
-  }, [allDone, statusHidden]);
+  }, [allDone, clear]);
 
   return (
     <div className="w-full space-y-4 animate-fade-up">
@@ -140,7 +138,7 @@ export function UploadZone({ companyId, onUploadStart }: UploadZoneProps) {
       </div>
 
       {/* ── File List ── */}
-      {hasFiles && !statusHidden && (
+      {hasFiles && (
         <div className="space-y-3 animate-fade-up">
           <div className="flex items-center justify-between px-1">
             <div className="flex items-center gap-2">
@@ -157,9 +155,9 @@ export function UploadZone({ companyId, onUploadStart }: UploadZoneProps) {
                   {readyCount}/{files.length} ready
                 </span>
               )}
-              {allDone && dismissIn != null && dismissIn > 0 && (
+              {allDone && refreshIn != null && refreshIn > 0 && (
                 <span className="text-xs text-muted-foreground">
-                  This message goes in {dismissIn}s
+                  This message goes in {refreshIn}s
                 </span>
               )}
             </div>
