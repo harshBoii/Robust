@@ -47,12 +47,12 @@ export function UploadZone({ companyId, onUploadStart }: UploadZoneProps) {
       return;
     }
 
-    setRefreshIn(30);
+    setRefreshIn(15);
     const startedAt = Date.now();
     const tick = window.setInterval(() => {
       const remaining = Math.max(
         0,
-        30 - Math.round((Date.now() - startedAt) / 1000),
+        15 - Math.round((Date.now() - startedAt) / 1000),
       );
       setRefreshIn(remaining);
       if (remaining === 0) {
