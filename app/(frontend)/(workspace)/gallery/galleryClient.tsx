@@ -19,6 +19,7 @@ import {
   Check,
   X,
   Download,
+  Trash2,
 } from "lucide-react";
 
 type AssetType = "VIDEO" | "IMAGE" | "DOCUMENT";
@@ -403,6 +404,7 @@ export default function GalleryClient({
   const [preview, setPreview] = useState<PreviewState>(null);
   const [openingId, setOpeningId] = useState<string | null>(null);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>("flat");
   const [openFolder, setOpenFolder] = useState<BulkGroup | null>(null);
   const [analyzeBusy, setAnalyzeBusy] = useState(false);
@@ -586,6 +588,37 @@ export default function GalleryClient({
     }
   };
 
+  const deleteAsset = async (asset: GalleryAsset) => {
+    const label = asset.title || asset.filename;
+    if (
+      !window.confirm(
+        `Delete "${label}" permanently? This removes the file from storage and cannot be undone.`,
+      )
+    ) {
+      return;
+    }
+
+    setDeletingId(asset.id);
+    setError(null);
+    try {
+      const res = await fetch(`/api/gallery/assets/${asset.id}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) {
+        throw new Error(data.error ?? "Delete failed");
+      }
+
+      setAssets((current) => current.filter((item) => item.id !== asset.id));
+    } catch (e) {
+      console.error(e);
+      setError(e instanceof Error ? e.message : "Delete failed");
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
   const openAsset = async (asset: GalleryAsset) => {
     setOpeningId(asset.id);
     try {
@@ -634,7 +667,10 @@ export default function GalleryClient({
 
   const renderAssetCard = (asset: GalleryAsset) => {
     const usageTags = getUsageTags(asset);
-    const isBusy = openingId === asset.id || downloadingId === asset.id;
+    const isBusy =
+      openingId === asset.id ||
+      downloadingId === asset.id ||
+      deletingId === asset.id;
     return (
       <div
         key={asset.id}
@@ -692,19 +728,35 @@ export default function GalleryClient({
               ))}
             </div>
           )}
-          <button
-            type="button"
-            disabled={isBusy}
-            onClick={() => void downloadAsset(asset)}
-            className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-[var(--glass-border)] px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition hover:border-primary/30 hover:bg-[var(--glass-hover)] hover:text-foreground disabled:opacity-50"
-          >
-            {downloadingId === asset.id ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            ) : (
-              <Download className="h-3.5 w-3.5" />
-            )}
-            Download
-          </button>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              disabled={isBusy}
+              onClick={() => void downloadAsset(asset)}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--glass-border)] px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition hover:border-primary/30 hover:bg-[var(--glass-hover)] hover:text-foreground disabled:opacity-50"
+            >
+              {downloadingId === asset.id ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Download className="h-3.5 w-3.5" />
+              )}
+              Download
+            </button>
+            <button
+              type="button"
+              disabled={isBusy}
+              onClick={() => void deleteAsset(asset)}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-destructive/25 px-2.5 py-1.5 text-xs font-medium text-destructive transition hover:border-destructive/45 hover:bg-destructive/10 disabled:opacity-50"
+              aria-label={`Delete ${asset.title || asset.filename}`}
+            >
+              {deletingId === asset.id ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Trash2 className="h-3.5 w-3.5" />
+              )}
+              Delete
+            </button>
+          </div>
         </div>
       </div>
     );
