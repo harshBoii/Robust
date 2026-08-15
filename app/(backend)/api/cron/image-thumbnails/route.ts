@@ -28,10 +28,24 @@ export async function GET(request: NextRequest) {
   }
 
   try {
+    console.info("[cron/image-thumbnails] Starting thumbnail backfill");
     const summary = await processPendingImageThumbnails({
       limit: 50,
       concurrency: 3,
     });
+    console.info("[cron/image-thumbnails] Completed", summary);
+
+    if (summary.failed > 0) {
+      console.error(
+        `[cron/image-thumbnails] ${summary.failed} thumbnail(s) failed`,
+        summary.failures,
+      );
+      return NextResponse.json(
+        { ok: false, ...summary },
+        { status: 500 },
+      );
+    }
+
     return NextResponse.json({ ok: true, ...summary });
   } catch (error) {
     console.error("[cron/image-thumbnails]", error);
