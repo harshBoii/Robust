@@ -453,6 +453,10 @@ model Asset {
   streamId      String?      @unique @db.VarChar(255)
   playbackUrl   String?      @db.VarChar(2000)
   thumbnailUrl  String?      @db.VarChar(1000)
+  thumbnailR2Key String?     @db.VarChar(500)
+  thumbnailStatus ImageThumbnailStatus @default(NOT_REQUIRED)
+  thumbnailError String?     @db.Text
+  thumbnailGeneratedAt DateTime? @db.Timestamptz(3)
   tags          String[]     @default([])
   metadata      Json         @default("{}")
   uploadSource  UploadSource @default(NATIVE)
@@ -480,6 +484,7 @@ model Asset {
   @@index([status])
   @@index([intelligenceStatus])
   @@index([assetType, companyId])
+  @@index([assetType, thumbnailStatus])
   @@index([createdAt(sort: Desc)])
   @@map("assets")
 }
@@ -2299,6 +2304,14 @@ enum AccessStatus {
   PENDING
   APPROVED
   REJECTED
+}
+
+enum ImageThumbnailStatus {
+  NOT_REQUIRED
+  PENDING
+  PROCESSING
+  READY
+  ERROR
 }
 
 enum AssetType {

@@ -47,6 +47,7 @@ export async function DELETE(
       assetType: true,
       r2Key: true,
       r2Bucket: true,
+      thumbnailR2Key: true,
       streamId: true,
       _count: { select: { adPublishJobs: true } },
     },
@@ -74,7 +75,9 @@ export async function DELETE(
             r2CompanionJpegKey(asset.r2Key),
             r2ThumbnailsFolderKey(asset.r2Key),
           ]
-        : [asset.r2Key];
+        : [asset.r2Key, asset.thumbnailR2Key].filter(
+            (key): key is string => Boolean(key),
+          );
     const storageDeletes: Promise<unknown>[] = [
       r2.send(
         new DeleteObjectsCommand({

@@ -3,10 +3,12 @@ import { getR2PublicObjectUrl, r2 } from "@/lib/cloudfare/r2";
 import { prisma } from "@/lib/prisma";
 import { enqueueAssetStreamUpload } from "@/lib/cloudfare/stream";
 import { maybeAnalyzeBulkUpload } from "@/lib/gallery/analyze-bulk";
+import { generateImageThumbnail } from "@/lib/gallery/image-thumbnail";
 import {
   AssetType,
   AssetStatus,
   BulkUploadStatus,
+  ImageThumbnailStatus,
   UploadSource,
 } from "@/app/generated/prisma/enums";
 import { NextRequest, NextResponse } from "next/server";
@@ -69,6 +71,10 @@ export async function POST(req: NextRequest) {
       mimeType: session.fileType,
       // Images are immediately READY; videos wait for Stream
       status: resolvedType === "VIDEO" ? AssetStatus.PROCESSING : AssetStatus.READY,
+      thumbnailStatus:
+        resolvedType === "IMAGE"
+          ? ImageThumbnailStatus.PENDING
+          : ImageThumbnailStatus.NOT_REQUIRED,
       uploadSource: UploadSource.NATIVE,
       ...(publicPreviewUrl ? { thumbnailUrl: publicPreviewUrl } : {}),
     },
@@ -93,10 +99,29 @@ export async function POST(req: NextRequest) {
     await enqueueAssetStreamUpload(asset.id, "HIGH");
   }
 
+  // Single image uploads wait for their optimized gallery thumbnail before the
+  // request resolves. Bulk uploads are backfilled by the daily cron worker.
+  let thumbnailUrl = asset.thumbnailUrl ?? null;
+  let thumbnailStatus = asset.thumbnailStatus;
+  if (resolvedType === "IMAGE" && !bulkUploadId) {
+    try {
+      const generated = await generateImageThumbnail(asset.id);
+      thumbnailUrl = generated.thumbnailUrl;
+      thumbnailStatus = ImageThumbnailStatus.READY;
+    } catch (error) {
+      console.error(
+        `[upload/complete] Thumbnail generation failed for ${asset.id}:`,
+        error,
+      );
+      thumbnailStatus = ImageThumbnailStatus.ERROR;
+    }
+  }
+
   return NextResponse.json({
     assetId: asset.id,
     status: asset.status,
     assetType: resolvedType,
-    thumbnailUrl: asset.thumbnailUrl ?? null,
+    thumbnailUrl,
+    thumbnailStatus,
   });
 }
