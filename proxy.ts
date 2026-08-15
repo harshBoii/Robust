@@ -42,6 +42,8 @@ const PUBLIC_PATH_PREFIXES = [
   "/api/heygen/webhook",
   /** Video download metadata for microservice (presigned R2 JSON). */
   "/api/videos",
+  /** Cron endpoint for running scheduled tasks. */
+  "/api/cron",
 ] as const;
 
 /** Public: GET /api/assets/{id}/download (not /url or /status). */
