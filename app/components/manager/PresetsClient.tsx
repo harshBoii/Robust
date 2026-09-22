@@ -634,6 +634,7 @@ export default function PresetsClient() {
 
   /* ════════════════════════════════════════════════════ render ══ */
   return (
+    <div className="custom-scrollbar min-h-0 flex-1 overflow-y-auto pb-4">
     <div className="mx-auto max-w-7xl space-y-5">
 
       {/* Page header */}
@@ -937,6 +938,7 @@ export default function PresetsClient() {
           Boolean(draftCampaign.isDefault) || Boolean(draftAdset.isDefault)
         }
       />
+    </div>
     </div>
   );
 }

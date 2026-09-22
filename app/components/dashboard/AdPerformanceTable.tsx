@@ -101,14 +101,20 @@ function RangeInputs({
 
 const SYM: Record<Currency, string> = { USD: '$', GBP: '£', INR: '₹' };
 
+// Fixed row heights so `visibleRows` maps to an exact pixel height.
+const HEADER_ROW_PX = 44;
+const BODY_ROW_PX = 64;
+
 export default function AdPerformanceTable({
-  rows, onToggleStatus, onAutoPause, busyAdIds, currency,
+  rows, onToggleStatus, onAutoPause, busyAdIds, currency, visibleRows,
 }: {
   rows: DashboardRow[];
   onToggleStatus: (adId: string, nextStatus: 'ACTIVE' | 'PAUSED') => void;
   onAutoPause: () => void;
   busyAdIds: Set<string>;
   currency: Currency;
+  /** Fix the body to exactly this many rows tall (scrolls beyond), so layout is identical across screens. */
+  visibleRows?: number;
 }) {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'PAUSED'>('ALL');
@@ -311,10 +317,13 @@ export default function AdPerformanceTable({
       </div>
 
       {/* ── Table ── */}
-      <div className="max-h-[560px] overflow-auto">
+      <div
+        className={visibleRows ? 'overflow-auto' : 'max-h-[560px] overflow-auto'}
+        style={visibleRows ? { height: HEADER_ROW_PX + visibleRows * BODY_ROW_PX } : undefined}
+      >
         <table className="w-full min-w-[1000px] border-separate border-spacing-0">
           <thead className="sticky top-0 z-10">
-            <tr className="border-b border-border/40 bg-background/60 backdrop-blur-sm">
+            <tr className="border-b border-border/40 bg-background/60 backdrop-blur-sm" style={{ height: HEADER_ROW_PX }}>
               <th className="px-3 py-3 text-left font-ui text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
                 Creative
               </th>
@@ -343,10 +352,11 @@ export default function AdPerformanceTable({
                 <tr
                   key={r.adId}
                   className={[
-                    'group border-b border-border/30 transition-colors duration-150',
+                    'group whitespace-nowrap border-b border-border/30 transition-colors duration-150',
                     'hover:bg-[var(--glass-hover)]',
                     i % 2 === 0 ? '' : 'bg-background/10',
                   ].join(' ')}
+                  style={{ height: BODY_ROW_PX }}
                 >
                   {/* Thumbnail */}
                   <td className="px-3 py-3">

@@ -171,7 +171,7 @@ export default function HomeOverviewClient({ displayName }: HomeOverviewClientPr
   const activeCurrency = CURRENCIES.find((c) => c.value === currency);
 
   return (
-    <div className="flex h-[calc(100dvh-4.5rem)] min-h-0 flex-col gap-3 overflow-hidden">
+    <div className="custom-scrollbar flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto pb-1">
       {/* Header */}
       <div className="flex shrink-0 flex-wrap items-start justify-between gap-3">
         <div>
@@ -293,24 +293,28 @@ export default function HomeOverviewClient({ displayName }: HomeOverviewClientPr
       </div>
 
       {/* Middle: table + right rail */}
-      <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 lg:grid-cols-12">
-        <div className="flex min-h-0 flex-col overflow-hidden lg:col-span-9">
+      <div className="grid shrink-0 grid-cols-1 gap-3 lg:grid-cols-12">
+        <div className="flex min-w-0 flex-col overflow-hidden lg:col-span-9">
           <AdPerformanceTable
             rows={filteredRows}
             onToggleStatus={toggleStatus}
             onAutoPause={autoPause}
             busyAdIds={busyAdIds}
             currency={currency}
+            visibleRows={4}
           />
         </div>
-        <div className="min-h-0 max-h-[220px] lg:col-span-3 lg:max-h-full">
-          <RightRail rows={filteredRows} dashboardLoading={bootstrapping || loading} />
+        {/* Rail matches the table's height on desktop and scrolls internally. */}
+        <div className="relative max-h-[220px] min-h-0 lg:col-span-3 lg:max-h-none">
+          <div className="h-full lg:absolute lg:inset-0">
+            <RightRail rows={filteredRows} dashboardLoading={bootstrapping || loading} />
+          </div>
         </div>
       </div>
 
       {/* Bottom charts */}
-      <div className="grid shrink-0 grid-cols-1 gap-3 lg:grid-cols-12" style={{ height: 'min(32vh, 240px)' }}>
-        <Panel className="flex min-h-0 flex-col p-3 lg:col-span-7">
+      <div className="grid shrink-0 grid-cols-1 gap-3 lg:grid-cols-12">
+        <Panel className="flex h-[240px] min-h-0 flex-col p-3 lg:col-span-7">
           <div className="mb-2 flex items-center justify-between">
             <div>
               <h3 className="font-display text-sm font-semibold">Performance Overview</h3>
@@ -354,7 +358,7 @@ export default function HomeOverviewClient({ displayName }: HomeOverviewClientPr
           </div>
         </Panel>
 
-        <Panel className="flex min-h-0 flex-col p-3 lg:col-span-5">
+        <Panel className="flex h-[240px] min-h-0 flex-col p-3 lg:col-span-5">
           <h3 className="mb-2 font-display text-sm font-semibold">Signal Mix</h3>
           <div className="flex min-h-0 flex-1 gap-3">
             {signalMix.length === 0 ? (
