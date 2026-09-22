@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { prisma } from '@/lib/prisma';
+import { mapWithConcurrency } from '@/lib/utils/map-with-concurrency';
 
 const DASHBOARD_CREATIVE_PLACEHOLDER = {
   primaryText: '',
@@ -34,8 +35,8 @@ export async function syncAdThumbnailsFromRefresh(
   });
   const adByMetaId = new Map(ads.map((a) => [a.metaAdId, a]));
 
-  await Promise.all(
-    withThumb.map(async (r) => {
+  await mapWithConcurrency(
+    withThumb, 4, async (r) => {
       const ad = adByMetaId.get(r.adId);
       if (!ad) return;
 
@@ -87,6 +88,6 @@ export async function syncAdThumbnailsFromRefresh(
         where: { id: ad.id },
         data: { metaCreativeDbId: creative.id },
       });
-    }),
+    },
   );
 }

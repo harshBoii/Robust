@@ -5,6 +5,19 @@ import { prisma } from '@/lib/prisma';
 
 import { asNumber, computeCpi, daysBetweenUtc, parseMetaActions } from './row-metrics';
 
+type SnapshotMetric = {
+  metaAdId: string;
+  spend: number;
+  clicks: number;
+  ctr: number;
+  hookRate: number | null;
+  daysRunning: number | null;
+  statusSignal: string | null;
+  actions: unknown;
+  datePreset: string;
+  recordedAt: Date;
+};
+
 export type DashboardSnapshot = {
   rows: DashboardRow[];
   lastRefreshedAt: string | null;
@@ -32,25 +45,17 @@ export async function loadDashboardSnapshot(
 
   const adIds = ads.map((a) => a.metaAdId);
 
-  const metrics = await prisma.metaAdMetrics.findMany({
-    where: {
-      metaAdId: { in: adIds },
-      datePreset: { in: ['today', 'maximum'] },
-    },
-    orderBy: { recordedAt: 'desc' },
-    select: {
-      metaAdId: true,
-      spend: true,
-      clicks: true,
-      ctr: true,
-      hookRate: true,
-      daysRunning: true,
-      statusSignal: true,
-      actions: true,
-      datePreset: true,
-      recordedAt: true,
-    },
-  });
+  // Only the newest 'today' and 'maximum' row per ad is needed. DISTINCT ON keeps this
+  // query proportional to the number of ads instead of the whole metrics history.
+  const metrics = await prisma.$queryRaw<SnapshotMetric[]>`
+    SELECT DISTINCT ON ("metaAdId", "datePreset")
+      "metaAdId", spend, clicks, ctr, "hookRate", "daysRunning", "statusSignal",
+      actions, "datePreset", "recordedAt"
+    FROM meta_ad_metrics
+    WHERE "metaAdId" = ANY(${adIds}::text[])
+      AND "datePreset" IN ('today', 'maximum')
+    ORDER BY "metaAdId", "datePreset", "recordedAt" DESC
+  `;
 
   const todayByAd = new Map<string, (typeof metrics)[number]>();
   const maxByAd = new Map<string, (typeof metrics)[number]>();

@@ -12,8 +12,18 @@ import { getAdsWithInsights } from '@/lib/meta/client';
 import { getSession } from '@/lib/auth/session';
 import { requireMetaAdAccountId } from '@/lib/meta/integration-token';
 import { prisma } from '@/lib/prisma';
+import { mapWithConcurrency } from '@/lib/utils/map-with-concurrency';
 
 export const dynamic = 'force-dynamic';
+
+/** Max parallel DB writes during sync — leaves pool connections free for page loads. */
+const DB_WRITE_CONCURRENCY = 4;
+
+/**
+ * One sync per company at a time (per server instance). Concurrent callers — e.g. the user
+ * bouncing in and out of /home — share the running sync instead of starting another.
+ */
+const inFlightRefresh = new Map<string, Promise<NextResponse>>();
 
 type RuleRow = {
   ruleType:
@@ -87,8 +97,21 @@ export async function POST() {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
+  const { companyId } = session;
+  let pending = inFlightRefresh.get(companyId);
+  if (!pending) {
+    pending = runRefresh(companyId).finally(() => {
+      inFlightRefresh.delete(companyId);
+    });
+    inFlightRefresh.set(companyId, pending);
+  }
+  // Each caller gets its own copy of the shared response body.
+  return (await pending).clone();
+}
+
+async function runRefresh(companyId: string): Promise<NextResponse> {
   const metaIntegration = await prisma.metaIntegration.findUnique({
-    where: { companyId: session.companyId },
+    where: { companyId },
     select: {
       id: true,
       adAccountId: true,
@@ -113,7 +136,7 @@ export async function POST() {
   }
 
   const rules = (await prisma.adAutomationRule.findMany({
-    where: { companyId: session.companyId },
+    where: { companyId },
     select: {
       ruleType: true,
       isEnabled: true,
@@ -123,27 +146,19 @@ export async function POST() {
     },
   })) as RuleRow[];
 
-  const todayAds = await getAdsWithInsights({
-    companyId: session.companyId,
-    adAccountId,
-    datePreset: 'today',
-  });
-
-  const maximumAds = await getAdsWithInsights({
-    companyId: session.companyId,
-    adAccountId,
-    datePreset: 'maximum',
-  });
-
   const now = new Date();
   const since = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 7));
-  const last7dAds = await getAdsWithInsights({
-    companyId: session.companyId,
-    adAccountId,
-    datePreset: 'last_7d',
-    timeIncrement: 1,
-    timeRange: { since: ymd(since), until: ymd(now) },
-  });
+  const [todayAds, maximumAds, last7dAds] = await Promise.all([
+    getAdsWithInsights({ companyId, adAccountId, datePreset: 'today' }),
+    getAdsWithInsights({ companyId, adAccountId, datePreset: 'maximum' }),
+    getAdsWithInsights({
+      companyId,
+      adAccountId,
+      datePreset: 'last_7d',
+      timeIncrement: 1,
+      timeRange: { since: ymd(since), until: ymd(now) },
+    }),
+  ]);
 
   const byId = new Map<string, { today?: (typeof todayAds)[number]; maximum?: (typeof maximumAds)[number]; last7d?: (typeof last7dAds)[number] }>();
   for (const a of todayAds) byId.set(a.id, { ...(byId.get(a.id) ?? {}), today: a });
@@ -247,8 +262,8 @@ export async function POST() {
   }
 
   // 2. Upsert campaigns (no FK dependency)
-  await Promise.all(
-    Array.from(campaignMap.entries()).map(([metaCampaignId, data]) =>
+  await mapWithConcurrency(
+    Array.from(campaignMap.entries()), DB_WRITE_CONCURRENCY, ([metaCampaignId, data]) =>
       prisma.metaCampaign.upsert({
         where: {
           metaIntegrationId_metaCampaignId: {
@@ -270,7 +285,6 @@ export async function POST() {
           dailyBudget: data.dailyBudget,
         },
       }),
-    ),
   );
 
   // 3. Fetch DB IDs for campaigns we just upserted
@@ -284,11 +298,11 @@ export async function POST() {
   const campaignDbIdMap = new Map(dbCampaigns.map((c) => [c.metaCampaignId, c.id]));
 
   // 4. Upsert adsets (depend on campaign DB IDs)
-  await Promise.all(
-    Array.from(adSetMap.entries()).map(([metaAdSetId, data]) => {
+  await mapWithConcurrency(
+    Array.from(adSetMap.entries()), DB_WRITE_CONCURRENCY, async ([metaAdSetId, data]) => {
       const campaignDbId = campaignDbIdMap.get(data.metaCampaignId);
-      if (!campaignDbId) return Promise.resolve();
-      return prisma.metaAdSet.upsert({
+      if (!campaignDbId) return;
+      await prisma.metaAdSet.upsert({
         where: {
           metaIntegrationId_metaAdSetId: {
             metaIntegrationId: metaIntegration.id,
@@ -309,7 +323,7 @@ export async function POST() {
           dailyBudget: data.dailyBudget,
         },
       });
-    }),
+    },
   );
 
   // 5. Fetch DB IDs for adsets we just upserted
@@ -323,12 +337,12 @@ export async function POST() {
   const adSetDbIdMap = new Map(dbAdSets.map((a) => [a.metaAdSetId, a.id]));
 
   // 6. Upsert ads (depend on adset DB IDs)
-  await Promise.all(
-    rows.map((r) => {
-      if (!r.adSetId) return Promise.resolve();
+  await mapWithConcurrency(
+    rows, DB_WRITE_CONCURRENCY, async (r) => {
+      if (!r.adSetId) return;
       const adSetDbId = adSetDbIdMap.get(r.adSetId);
-      if (!adSetDbId) return Promise.resolve();
-      return prisma.metaAd.upsert({
+      if (!adSetDbId) return;
+      await prisma.metaAd.upsert({
         where: {
           metaIntegrationId_metaAdId: {
             metaIntegrationId: metaIntegration.id,
@@ -349,7 +363,7 @@ export async function POST() {
           publishedAt: r.createdTimeIso ? new Date(r.createdTimeIso) : undefined,
         },
       });
-    }),
+    },
   );
 
   await syncAdThumbnailsFromRefresh(
@@ -386,7 +400,19 @@ export async function POST() {
   });
 
   if (metricsData.length) {
-    await prisma.metaAdMetrics.createMany({ data: metricsData });
+    // Keep one snapshot per ad/preset per UTC day: replace today's earlier rows instead of
+    // appending on every refresh (the chart only reads the latest row per ad per day anyway).
+    const startOfTodayUtc = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+    await prisma.$transaction([
+      prisma.metaAdMetrics.deleteMany({
+        where: {
+          metaAdId: { in: rows.map((r) => r.adId) },
+          datePreset: { in: ['today', 'maximum'] },
+          recordedAt: { gte: startOfTodayUtc },
+        },
+      }),
+      prisma.metaAdMetrics.createMany({ data: metricsData }),
+    ]);
   }
 
   return NextResponse.json({ rows });

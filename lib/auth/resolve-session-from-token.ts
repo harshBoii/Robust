@@ -6,6 +6,8 @@ export type ResolvedSession = {
   userName: string;
   slug: string;
   sessionId: string;
+  /** Last recorded activity; lets getSession skip redundant lastSeenAt writes. */
+  lastSeenAt: Date;
 };
 
 /** Validate JWT + server-side auth_sessions row. Used by proxy and getSession. */
@@ -19,7 +21,7 @@ export async function resolveSessionFromToken(
 
     const row = await prisma.authSession.findUnique({
       where: { id: sessionId },
-      select: { revokedAt: true, expiresAt: true },
+      select: { revokedAt: true, expiresAt: true, lastSeenAt: true },
     });
     if (!row || row.revokedAt || row.expiresAt <= new Date()) return null;
 
@@ -28,6 +30,7 @@ export async function resolveSessionFromToken(
       userName: (payload.userName as string) ?? '',
       slug: (payload.slug as string) ?? '',
       sessionId,
+      lastSeenAt: row.lastSeenAt,
     };
   } catch {
     return null;

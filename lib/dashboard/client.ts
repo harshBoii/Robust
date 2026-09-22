@@ -1,11 +1,17 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 import type { DashboardRow } from '@/app/components/dashboard/AdPerformanceTable';
 import type { AutomationRule } from '@/app/components/dashboard/AutomationControls';
 import type { Currency } from '@/lib/currency';
-import { isDashboardSnapshotStale } from '@/lib/dashboard/constants';
+import { DASHBOARD_REFRESH_STALE_MS, isDashboardSnapshotStale } from '@/lib/dashboard/constants';
+
+/**
+ * When this tab last kicked off a background Meta sync. Module-level (not a ref) so it
+ * survives /home unmounting — otherwise every visit to the page would start another sync.
+ */
+let lastBackgroundRefreshAt = 0;
 
 export type DashboardMetric = {
   metaAdId: string;
@@ -45,7 +51,6 @@ export function useDashboardData() {
   const [bootstrapping, setBootstrapping] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [currency, setCurrency] = useState<Currency>('INR');
-  const backgroundRefreshStarted = useRef(false);
 
   const loadDashboard = useCallback(async () => {
     const data = await dashboardJson<DashboardGetResponse>(await fetch('/api/dashboard'));
@@ -90,8 +95,8 @@ export function useDashboardData() {
 
         const stale =
           data.snapshotStale ?? isDashboardSnapshotStale(data.lastRefreshedAt);
-        if (stale && !backgroundRefreshStarted.current) {
-          backgroundRefreshStarted.current = true;
+        if (stale && Date.now() - lastBackgroundRefreshAt > DASHBOARD_REFRESH_STALE_MS) {
+          lastBackgroundRefreshAt = Date.now();
           void refresh({ background: true });
         }
       } catch (e) {

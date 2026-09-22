@@ -40,6 +40,8 @@ export function TemplateCard({
         <img
           src={previewSrc}
           alt={previewAlt}
+          loading="lazy"
+          decoding="async"
           className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.02]"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent" />

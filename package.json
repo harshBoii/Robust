@@ -9,6 +9,7 @@
     "lint": "eslint",
     "backfill:image-thumbnails": "tsx scripts/backfill-image-thumbnails.ts",
     "backfill:video-thumbnails-r2": "tsx scripts/backfill-video-thumbnails-r2.ts",
+    "templates:thumbs": "node scripts/generate-template-thumbs.mjs",
     "postinstall": "prisma generate"
   },
   "dependencies": {

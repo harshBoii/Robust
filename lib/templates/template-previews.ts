@@ -50,7 +50,21 @@ export function templatePreviewSrc(path: string): string {
     .join('/');
 }
 
+/** "meta story:reel.png" -> "meta-story-reel" — must match scripts/generate-template-thumbs.mjs */
+function thumbSlug(path: string): string {
+  const file = path.slice(path.lastIndexOf('/') + 1);
+  return file
+    .replace(/\.[^.]+$/, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '');
+}
+
+/**
+ * Card art for the /templates grid. Serves the small WebP thumbnail (~50 KB) rather than
+ * the multi-MB source image — run `npm run templates:thumbs` after changing public/templates.
+ */
 export function getTemplatePreviewImage(templateId: string, category: TemplateCategory): string {
   const path = TEMPLATE_PREVIEW[templateId] ?? CATEGORY_PREVIEW[category];
-  return templatePreviewSrc(path);
+  return `${TEMPLATE_DIR}/thumbs/${thumbSlug(path)}.webp`;
 }
