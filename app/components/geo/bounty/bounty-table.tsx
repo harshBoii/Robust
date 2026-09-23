@@ -27,6 +27,10 @@ type BountyTableProps = {
   niches: BountyNiche[];
   /** When filters yield no rows but the company has topics, show a different empty message. */
   hadTopicsBeforeFilter?: boolean;
+  /** Multi-select for bulk actions; omit to hide the checkbox column. */
+  selectedIds?: Set<string>;
+  onToggleRow?: (id: string) => void;
+  onToggleAll?: (ids: string[], select: boolean) => void;
 };
 
 const ENGINES_COLORS = [
@@ -39,7 +43,13 @@ const ENGINES_COLORS = [
 export function BountyTable({
   niches,
   hadTopicsBeforeFilter = false,
+  selectedIds,
+  onToggleRow,
+  onToggleAll,
 }: BountyTableProps) {
+  const selectable = Boolean(selectedIds && onToggleRow && onToggleAll);
+  const selectedVisible = selectable ? niches.filter((n) => selectedIds!.has(n.id)).length : 0;
+  const allVisibleSelected = niches.length > 0 && selectedVisible === niches.length;
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [modalBounty, setModalBounty] = useState<BountyNiche | null>(null);
 
@@ -59,6 +69,20 @@ export function BountyTable({
         <table className="w-full text-left text-sm">
           <thead className="sticky top-0 z-10">
             <tr className="border-b border-[var(--glass-border)] bg-[var(--glass)]/95 backdrop-blur-sm">
+              {selectable && (
+                <th className="w-10 px-4 py-3">
+                  <input
+                    type="checkbox"
+                    aria-label="Select all topics"
+                    className="h-4 w-4 cursor-pointer accent-[var(--sibling-primary)]"
+                    checked={allVisibleSelected}
+                    ref={(el) => {
+                      if (el) el.indeterminate = selectedVisible > 0 && !allVisibleSelected;
+                    }}
+                    onChange={() => onToggleAll!(niches.map((n) => n.id), !allVisibleSelected)}
+                  />
+                </th>
+              )}
               <th className="px-4 py-3 font-medium uppercase tracking-wider text-muted-foreground">
                 Topic
               </th>
@@ -79,11 +103,23 @@ export function BountyTable({
           <tbody className="divide-y divide-[var(--glass-border)]/60">
             {niches.map((row) => {
               const isExpanded = expandedId === row.id;
+              const isSelected = selectable && selectedIds!.has(row.id);
               return (
                 <tr
                   key={row.id}
-                  className="transition-colors hover:bg-[var(--glass-hover)]/40"
+                  className={`transition-colors hover:bg-[var(--glass-hover)]/40 ${isSelected ? "bg-[var(--glass-hover)]/30" : ""}`}
                 >
+                  {selectable && (
+                    <td className="w-10 px-4 py-3">
+                      <input
+                        type="checkbox"
+                        aria-label={`Select ${row.topic}`}
+                        className="h-4 w-4 cursor-pointer accent-[var(--sibling-primary)]"
+                        checked={isSelected}
+                        onChange={() => onToggleRow!(row.id)}
+                      />
+                    </td>
+                  )}
                   <td className="px-4 py-3">
                     <div className="flex flex-wrap items-center gap-2">
                       <button

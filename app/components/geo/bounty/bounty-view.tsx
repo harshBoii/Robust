@@ -1,6 +1,9 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { AiOutlineLoading } from "react-icons/ai";
+import { Trash2 } from "lucide-react";
 import {
   BountyHeader,
   BountyFilterTabs,
@@ -52,6 +55,12 @@ function compareTimestamps(a: string, b: string): number {
 }
 
 export function BountyView({ initialNiches, summary }: BountyViewProps) {
+  const router = useRouter();
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  /** Hidden right away after a successful delete, before the server refresh lands. */
+  const [deletedIds, setDeletedIds] = useState<Set<string>>(new Set());
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [filter, setFilter] = useState<BountyFilterTab>("all");
   const [search, setSearch] = useState("");
   const [topicRevenueFilter, setTopicRevenueFilter] =
@@ -73,7 +82,7 @@ export function BountyView({ initialNiches, summary }: BountyViewProps) {
       };
 
   const visibleNiches = useMemo(() => {
-    let rows = initialNiches;
+    let rows = initialNiches.filter((n) => !deletedIds.has(n.id));
 
     if (filter !== "all") {
       rows = rows.filter((n) => n.difficulty.toLowerCase() === filter);
@@ -115,7 +124,53 @@ export function BountyView({ initialNiches, summary }: BountyViewProps) {
     });
 
     return sorted;
-  }, [initialNiches, filter, search, topicRevenueFilter, sort]);
+  }, [initialNiches, deletedIds, filter, search, topicRevenueFilter, sort]);
+
+  const toggleRow = (id: string) =>
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
+  const toggleAll = (ids: string[], select: boolean) =>
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      for (const id of ids) {
+        if (select) next.add(id);
+        else next.delete(id);
+      }
+      return next;
+    });
+
+  const deleteSelected = async () => {
+    const ids = [...selectedIds];
+    if (ids.length === 0) return;
+    const label = ids.length === 1 ? "this topic" : `these ${ids.length} topics`;
+    if (!window.confirm(`Delete ${label}? Their prompts will be removed from Bounty. Published pages are kept.`)) {
+      return;
+    }
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      const res = await fetch("/api/geo/bounty", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ ids }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) throw new Error(data.error ?? "Delete failed");
+      setDeletedIds((prev) => new Set([...prev, ...ids]));
+      setSelectedIds(new Set());
+      router.refresh();
+    } catch (e) {
+      setDeleteError(e instanceof Error ? e.message : "Delete failed");
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   const bountyMetrics: BountyMetricCard[] = summary
     ? [
@@ -220,9 +275,45 @@ export function BountyView({ initialNiches, summary }: BountyViewProps) {
           <option value="date_asc">Oldest topic first</option>
         </select>
       </section>
+      {selectedIds.size > 0 || deleteError ? (
+        <div className="glass-card flex flex-wrap items-center gap-3 rounded-xl px-4 py-2.5 text-sm">
+          {selectedIds.size > 0 ? (
+            <>
+              <span className="font-medium text-foreground">
+                {selectedIds.size} selected
+              </span>
+              <button
+                type="button"
+                onClick={() => void deleteSelected()}
+                disabled={deleting}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-destructive px-3 py-1.5 text-xs font-semibold text-white transition hover:opacity-90 disabled:opacity-60"
+              >
+                {deleting ? (
+                  <AiOutlineLoading className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Trash2 className="h-3.5 w-3.5" />
+                )}
+                {deleting ? "Deleting…" : "Delete"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedIds(new Set())}
+                disabled={deleting}
+                className="text-xs text-muted-foreground hover:text-foreground"
+              >
+                Clear selection
+              </button>
+            </>
+          ) : null}
+          {deleteError ? <span className="text-xs text-destructive">{deleteError}</span> : null}
+        </div>
+      ) : null}
       <BountyTable
         niches={visibleNiches}
         hadTopicsBeforeFilter={initialNiches.length > 0}
+        selectedIds={selectedIds}
+        onToggleRow={toggleRow}
+        onToggleAll={toggleAll}
       />
     </div>
   );

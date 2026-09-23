@@ -3,7 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import { AiOutlineLoading } from 'react-icons/ai';
-import { Pencil, Plus, Sparkles, Trash2, X } from 'lucide-react';
+import { Check, Pencil, Plus, Save, Sparkles, Trash2, X } from 'lucide-react';
 
 import { useToast } from '@/app/components/UI/ToastProvider';
 import { ModalPortal } from '@/app/components/common/ModalPortal';
@@ -146,6 +146,8 @@ export default function DataMineSection({
   const [loading, setLoading] = useState(true);
   const [website, setWebsite] = useState('');
   const [linkedinUrl, setLinkedinUrl] = useState('');
+  /** Last values persisted server-side — used to detect unsaved edits to the seed inputs. */
+  const [savedInputs, setSavedInputs] = useState({ website: '', linkedinUrl: '' });
   const [brand, setBrand] = useState<DataMineBrandEntityDto | null>(null);
   const [offerings, setOfferings] = useState<DataMineOfferingDto[]>([]);
 
@@ -162,6 +164,7 @@ export default function DataMineSection({
     (snap: DataMineSnapshot) => {
       setWebsite(snap.website ?? '');
       setLinkedinUrl(snap.linkedinUrl ?? '');
+      setSavedInputs({ website: snap.website ?? '', linkedinUrl: snap.linkedinUrl ?? '' });
       setBrand(snap.brandEntity);
       setOfferings(snap.offerings);
       onSnapshotChange?.(snap);
@@ -191,14 +194,19 @@ export default function DataMineSection({
     void load();
   }, [load]);
 
-  const saveSeedInputs = async () => {
+  const inputsDirty =
+    website.trim() !== savedInputs.website.trim() ||
+    linkedinUrl.trim() !== savedInputs.linkedinUrl.trim();
+
+  /** Persists the seed inputs; returns false if the save failed. */
+  const saveSeedInputs = async ({ silent = false }: { silent?: boolean } = {}): Promise<boolean> => {
     if (!website.trim()) {
       toast.push({
         title: 'Website required',
         message: 'Website URL cannot be empty.',
         kind: 'error',
       });
-      return;
+      return false;
     }
     setSavingInputs(true);
     try {
@@ -214,13 +222,15 @@ export default function DataMineSection({
         }),
       );
       applySnapshot(dataMine);
-      toast.push({ title: 'Seed inputs saved', kind: 'success' });
+      if (!silent) toast.push({ title: 'Seed inputs saved', kind: 'success' });
+      return true;
     } catch (e) {
       toast.push({
         title: 'Could not save',
         message: e instanceof Error ? e.message : undefined,
         kind: 'error',
       });
+      return false;
     } finally {
       setSavingInputs(false);
     }
@@ -230,13 +240,16 @@ export default function DataMineSection({
     if (!website.trim()) {
       toast.push({
         title: 'Website required',
-        message: 'Enter and save a website URL before auto-fill.',
+        message: 'Enter a website URL before auto-fill.',
         kind: 'error',
       });
       return;
     }
     setSeeding(true);
     try {
+      // Auto-fill reads the saved website server-side, so persist any edits first.
+      if (inputsDirty && !(await saveSeedInputs({ silent: true }))) return;
+
       const { dataMine } = await json<{ dataMine: DataMineSnapshot }>(
         await fetch('/api/company/seed', {
           method: 'POST',
@@ -429,24 +442,37 @@ export default function DataMineSection({
         <div className="mt-2 flex flex-wrap gap-2">
           <button
             type="button"
-            disabled={savingInputs || !website.trim()}
+            disabled={savingInputs || seeding || !website.trim() || !inputsDirty}
             onClick={() => void saveSeedInputs()}
-            className={`${profileGhostButton} font-semibold disabled:opacity-60`}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3.5 py-1.5 text-[12px] font-semibold text-primary-foreground shadow-sm transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {savingInputs ? 'Saving…' : 'Save inputs'}
+            {savingInputs && !seeding ? (
+              <AiOutlineLoading className="h-3.5 w-3.5 animate-spin" />
+            ) : inputsDirty ? (
+              <Save className="h-3.5 w-3.5" />
+            ) : (
+              <Check className="h-3.5 w-3.5" />
+            )}
+            {savingInputs && !seeding ? 'Saving…' : inputsDirty ? 'Save inputs' : 'Saved'}
           </button>
           <button
             type="button"
-            disabled={seeding || !website.trim()}
+            disabled={seeding || savingInputs || !website.trim()}
             onClick={() => void runAutoFill()}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-[11px] font-semibold text-primary-foreground disabled:opacity-60"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-primary/40 bg-primary/10 px-3 py-1.5 text-[11px] font-semibold text-primary transition hover:bg-primary/15 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {seeding ? (
               <AiOutlineLoading className="h-3.5 w-3.5 animate-spin" />
             ) : (
               <Sparkles className="h-3.5 w-3.5" />
             )}
-            Auto Fill Using Miss Robusta
+            {seeding
+              ? savingInputs
+                ? 'Saving…'
+                : 'Auto filling…'
+              : inputsDirty
+                ? 'Auto Save & Auto Fill'
+                : 'Auto Fill Using Miss Robusta'}
           </button>
         </div>
       </div>

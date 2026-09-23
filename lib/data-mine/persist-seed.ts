@@ -14,27 +14,22 @@ export async function persistSeedResponse(
   const mapped = mapSeedResponse(response);
 
   await prisma.$transaction(async (tx) => {
+    // Auto-fill enriches the brand, not the account. Never overwrite what identifies the
+    // account (website the user entered, slug, login email), and only fill descriptive
+    // fields the user hasn't set yet.
+    const current = await tx.company.findUnique({
+      where: { id: companyId },
+      select: { name: true, description: true, logoUrl: true },
+    });
     const companyData: Prisma.CompanyUpdateInput = {};
-    if (mapped.company.name) companyData.name = mapped.company.name;
-    if (mapped.company.slug) companyData.slug = mapped.company.slug;
-    if (mapped.company.description !== undefined) companyData.description = mapped.company.description;
-    if (mapped.company.logoUrl !== undefined) companyData.logoUrl = mapped.company.logoUrl;
-    if (mapped.company.website !== undefined) companyData.website = mapped.company.website;
-    if (mapped.company.email !== undefined) companyData.email = mapped.company.email;
+    if (mapped.company.name && !current?.name?.trim()) companyData.name = mapped.company.name;
+    if (mapped.company.description && !current?.description?.trim()) {
+      companyData.description = mapped.company.description;
+    }
+    if (mapped.company.logoUrl && !current?.logoUrl?.trim()) companyData.logoUrl = mapped.company.logoUrl;
 
     if (Object.keys(companyData).length > 0) {
-      try {
-        await tx.company.update({ where: { id: companyId }, data: companyData });
-      } catch (e) {
-        if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
-          const { slug: _slug, ...rest } = companyData;
-          if (Object.keys(rest).length > 0) {
-            await tx.company.update({ where: { id: companyId }, data: rest });
-          }
-        } else {
-          throw e;
-        }
-      }
+      await tx.company.update({ where: { id: companyId }, data: companyData });
     }
 
     if (!mapped.brandEntity) return;
