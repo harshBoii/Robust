@@ -34,7 +34,7 @@ export const geoPendingPublishSchema = z.object({
   redditSubreddit: z.string().optional(),
   redditFlairId: z.string().optional(),
   /** WEBSITE_BLOG only: which CMS to publish to when both are connected. */
-  blogDestination: z.enum(['shopify', 'wordpress']).optional(),
+  blogDestination: z.enum(['shopify', 'wordpress', 'nextjs']).optional(),
 });
 
 export const geoRedditTargetPickerSchema = z.object({

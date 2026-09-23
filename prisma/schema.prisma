@@ -93,6 +93,7 @@ model Company {
   rivalOf                 CompanyRival[] @relation("CompanyRivalTargets")
   shopifyBlogChannels     ShopifyBlogChannel[]
   wordpressSites          WordPressSite[]
+  nextjsSite              NextjsSite?
   wordpressBlogChannels   WordPressBlogChannel[]
   metaAdsAutoConfig       MetaAdsAutoConfig?
   metaApiLogs             MetaApiLog[]
@@ -1101,6 +1102,33 @@ model WordPressSite {
   @@map("wordpress_sites")
 }
 
+/// A customer-owned Next.js site that pulls published bounty pages from /api/public/blog.
+model NextjsSite {
+  id        String @id @default(cuid())
+  companyId String @unique
+  /// Normalized site origin, e.g. https://example.com (no trailing slash).
+  siteUrl   String @db.VarChar(1000)
+  /// Route prefix the blog lives under on the customer site, e.g. /blog.
+  basePath  String @default("/blog") @db.VarChar(255)
+
+  /// SHA-256 (hex) of the read API key the customer site sends as a Bearer token.
+  apiKeyHash          String @unique @db.VarChar(64)
+  /// First characters of the key, shown in the UI so users can tell keys apart.
+  apiKeyPrefix        String @db.VarChar(24)
+  /// Shared secret we send to the customer's revalidate endpoint (AES-256-GCM encrypted).
+  revalidateSecretEnc String @db.Text
+
+  status         String    @default("connected") @db.VarChar(32)
+  lastVerifiedAt DateTime? @db.Timestamptz(3)
+  lastError      String?   @db.Text
+  createdAt      DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime  @updatedAt @db.Timestamptz(3)
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@map("nextjs_sites")
+}
+
 model WordPressBlogChannel {
   id           String   @id @default(cuid())
   siteId       String
@@ -1742,6 +1770,10 @@ model AeoPage {
   wordpressPostId   Int?
   /// WordPressSite.id the post above lives on
   wordpressSiteId   String?       @db.VarChar(64)
+  /// Set when published to the company's custom Next.js site (served via /api/public/blog).
+  nextjsPublishedAt DateTime?     @db.Timestamptz(3)
+  /// NextjsSite.id the page above is published on
+  nextjsSiteId      String?       @db.VarChar(64)
   clusterId         String?
   publishedAt       DateTime?     @db.Timestamptz(3)
   createdAt         DateTime      @default(now()) @db.Timestamptz(3)
@@ -1769,6 +1801,7 @@ model AeoPage {
   @@index([clusterId])
   @@index([companyId, status])
   @@index([publishedAt(sort: Desc)])
+  @@index([nextjsSiteId, nextjsPublishedAt(sort: Desc)])
   @@map("aeo_pages")
 }
 

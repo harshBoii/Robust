@@ -9,7 +9,7 @@ import {
 } from "@/app/components/geo/bounty/reddit-publish-target-modal";
 import { publishPlatformLabel } from "@/lib/geo/bounty/spread-platforms";
 
-type BlogDestination = "shopify" | "wordpress";
+type BlogDestination = "shopify" | "wordpress" | "nextjs";
 
 type PublishTargets = {
   shopify: { available: boolean };
@@ -20,6 +20,7 @@ type PublishTargets = {
     jsonLdMode?: "PLUGIN" | "INLINE" | "SEO_PLUGIN" | "UNAVAILABLE";
     schemaWarning?: string;
   };
+  nextjs?: { available: boolean; reason?: string; siteUrl?: string; basePath?: string };
   websiteBlog?: { available: boolean; reason?: string };
   defaultBlogDestination?: BlogDestination | null;
   blogDestinationRequired?: boolean;
@@ -134,7 +135,10 @@ export function ArticleActions({
 
   const canPublishBlog =
     targets &&
-    (targets.shopify.available || targets.wordpress.available || targets.websiteBlog?.available);
+    (targets.shopify.available ||
+      targets.wordpress.available ||
+      targets.nextjs?.available ||
+      targets.websiteBlog?.available);
 
   // Both connected with no default: a destination must be picked before publishing.
   const needsDestinationChoice = Boolean(
@@ -207,10 +211,13 @@ export function ArticleActions({
 
     try {
       if (isBlog) {
-        const path =
+        const approveRoute =
           blogDestination === "wordpress"
-            ? `/api/geo/bounty/${encodeURIComponent(bountyId)}/approve-wordpress`
-            : `/api/geo/bounty/${encodeURIComponent(bountyId)}/approve-shopify`;
+            ? "approve-wordpress"
+            : blogDestination === "nextjs"
+              ? "approve-nextjs"
+              : "approve-shopify";
+        const path = `/api/geo/bounty/${encodeURIComponent(bountyId)}/${approveRoute}`;
 
         const res = await fetch(path, {
           method: "POST",
@@ -312,6 +319,9 @@ export function ArticleActions({
               <option value="wordpress" disabled={!targets?.wordpress.available}>
                 WordPress
               </option>
+              <option value="nextjs" disabled={!targets?.nextjs?.available}>
+                Next.js site
+              </option>
             </select>
           </label>
         )}
@@ -328,7 +338,7 @@ export function ArticleActions({
 
       {isBlog && !canPublishBlog && (
         <p className="text-xs text-muted-foreground">
-          Connect Shopify or WordPress under{" "}
+          Connect Shopify, WordPress or a Next.js site under{" "}
           <Link href="/profile/integration" className="text-[var(--sibling-primary)] hover:underline">
             Profile → Integrations
           </Link>{" "}
@@ -338,7 +348,7 @@ export function ArticleActions({
 
       {needsDestinationChoice && (
         <p className="text-xs text-amber-600 dark:text-amber-400">
-          Shopify and WordPress are both connected — choose where this blog should publish.
+          More than one blog destination is connected — choose where this blog should publish.
         </p>
       )}
 

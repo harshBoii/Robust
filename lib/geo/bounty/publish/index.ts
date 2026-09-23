@@ -2,7 +2,9 @@ import { prisma } from "@/lib/prisma";
 import type { BountySpreadPlatform } from "@/app/generated/prisma/client";
 import { approveBountyToShopify } from "@/lib/geo/bounty/approveBountyToShopify";
 import { approveBountyToWordPress } from "@/lib/geo/bounty/approveBountyToWordPress";
+import { approveBountyToNextjs } from "@/lib/geo/bounty/approveBountyToNextjs";
 import {
+  connectedBlogDestinations,
   getBlogConnectivity,
   resolveBlogDestination,
   type BlogDestination,
@@ -25,11 +27,11 @@ const websiteBlogAdapter: PublishAdapter = {
   platform: "WEBSITE_BLOG",
   async isAvailable(companyId) {
     const connectivity = await getBlogConnectivity(companyId);
-    if (connectivity.shopify || connectivity.wordpress) return { available: true };
+    if (connectedBlogDestinations(connectivity).length > 0) return { available: true };
     return {
       available: false,
       reason:
-        "Connect Shopify or WordPress under Profile → Integrations to publish website blogs",
+        "Connect Shopify, WordPress or a Next.js site under Profile → Integrations to publish website blogs",
     };
   },
   async publish(opts) {
@@ -57,6 +59,19 @@ const websiteBlogAdapter: PublishAdapter = {
         warnings: result.partial
           ? ["Shopify reported errors but the article was created."]
           : undefined,
+      };
+    }
+
+    if (resolution.destination === "nextjs") {
+      const result = await approveBountyToNextjs({
+        companyId: opts.companyId,
+        bountyId: opts.bountyId,
+      });
+      return {
+        publishedUrl: result.canonicalUrl,
+        externalPostId: null,
+        destination: "nextjs",
+        warnings: result.warnings.length > 0 ? result.warnings : undefined,
       };
     }
 

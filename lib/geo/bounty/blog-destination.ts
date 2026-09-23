@@ -10,19 +10,26 @@ import { prisma } from '@/lib/prisma';
  * no way to choose. Destination is now explicit, with the company default as the tiebreak.
  */
 
-export type BlogDestination = 'shopify' | 'wordpress';
+export type BlogDestination = 'shopify' | 'wordpress' | 'nextjs';
 
-export type BlogConnectivity = {
-  shopify: boolean;
-  wordpress: boolean;
+export const BLOG_DESTINATIONS: readonly BlogDestination[] = ['shopify', 'wordpress', 'nextjs'];
+
+export const BLOG_DESTINATION_LABEL: Record<BlogDestination, string> = {
+  shopify: 'Shopify',
+  wordpress: 'WordPress',
+  nextjs: 'Next.js site',
 };
 
+export type BlogConnectivity = Record<BlogDestination, boolean>;
+
 export function parseBlogDestination(value: unknown): BlogDestination | null {
-  return value === 'shopify' || value === 'wordpress' ? value : null;
+  return typeof value === 'string' && (BLOG_DESTINATIONS as readonly string[]).includes(value)
+    ? (value as BlogDestination)
+    : null;
 }
 
 export async function getBlogConnectivity(companyId: string): Promise<BlogConnectivity> {
-  const [shopify, wordpress] = await Promise.all([
+  const [shopify, wordpress, nextjs] = await Promise.all([
     prisma.shopifyShop.findFirst({
       where: { companyId, status: 'installed' },
       select: { id: true },
@@ -31,8 +38,16 @@ export async function getBlogConnectivity(companyId: string): Promise<BlogConnec
       where: { companyId, status: 'connected' },
       select: { id: true },
     }),
+    prisma.nextjsSite.findFirst({
+      where: { companyId, status: 'connected' },
+      select: { id: true },
+    }),
   ]);
-  return { shopify: Boolean(shopify), wordpress: Boolean(wordpress) };
+  return { shopify: Boolean(shopify), wordpress: Boolean(wordpress), nextjs: Boolean(nextjs) };
+}
+
+export function connectedBlogDestinations(connectivity: BlogConnectivity): BlogDestination[] {
+  return BLOG_DESTINATIONS.filter((d) => connectivity[d]);
 }
 
 export type DestinationResolution =
@@ -42,8 +57,8 @@ export type DestinationResolution =
 /**
  * Resolve where a website blog should publish, in priority order:
  *   1. an explicit request-level choice
- *   2. the company's configured default (when that provider is actually connected)
- *   3. the only connected provider
+ *   2. the only connected provider
+ *   3. the company's configured default (when that provider is actually connected)
  *   4. otherwise: ambiguous, and the caller must ask
  */
 export async function resolveBlogDestination(opts: {
@@ -58,25 +73,23 @@ export async function resolveBlogDestination(opts: {
       return {
         ok: false,
         code: 'NO_BLOG_DESTINATION',
-        reason:
-          opts.requested === 'shopify'
-            ? 'Shopify is not connected for this workspace.'
-            : 'WordPress is not connected for this workspace.',
+        reason: `${BLOG_DESTINATION_LABEL[opts.requested]} is not connected for this workspace.`,
       };
     }
     return { ok: true, destination: opts.requested };
   }
 
-  if (!connectivity.shopify && !connectivity.wordpress) {
+  const connected = connectedBlogDestinations(connectivity);
+  if (connected.length === 0) {
     return {
       ok: false,
       code: 'NO_BLOG_DESTINATION',
-      reason: 'Connect Shopify or WordPress under Profile → Integrations to publish website blogs',
+      reason:
+        'Connect Shopify, WordPress or a Next.js site under Profile → Integrations to publish website blogs',
     };
   }
-
-  if (connectivity.shopify !== connectivity.wordpress) {
-    return { ok: true, destination: connectivity.shopify ? 'shopify' : 'wordpress' };
+  if (connected.length === 1) {
+    return { ok: true, destination: connected[0] };
   }
 
   const company = await prisma.company.findUnique({
@@ -91,7 +104,6 @@ export async function resolveBlogDestination(opts: {
   return {
     ok: false,
     code: 'AMBIGUOUS_BLOG_DESTINATION',
-    reason:
-      'Both Shopify and WordPress are connected. Choose a destination, or set a default in Integrations.',
+    reason: `${connected.map((d) => BLOG_DESTINATION_LABEL[d]).join(', ')} are connected. Choose a destination, or set a default in Integrations.`,
   };
 }

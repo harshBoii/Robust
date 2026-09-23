@@ -90,7 +90,7 @@ type WordPressAppResponse = {
   connected: boolean;
   envConfigured: boolean;
   pluginDownloadUrl: string;
-  defaultBlogDestination: 'shopify' | 'wordpress' | null;
+  defaultBlogDestination: 'shopify' | 'wordpress' | 'nextjs' | null;
 };
 
 export default function ManagerWordPressClient({

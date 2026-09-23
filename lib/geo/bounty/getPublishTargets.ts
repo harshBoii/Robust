@@ -3,7 +3,11 @@ import 'server-only';
 import type { BountySpreadPlatform, WordPressJsonLdMode } from '@/app/generated/prisma/client';
 import { prisma } from '@/lib/prisma';
 import { getPublishAdapter } from '@/lib/geo/bounty/publish';
-import { parseBlogDestination, type BlogDestination } from '@/lib/geo/bounty/blog-destination';
+import {
+  connectedBlogDestinations,
+  parseBlogDestination,
+  type BlogDestination,
+} from '@/lib/geo/bounty/blog-destination';
 
 const SOCIAL_PLATFORMS: BountySpreadPlatform[] = ['X', 'LINKEDIN', 'REDDIT', 'THIRD_PARTY_BLOG'];
 
@@ -19,12 +23,13 @@ export type WordPressTarget = {
 export type PublishTargetsData = {
   shopify: { available: boolean };
   wordpress: WordPressTarget;
+  nextjs: { available: boolean; reason?: string; siteUrl?: string; basePath?: string };
   /** @deprecated Legacy key kept for existing clients; mirrors `wordpress.available`. */
   wordpressWoo: { available: boolean; reason?: string };
   websiteBlog: { available: boolean; reason?: string };
   /** Which destination a blog publish will use if the caller does not specify one. */
   defaultBlogDestination: BlogDestination | null;
-  /** True when both providers are connected and the caller must choose. */
+  /** True when several providers are connected, none is the default, and the caller must choose. */
   blogDestinationRequired: boolean;
   social: Record<string, { available: boolean; reason?: string }>;
   connectedAccounts: Array<{ provider: string; accountHandle: string | null }>;
@@ -54,7 +59,7 @@ export async function getPublishTargetsForBounty(
 
   if (!bounty) return null;
 
-  const [shopify, wpSite, company] = await Promise.all([
+  const [shopify, wpSite, nextjsSite, company] = await Promise.all([
     prisma.shopifyShop.findFirst({
       where: { companyId, status: 'installed' },
       select: { id: true },
@@ -63,6 +68,10 @@ export async function getPublishTargetsForBounty(
       where: { companyId, status: 'connected' },
       orderBy: { updatedAt: 'desc' },
       select: { siteUrl: true, jsonLdMode: true },
+    }),
+    prisma.nextjsSite.findFirst({
+      where: { companyId, status: 'connected' },
+      select: { siteUrl: true, basePath: true },
     }),
     prisma.company.findUnique({
       where: { id: companyId },
@@ -85,14 +94,19 @@ export async function getPublishTargetsForBounty(
     select: { provider: true, accountHandle: true },
   });
 
+  const nextjsAvailable = Boolean(nextjsSite);
+  const connected = connectedBlogDestinations({
+    shopify: shopifyAvailable,
+    wordpress: wordpressAvailable,
+    nextjs: nextjsAvailable,
+  });
   const preferred = parseBlogDestination(company?.defaultBlogDestination);
-  const bothConnected = shopifyAvailable && wordpressAvailable;
 
   let defaultBlogDestination: BlogDestination | null = null;
-  if (preferred && (preferred === 'shopify' ? shopifyAvailable : wordpressAvailable)) {
+  if (preferred && connected.includes(preferred)) {
     defaultBlogDestination = preferred;
-  } else if (shopifyAvailable !== wordpressAvailable) {
-    defaultBlogDestination = shopifyAvailable ? 'shopify' : 'wordpress';
+  } else if (connected.length === 1) {
+    defaultBlogDestination = connected[0];
   }
 
   return {
@@ -110,13 +124,18 @@ export async function getPublishTargetsForBounty(
           }
         : {}),
     },
+    nextjs: {
+      available: nextjsAvailable,
+      reason: nextjsAvailable ? undefined : 'Connect a Next.js site under Profile → Integrations',
+      ...(nextjsSite ? { siteUrl: nextjsSite.siteUrl, basePath: nextjsSite.basePath } : {}),
+    },
     wordpressWoo: {
       available: wordpressAvailable,
       reason: wordpressAvailable ? undefined : 'WordPress is not connected',
     },
     websiteBlog: websiteBlogAvailability,
     defaultBlogDestination,
-    blogDestinationRequired: bothConnected && defaultBlogDestination === null,
+    blogDestinationRequired: connected.length > 1 && defaultBlogDestination === null,
     social,
     connectedAccounts: integrations.map((i) => ({
       provider: i.provider,

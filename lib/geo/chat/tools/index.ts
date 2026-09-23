@@ -10,6 +10,7 @@ import { runGetCitedForCompany } from '@/lib/geo/bounty/runGetCitedForCompany';
 import { getPublishTargetsForBounty } from '@/lib/geo/bounty/getPublishTargets';
 import { publishBountyContent } from '@/lib/geo/bounty/publish';
 import { parseSpreadPlatforms } from '@/lib/geo/bounty/spread-platforms';
+import { parseBlogDestination, type BlogDestination } from '@/lib/geo/bounty/blog-destination';
 import { fetchRedditPublishTargets } from '@/lib/zernio/reddit-publish-targets';
 
 import type { GeoToolCall } from '../geo-agent-schema';
@@ -296,12 +297,12 @@ export async function executeGeoTool(
 function resolveBlogDestinationOpt(
   args: Record<string, unknown>,
   geo: GeoChatState,
-): 'shopify' | 'wordpress' | null {
+): BlogDestination | null {
   const raw =
     (typeof args.blogDestination === 'string' ? args.blogDestination.trim() : '') ||
     geo.pendingPublish?.blogDestination ||
     '';
-  return raw === 'shopify' || raw === 'wordpress' ? raw : null;
+  return parseBlogDestination(raw);
 }
 
 function resolveRedditOpts(

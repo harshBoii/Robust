@@ -7,6 +7,7 @@ import ManagerShopifyClient from '@/app/components/manager/ManagerShopifyClient'
 import ManagerWordPressClient from '@/app/components/manager/ManagerWordPressClient';
 import { ModalBackdrop } from '@/app/components/common/ModalBackdrop';
 import { ModalPortal } from '@/app/components/common/ModalPortal';
+import NextjsConnectionPanel from '@/app/components/profile/NextjsConnectionPanel';
 import SocialProviderConnectionPanel from '@/app/components/profile/SocialProviderConnectionPanel';
 import type { SocialProvider } from '@/app/generated/prisma/client';
 import { socialProviderLabel } from '@/lib/auth/social-oauth-state';
@@ -70,6 +71,20 @@ export function WordPressConnectionModal({ onClose }: { onClose: () => void }) {
         embedded
         onConnectClick={() => closeModalAfterConnect(onClose)}
       />
+    </IntegrationModalShell>
+  );
+}
+
+export function NextjsConnectionModal({
+  onClose,
+  onChanged,
+}: {
+  onClose: () => void;
+  onChanged?: () => void;
+}) {
+  return (
+    <IntegrationModalShell title="Next.js site connection" onClose={onClose}>
+      <NextjsConnectionPanel onChanged={onChanged} />
     </IntegrationModalShell>
   );
 }

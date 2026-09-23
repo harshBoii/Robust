@@ -36,6 +36,8 @@ const PUBLIC_PATH_PREFIXES = [
   "/api/mcpServer",
   /** Stream queue reconcile (Bearer STREAM_QUEUE_RECONCILE_SECRET outside development). */
   "/api/public/stream-queue",
+  /** Blog content for customer Next.js sites (Bearer rbk_live_ API key checked per route). */
+  "/api/public/blog",
   /** Asset Intelligence microservice webhook (optional x-intel-secret). */
   "/api/receive-intel",
   /** HeyGen video agent webhook (optional x-heygen-secret). */

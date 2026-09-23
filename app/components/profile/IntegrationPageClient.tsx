@@ -5,11 +5,12 @@ import { useCallback, useEffect, useState } from 'react';
 import { Plug, Share2 } from 'lucide-react';
 
 import { ProfileSecondaryNav } from '@/app/components/profile/ProfileSecondaryNav';
-import { SiMeta, SiShopify, SiReddit, SiWordpress, SiX, SiGoogle } from 'react-icons/si';
+import { SiMeta, SiNextdotjs, SiShopify, SiReddit, SiWordpress, SiX, SiGoogle } from 'react-icons/si';
 import { FaLinkedin } from 'react-icons/fa';
 
 import {
   MetaConnectionModal,
+  NextjsConnectionModal,
   ShopifyConnectionModal,
   SocialConnectionModal,
   WordPressConnectionModal,
@@ -30,6 +31,7 @@ type IntegrationModal =
   | 'meta'
   | 'shopify'
   | 'wordpress'
+  | 'nextjs'
   | 'google-ads'
   | SocialProvider
   | null;
@@ -163,6 +165,7 @@ export default function IntegrationPageClient() {
   const [googleAdsConnected, setGoogleAdsConnected] = useState(false);
   const [shopifyConnected, setShopifyConnected] = useState(false);
   const [wordpressConnected, setWordpressConnected] = useState(false);
+  const [nextjsConnected, setNextjsConnected] = useState(false);
   const [socialProviders, setSocialProviders] = useState<ProviderStatus[]>([]);
   const [loading, setLoading] = useState(true);
   const [zernioError, setZernioError] = useState<string | null>(null);
@@ -171,7 +174,7 @@ export default function IntegrationPageClient() {
 
   const loadStatus = useCallback(async () => {
     try {
-      const [meta, shopify, wordpress, social, gads] = await Promise.all([
+      const [meta, shopify, wordpress, nextjs, social, gads] = await Promise.all([
         json<{
           hasAdAccountAndPage: boolean;
         }>(await fetch('/api/meta/integration')).catch(() => ({ hasAdAccountAndPage: false })),
@@ -180,6 +183,9 @@ export default function IntegrationPageClient() {
         ).catch(() => ({ connected: false })),
         json<{ connected: boolean }>(
           await fetch('/api/company/wordpress-app', { credentials: 'include' }),
+        ).catch(() => ({ connected: false })),
+        json<{ connected: boolean }>(
+          await fetch('/api/company/nextjs-site', { credentials: 'include' }),
         ).catch(() => ({ connected: false })),
         json<{ providers: ProviderStatus[] }>(
           await fetch('/api/integrations/social', { credentials: 'include' }),
@@ -191,6 +197,7 @@ export default function IntegrationPageClient() {
       setMetaConnected(meta.hasAdAccountAndPage);
       setShopifyConnected(shopify.connected);
       setWordpressConnected(wordpress.connected);
+      setNextjsConnected(nextjs.connected);
       setSocialProviders(social.providers);
       setGoogleAdsConnected(Boolean(gads.integration?.customerId));
     } catch (e) {
@@ -388,6 +395,13 @@ export default function IntegrationPageClient() {
               connected={wordpressConnected}
               onManage={() => setModal('wordpress')}
             />
+            <IntegrationCard
+              label="Next.js site"
+              description="Publish blog posts to your own Next.js website"
+              icon={SiNextdotjs}
+              connected={nextjsConnected}
+              onManage={() => setModal('nextjs')}
+            />
             {SOCIAL_CARDS.map((card) => {
               const provider = card.id as SocialProvider;
               const connected = socialConnected(provider);
@@ -426,6 +440,9 @@ export default function IntegrationPageClient() {
             void loadStatus();
           }}
         />
+      ) : null}
+      {modal === 'nextjs' ? (
+        <NextjsConnectionModal onClose={dismissModal} onChanged={() => void loadStatus()} />
       ) : null}
       {modal === 'X' || modal === 'LINKEDIN' || modal === 'REDDIT' ? (
         <SocialConnectionModal provider={modal} onClose={dismissModal} />
